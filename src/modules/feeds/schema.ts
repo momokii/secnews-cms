@@ -10,7 +10,7 @@ export const FeedItemStatusEnum = z.enum(PrismaFeedItemStatus);
 export type FeedItemStatus = z.infer<typeof FeedItemStatusEnum>;
 
 export const FeedSourceSchema = z.object({
-  id: z.number().int().positive(),
+  id: z.uuid(),
   name: z.string().min(1),
   url: z.url(),
   active: z.boolean(),
@@ -35,17 +35,27 @@ export const UpdateFeedBodySchema = z
   })
   .refine((body) => Object.keys(body).length > 0, { message: "At least one field required" });
 
+// GET /feeds
+export const ListFeedSourcesQuerySchema = pageQuery;
+export const ListFeedSourcesResponseSchema = paginated(FeedSourceSchema);
+
+/** Feed ids are uuid strings (prisma defaults), not the int idParam variant. */
+export const UuidIdParamSchema = z.object({ id: z.uuid() });
+
 export const FeedItemSchema = z.object({
-  id: z.number().int().positive(),
-  feedSourceId: z.number().int().positive(),
+  id: z.uuid(),
+  feedSourceId: z.uuid(),
   guid: z.string(),
   title: z.string(),
-  url: z.url(),
-  publishedAt: z.iso.datetime(),
+  /** Null in the DB schema; every ingestion surface (poll skip rule, ingest
+   * body) requires a link, so real rows always carry one. */
+  url: z.url().nullable(),
+  /** Null when neither isoDate nor pubDate could be parsed. */
+  publishedAt: z.iso.datetime().nullable(),
   summary: z.string().nullable(),
   status: FeedItemStatusEnum,
   /** Set when TAKEN — back-reference to the spawned ticket. */
-  ticketId: z.number().int().positive().nullable(),
+  ticketId: z.uuid().nullable(),
   fetchedAt: z.iso.datetime(),
 });
 export type FeedItem = z.infer<typeof FeedItemSchema>;
@@ -53,8 +63,11 @@ export type FeedItem = z.infer<typeof FeedItemSchema>;
 // GET /feed-items
 export const ListFeedItemsQuerySchema = pageQuery.extend({
   status: FeedItemStatusEnum.optional(),
-  feedSourceId: z.coerce.number().int().positive().optional(),
+  feedSourceId: z.uuid().optional(),
   q: z.string().min(1).optional(),
+  /** publishedAt range (inclusive). */
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
 });
 export const ListFeedItemsResponseSchema = paginated(FeedItemSchema);
 

@@ -1,10 +1,12 @@
 import { buildApp } from "./app.js";
+import { startFeedPollScheduler } from "./lib/rss/scheduler.js";
 
 const port = Number(process.env["PORT"] ?? 3000);
 const host = process.env["HOST"] ?? "0.0.0.0";
 
 async function main(): Promise<void> {
   const app = await buildApp();
+  startFeedPollScheduler(app);
   try {
     await app.listen({ port, host });
   } catch (err) {
