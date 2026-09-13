@@ -239,6 +239,9 @@ model DeliveryAudit {
   channel   Channel        @relation(fields: [channelId], references: [id])
   status    DeliveryStatus
   error     String?
+  // TASK-D1: compliance fields — exact rendered body and sending actor.
+  payload   String
+  sentById  String
   createdAt DateTime       @default(now())
 }
 

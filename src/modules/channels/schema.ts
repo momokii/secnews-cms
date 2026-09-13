@@ -11,8 +11,8 @@ export type ChannelType = z.infer<typeof ChannelTypeEnum>;
 export const emailField = z.email();
 
 const baseChannel = {
-  id: z.number().int().positive(),
-  clientId: z.number().int().positive(),
+  id: z.uuid(),
+  clientId: z.uuid(),
   active: z.boolean(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
@@ -70,3 +70,6 @@ export const UpdateChannelBodySchema = z
     bcc: z.array(emailField).min(1).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, { message: "At least one field required" });
+export type UpdateChannelBody = z.infer<typeof UpdateChannelBodySchema>;
+
+export const UuidIdParamSchema = z.object({ id: z.uuid() });

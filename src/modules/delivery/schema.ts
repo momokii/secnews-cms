@@ -13,7 +13,7 @@ import { ChannelTypeEnum } from "../channels/schema.js";
 export const SendBodySchema = z
   .object({
     /** Explicit targets — every id must exist AND be active. */
-    channelIds: z.array(z.number().int().positive()).min(1).optional(),
+    channelIds: z.array(z.uuid()).min(1).optional(),
     /** Shortcut: all currently-ACTIVE channels. */
     all: z.boolean().optional(),
   })
@@ -27,11 +27,11 @@ export const DeliveryStatusEnum = z.enum(PrismaDeliveryStatus);
 export type DeliveryStatus = z.infer<typeof DeliveryStatusEnum>;
 
 export const DeliveryAuditSchema = z.object({
-  id: z.number().int().positive(),
-  ticketId: z.number().int().positive(),
-  channelId: z.number().int().positive(),
+  id: z.uuid(),
+  ticketId: z.uuid(),
+  channelId: z.uuid(),
   channelType: ChannelTypeEnum,
-  clientId: z.number().int().positive(),
+  clientId: z.uuid(),
   clientName: z.string(),
   /** Concrete destination: chatId or bcc summary. */
   target: z.string(),
@@ -39,7 +39,7 @@ export const DeliveryAuditSchema = z.object({
   payload: z.string(),
   status: DeliveryStatusEnum,
   errorDetail: z.string().nullable(),
-  sentById: z.number().int().positive(),
+  sentById: z.uuid(),
   sentAt: z.iso.datetime(),
 });
 export type DeliveryAudit = z.infer<typeof DeliveryAuditSchema>;
