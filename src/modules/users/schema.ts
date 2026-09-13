@@ -23,6 +23,7 @@ export const UpdateUserBodySchema = z
     active: z.boolean().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, { message: "At least one field required" });
+export type UpdateUserBody = z.infer<typeof UpdateUserBodySchema>;
 
 // POST /users/:id/reset-password (admin-triggered, distinct from self-service)
 export const ResetPasswordBodySchema = z.object({
@@ -34,4 +35,5 @@ export const ListUsersQuerySchema = pageQuery.extend({
   q: z.string().min(1).optional(),
   role: RoleEnum.optional(),
 });
+export type ListUsersQuery = z.infer<typeof ListUsersQuerySchema>;
 export const ListUsersResponseSchema = paginated(UserPublicSchema);

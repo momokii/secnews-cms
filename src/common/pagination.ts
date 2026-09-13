@@ -12,9 +12,9 @@ export const pageQuery = z.object({
 });
 export type PageQuery = z.infer<typeof pageQuery>;
 
-/** Shared `:id` path param (e.g. /tickets/42). */
+/** Shared `:id` path param — every model PK is a uuid string (B1 schema). */
 export const idParam = z.object({
-  id: z.coerce.number().int().positive(),
+  id: z.uuid(),
 });
 
 export type Paginated<T> = {

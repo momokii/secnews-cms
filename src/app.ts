@@ -1,14 +1,16 @@
 import AutoLoad from "@fastify/autoload";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
-import jwt from "@fastify/jwt";
 import rateLimit from "@fastify/rate-limit";
 import {
   serializerCompiler,
   validatorCompiler,
 } from "fastify-type-provider-zod";
 import Fastify, { type FastifyInstance } from "fastify";
+import { errorHandler } from "./common/error-handler.js";
 import { join } from "node:path";
+import authPlugin from "./plugins/auth.js";
+import prismaPlugin from "./plugins/prisma.js";
 
 /**
  * Build the fully-configured Fastify application without binding a port.
@@ -21,11 +23,13 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+  app.setErrorHandler(errorHandler);
 
   await app.register(helmet);
   await app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
   await app.register(cors, { origin: parseCorsOrigins(process.env["CORS_ORIGIN"]) });
-  await app.register(jwt, { secret: requireEnv("JWT_SECRET") });
+  await app.register(prismaPlugin);
+  await app.register(authPlugin);
 
   await app.register(AutoLoad, {
     dir: join(import.meta.dirname, "modules"),
@@ -33,14 +37,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   return app;
-}
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (value === undefined || value === "") {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
 }
 
 /** Empty/unset CORS_ORIGIN means "no cross-origin browser access" (secure default). */

@@ -12,9 +12,10 @@ export type Role = z.infer<typeof RoleEnum>;
 export const emailField = z.email();
 export const passwordField = z.string().min(8).max(72); // 72 = bcrypt input limit
 
-/** User as returned by the API — never includes password material. */
+/** User as returned by the API — never includes password material.
+ * `id` mirrors the Prisma uuid string PK (B1 schema is authoritative). */
 export const UserPublicSchema = z.object({
-  id: z.number().int().positive(),
+  id: z.uuid(),
   name: z.string(),
   email: emailField,
   role: RoleEnum,
