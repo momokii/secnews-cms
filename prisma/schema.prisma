@@ -1,0 +1,235 @@
+// SecNews CMS — full domain schema (Prisma 7, prisma-client generator, driver adapters).
+// Conventions: camelCase fields, no @map anywhere, datasource URL lives in prisma.config.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  EDITOR
+  ANALYST
+}
+
+enum FeedItemStatus {
+  UNREVIEWED
+  VIEWED
+  TAKEN
+}
+
+enum TicketOrigin {
+  AUTO_FEED
+  MANUAL
+}
+
+enum TicketStatus {
+  OPEN
+  RESEARCH
+  READY
+  SENT
+  CLOSED
+}
+
+enum FindingType {
+  VULNERABILITY_CVE
+  THREAT_CAMPAIGN
+  OTHER
+}
+
+enum IocType {
+  DOMAIN
+  IPV4
+  IPV6
+  URL
+  EMAIL
+  MD5
+  SHA1
+  SHA256
+  FILEPATH
+  MUTEX
+  CIDR
+  OTHER
+}
+
+enum ChannelType {
+  WHATSAPP
+  TELEGRAM
+  EMAIL
+}
+
+enum TlpLevel {
+  CLEAR
+  GREEN
+  AMBER
+  RED
+}
+
+enum SuggestionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum DeliveryStatus {
+  SENT
+  FAILED
+}
+
+enum IntegrationKind {
+  OPENAI
+  ANTHROPIC
+  GEMINI
+  OTX
+}
+
+// ── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model FeedSource {
+  id        String   @id @default(uuid())
+  name      String
+  url       String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items     FeedItem[]
+}
+
+model FeedItem {
+  id         String         @id @default(uuid())
+  feedId     String
+  feed       FeedSource     @relation(fields: [feedId], references: [id])
+  guid       String
+  title      String
+  url        String?
+  publishedAt DateTime?
+  status     FeedItemStatus @default(UNREVIEWED)
+  raw        Json
+  ticket     Ticket?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([feedId, guid])
+}
+
+model Ticket {
+  id            String      @id @default(uuid())
+  feedItemId    String?     @unique
+  feedItem      FeedItem?   @relation(fields: [feedItemId], references: [id])
+  title         String
+  summary       String
+  origin        TicketOrigin
+  status        TicketStatus @default(OPEN)
+  findingType   FindingType
+  tlp           TlpLevel    @default(AMBER)
+  recommendation String?
+  references    String[]
+  otxPulseId    String?
+  otxPulseUrl   String?
+  sources       TicketSource[]
+  iocs          Ioc[]
+  suggestions   AiSuggestion[]
+  deliveries    DeliveryAudit[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model TicketSource {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  url       String
+  label     String?
+  createdAt DateTime @default(now())
+}
+
+model Ioc {
+  id               String   @id @default(uuid())
+  ticketId         String
+  ticket           Ticket   @relation(fields: [ticketId], references: [id])
+  type             IocType
+  value            String
+  includeInBulletin Boolean @default(true)
+  createdAt        DateTime @default(now())
+
+  @@unique([ticketId, type, value])
+}
+
+model AiSuggestion {
+  id        String           @id @default(uuid())
+  ticketId  String
+  ticket    Ticket           @relation(fields: [ticketId], references: [id])
+  status    SuggestionStatus @default(PENDING)
+  model     String?
+  content   String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model IntegrationConfig {
+  id           String          @id @default(uuid())
+  kind         IntegrationKind @unique
+  encryptedKey String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model Client {
+  id           String   @id @default(uuid())
+  name         String
+  contactEmail String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  channels     Channel[]
+}
+
+model Channel {
+  id          String          @id @default(uuid())
+  clientId    String
+  client      Client          @relation(fields: [clientId], references: [id])
+  type        ChannelType
+  target      String
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deliveries  DeliveryAudit[]
+}
+
+model DeliveryAudit {
+  id        String         @id @default(uuid())
+  ticketId  String
+  ticket    Ticket         @relation(fields: [ticketId], references: [id])
+  channelId String
+  channel   Channel        @relation(fields: [channelId], references: [id])
+  status    DeliveryStatus
+  error     String?
+  createdAt DateTime       @default(now())
+}
+
+model BulletinTemplate {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  subject   String?
+  body      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

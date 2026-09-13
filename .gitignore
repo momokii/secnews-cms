@@ -18,6 +18,9 @@ dist/
 build/
 out/
 
+# Prisma generated client (prisma-client generator output)
+src/generated/
+
 # IDE / OS
 .DS_Store
 .idea/
