@@ -1,0 +1,15 @@
+# Dev conveniences on top of docker-compose.yml (auto-merged by compose).
+services:
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  api:
+    volumes:
+      - .:/app
+      - api_node_modules:/app/node_modules
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  api_node_modules:

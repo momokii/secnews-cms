@@ -1,0 +1,30 @@
+# Environment files — never commit real secrets
+.env
+.env.*
+!.env.example
+# Keep explicit entries for clarity (covered by .env.* above, but listed explicitly for humans)
+.env.staging
+.env.production
+.env.local
+
+# Dependencies
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+
+# Build / dist
+dist/
+build/
+out/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+logs/
+*.log
+npm-debug.log*
