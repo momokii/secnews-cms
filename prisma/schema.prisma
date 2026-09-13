@@ -92,14 +92,16 @@ enum IntegrationKind {
 // ── Models ───────────────────────────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String          @id @default(uuid())
+  email        String          @unique
   passwordHash String
   name         String
   role         Role
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  sources      TicketSource[]
+  iocs         Ioc[]
 }
 
 model FeedSource {
@@ -140,6 +142,16 @@ model Ticket {
   findingType   FindingType
   tlp           TlpLevel    @default(AMBER)
   recommendation String?
+  // Final (client-facing) output fields — edited via PATCH fields / AI suggestion
+  // accept (C4); structured per finding type.
+  overview        String?
+  description     String?
+  recommendations String?
+  cveIds          String[]
+  affectedProduct String?
+  affectedVersions String?
+  mitigation      String?
+  threatName      String?
   references    String[]
   otxPulseId    String?
   otxPulseUrl   String?
@@ -148,26 +160,32 @@ model Ticket {
   suggestions   AiSuggestion[]
   deliveries    DeliveryAudit[]
   createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  updatedAt     DateTime @updatedAt
 }
 
 model TicketSource {
-  id        String   @id @default(uuid())
-  ticketId  String
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
-  url       String
-  label     String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  ticketId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  url         String?
+  note        String?
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
 }
 
 model Ioc {
-  id               String   @id @default(uuid())
-  ticketId         String
-  ticket           Ticket   @relation(fields: [ticketId], references: [id])
-  type             IocType
-  value            String
-  includeInBulletin Boolean @default(true)
-  createdAt        DateTime @default(now())
+  id                String   @id @default(uuid())
+  ticketId          String
+  ticket            Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  type              IocType
+  value             String
+  context           String?
+  origin            String?
+  createdById       String?
+  createdBy         User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  includeInBulletin Boolean  @default(true)
+  createdAt         DateTime @default(now())
 
   @@unique([ticketId, type, value])
 }

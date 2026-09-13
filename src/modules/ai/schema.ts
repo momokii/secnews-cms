@@ -4,20 +4,22 @@ import { SuggestionStatusEnum } from "../tickets/schema.js";
 
 /** AI assist. fill = strict (suggests ONLY missing final fields);
  * enrich = full rewrite suggestions. Both land as PENDING suggestions that
- * must be accepted/edited/rejected before Send or OTX push (hard block, S2). */
+ * must be accepted/edited/rejected before Send or OTX push (hard block, S2).
+ * Ids are uuid strings — every model PK is a uuid in the B1 Prisma schema. */
 
 export const AiSuggestionSchema = z.object({
-  id: z.number().int().positive(),
-  ticketId: z.number().int().positive(),
+  id: z.uuid(),
+  ticketId: z.uuid(),
   /** Final-field path the suggestion targets: overview | description |
    * recommendations | references | cveIds | affectedVersions | mitigation. */
   field: z.string().min(1),
   currentValue: z.string().nullable(),
   suggestedValue: z.string(),
   status: SuggestionStatusEnum,
-  createdById: z.number().int().positive(),
+  /** Model id that produced the suggestion (null for hand-written rows). */
+  model: z.string().nullable(),
   createdAt: z.iso.datetime(),
-  resolvedAt: z.iso.datetime().nullable(),
+  updatedAt: z.iso.datetime(),
 });
 export type AiSuggestion = z.infer<typeof AiSuggestionSchema>;
 
