@@ -35,11 +35,12 @@ export const SuggestionStatusEnum = z.enum(PrismaSuggestionStatus);
 export type SuggestionStatus = z.infer<typeof SuggestionStatusEnum>;
 
 // ---- Entities ----
+// Ids mirror the Prisma uuid string PKs (B1 authoritative), same as auth/feeds modules.
 
 const cveId = z.string().regex(/^CVE-\d{4}-\d{4,}$/, "CVE-YYYY-NNNNN");
 
 export const TicketSchema = z.object({
-  id: z.number().int().positive(),
+  id: z.uuid(),
   title: z.string().min(1),
   origin: TicketOriginEnum,
   findingType: FindingTypeEnum,
@@ -56,7 +57,7 @@ export const TicketSchema = z.object({
   recommendations: z.string().nullable(),
   references: z.array(z.url()).default([]),
   tlp: TlpEnum.default("AMBER"),
-  feedItemId: z.number().int().positive().nullable(),
+  feedItemId: z.uuid().nullable(),
   otxPulseId: z.string().nullable(),
   otxPulseUrl: z.url().nullable(),
   createdAt: z.iso.datetime(),
@@ -65,24 +66,24 @@ export const TicketSchema = z.object({
 export type Ticket = z.infer<typeof TicketSchema>;
 
 export const TicketSourceSchema = z.object({
-  id: z.number().int().positive(),
-  ticketId: z.number().int().positive(),
+  id: z.uuid(),
+  ticketId: z.uuid(),
   url: z.url().nullable(),
   note: z.string().nullable(),
-  createdById: z.number().int().positive(),
+  createdById: z.uuid().nullable(),
   createdAt: z.iso.datetime(),
 });
 export type TicketSource = z.infer<typeof TicketSourceSchema>;
 
 export const IocSchema = z.object({
-  id: z.number().int().positive(),
-  ticketId: z.number().int().positive(),
+  id: z.uuid(),
+  ticketId: z.uuid(),
   type: IocTypeEnum,
   value: z.string().min(1).max(512),
   context: z.string().nullable(),
   origin: z.string().nullable(),
   includeInBulletin: z.boolean(),
-  createdById: z.number().int().positive(),
+  createdById: z.uuid().nullable(),
   createdAt: z.iso.datetime(),
 });
 export type Ioc = z.infer<typeof IocSchema>;
@@ -174,6 +175,10 @@ export const UpdateIocBodySchema = z
     includeInBulletin: z.boolean().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, { message: "At least one field required" });
+
+export const UuidIdParamSchema = z.object({ id: z.uuid() });
+export const IocIdParamSchema = z.object({ id: z.uuid(), iocId: z.uuid() });
+export const SourceIdParamSchema = z.object({ id: z.uuid(), sourceId: z.uuid() });
 
 // ---- List ----
 
