@@ -26,8 +26,10 @@ function prismaErrorToReply(reply: Parameters<typeof sendError>[0], err: unknown
 }
 
 // Autoload prefixes the module directory, so "/" here resolves to /feeds.
+// Contract #12–#15: every source surface is MGR (ADMIN/EDITOR).
 export default async function feedRoutes(app: FastifyInstance): Promise<void> {
   const f = app.withTypeProvider<ZodTypeProvider>();
+  const mgr = [app.requireRole("ADMIN", "EDITOR")];
 
   f.get(
     "/",
@@ -36,6 +38,7 @@ export default async function feedRoutes(app: FastifyInstance): Promise<void> {
         querystring: ListFeedSourcesQuerySchema,
         response: { 200: ListFeedSourcesResponseSchema },
       },
+      onRequest: mgr,
     },
     async (request) => {
       const { page, pageSize } = request.query;
@@ -53,7 +56,10 @@ export default async function feedRoutes(app: FastifyInstance): Promise<void> {
 
   f.post(
     "/",
-    { schema: { body: CreateFeedBodySchema, response: { 201: FeedSourceSchema } } },
+    {
+      schema: { body: CreateFeedBodySchema, response: { 201: FeedSourceSchema } },
+      onRequest: mgr,
+    },
     async (request, reply) => {
       try {
         const { name, url, active } = request.body;
@@ -75,6 +81,7 @@ export default async function feedRoutes(app: FastifyInstance): Promise<void> {
         body: UpdateFeedBodySchema,
         response: { 200: FeedSourceSchema },
       },
+      onRequest: mgr,
     },
     async (request, reply) => {
       const { name, url, active } = request.body;
@@ -97,7 +104,7 @@ export default async function feedRoutes(app: FastifyInstance): Promise<void> {
 
   f.delete(
     "/:id",
-    { schema: { params: UuidIdParamSchema } },
+    { schema: { params: UuidIdParamSchema }, onRequest: mgr },
     async (request, reply) => {
       try {
         await prisma.feedSource.delete({ where: { id: request.params.id } });
