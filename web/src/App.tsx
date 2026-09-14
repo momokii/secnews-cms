@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from "react-router";
 import { AccountPage } from "./pages/AccountPage";
 import { AppShell } from "./components/AppShell";
-import { RequireAuth } from "./components/RequireAuth";
+import { GuestOnly, RequireAuth } from "./components/RequireAuth";
 import { RoleGate } from "./components/RoleGate";
 import { BootstrapPage } from "./pages/BootstrapPage";
 import { BulletinPage } from "./pages/BulletinPage";
@@ -19,8 +19,10 @@ export function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/bootstrap" element={<BootstrapPage />} />
+        <Route element={<GuestOnly />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/bootstrap" element={<BootstrapPage />} />
+        </Route>
         <Route element={<RequireAuth />}>
           <Route path="/account" element={<AccountPage />} />
           <Route

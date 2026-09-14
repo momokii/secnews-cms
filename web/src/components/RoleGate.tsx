@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router";
-import { getToken, getUser } from "../lib/tokenStore";
+import { useSession } from "../lib/tokenStore";
 
 interface RoleGateProps {
   /** Roles allowed to view the children. */
@@ -9,13 +9,13 @@ interface RoleGateProps {
 }
 
 /**
- * Stub: renders children unconditionally and records the allowed roles as a data
- * attribute. Real role enforcement lands with the auth context wave (F1).
+ * Renders children only when the live session role is allowed; otherwise
+ * redirects to /feeds. A session without a parseable user (token only) passes.
  */
 export function RoleGate({ roles, children }: RoleGateProps) {
-  const current = getUser();
-  const allowed = current === null
-    ? getToken() !== null
-    : roles.map((role) => role.toUpperCase()).includes(current.role);
+  const { token, user } = useSession();
+  const allowed = user === null
+    ? token !== null
+    : roles.map((role) => role.toUpperCase()).includes(user.role);
   return allowed ? <>{children}</> : <Navigate to="/feeds" replace />;
 }
