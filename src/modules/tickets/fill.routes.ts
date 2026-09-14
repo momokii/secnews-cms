@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { AppError } from "../../common/errors.js";
 import { idParam } from "../../common/pagination.js";
 import { AiFillResponseSchema } from "../ai/schema.js";
+import { recordActivity } from "./activity.js";
 import { generateSuggestions, SemanticError, storeSuggestions, toSuggestion } from "../ai/service.js";
 
 /**
@@ -24,7 +25,12 @@ function semantic422(reply: FastifyReply, error: SemanticError): void {
 export default async function fillRoutes(app: FastifyInstance): Promise<void> {
   const f = app.withTypeProvider<ZodTypeProvider>();
 
-  const run = async (ticketId: string, mode: "fill" | "enrich", reply: FastifyReply) => {
+  const run = async (
+    ticketId: string,
+    mode: "fill" | "enrich",
+    actorId: string,
+    reply: FastifyReply,
+  ) => {
     const ticket = await app.prisma.ticket.findUnique({
       where: { id: ticketId },
       include: { iocs: true, sources: true },
@@ -43,6 +49,12 @@ export default async function fillRoutes(app: FastifyInstance): Promise<void> {
       }
       throw error;
     }
+    await recordActivity(app.prisma, {
+      ticketId,
+      actorId,
+      action: mode === "fill" ? "AI_FILL" : "AI_ENRICH",
+      detail: `${rows.length} suggestion(s)`,
+    });
     return { suggestions: rows.map(toSuggestion) };
   };
 
@@ -53,7 +65,7 @@ export default async function fillRoutes(app: FastifyInstance): Promise<void> {
       body: emptyBody,
       response: { 200: AiFillResponseSchema },
     },
-  }, async (request, reply) => run(request.params.id, "fill", reply));
+  }, async (request, reply) => run(request.params.id, "fill", request.user.sub, reply));
 
   f.post("/:id/ai/enrich", {
     onRequest: [app.requireRole("ADMIN", "EDITOR", "ANALYST")],
@@ -62,5 +74,5 @@ export default async function fillRoutes(app: FastifyInstance): Promise<void> {
       body: emptyBody,
       response: { 200: AiFillResponseSchema },
     },
-  }, async (request, reply) => run(request.params.id, "enrich", reply));
+  }, async (request, reply) => run(request.params.id, "enrich", request.user.sub, reply));
 }

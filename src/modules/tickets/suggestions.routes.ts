@@ -5,6 +5,7 @@ import type { Prisma } from "../../generated/prisma/client.js";
 import { SuggestionStatus } from "../../generated/prisma/enums.js";
 import { AppError } from "../../common/errors.js";
 import { idParam } from "../../common/pagination.js";
+import { recordActivity } from "./activity.js";
 import {
   ListSuggestionsQuerySchema,
   ListSuggestionsResponseSchema,
@@ -106,9 +107,20 @@ export default async function suggestionRoutes(app: FastifyInstance): Promise<vo
       throw new AppError("CONFLICT", `Suggestion already ${row.status.toLowerCase()}`);
     }
     const { field, suggestedValue } = parseSuggestion(row);
+    const actorId = request.user.sub;
     const updated = await app.prisma.$transaction(async (tx) => {
       await tx.ticket.update({ where: { id }, data: mergeFor(field, suggestedValue) });
-      return tx.aiSuggestion.update({ where: { id: suggestionId }, data: { status: SuggestionStatus.ACCEPTED } });
+      const updated = await tx.aiSuggestion.update({
+        where: { id: suggestionId },
+        data: { status: SuggestionStatus.ACCEPTED },
+      });
+      await recordActivity(tx, {
+        ticketId: id,
+        actorId,
+        action: "SUGGESTION_ACCEPTED",
+        detail: field,
+      });
+      return updated;
     });
     return { suggestion: toSuggestion(updated) };
   });
@@ -129,9 +141,18 @@ export default async function suggestionRoutes(app: FastifyInstance): Promise<vo
     if (row.status !== SuggestionStatus.PENDING) {
       throw new AppError("CONFLICT", `Suggestion already ${row.status.toLowerCase()}`);
     }
-    const updated = await app.prisma.aiSuggestion.update({
-      where: { id: suggestionId },
-      data: { status: SuggestionStatus.REJECTED },
+    const actorId = request.user.sub;
+    const updated = await app.prisma.$transaction(async (tx) => {
+      const updated = await tx.aiSuggestion.update({
+        where: { id: suggestionId },
+        data: { status: SuggestionStatus.REJECTED },
+      });
+      await recordActivity(tx, {
+        ticketId: id,
+        actorId,
+        action: "SUGGESTION_REJECTED",
+      });
+      return updated;
     });
     return { suggestion: toSuggestion(updated) };
   });
