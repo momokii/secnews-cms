@@ -22,8 +22,8 @@ export interface OtxPulse {
   tlp: OtxTlp;
   tags: string[];
   indicatorCount: number;
-  created: string;
-  modified: string;
+  created: string | null;
+  modified: string | null;
 }
 
 export async function getBulletinTemplate(): Promise<BulletinTemplate> {

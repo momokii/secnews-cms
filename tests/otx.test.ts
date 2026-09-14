@@ -278,6 +278,52 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
     expect(headers["X-OTX-API-KEY"]).toBe(OTX_KEY);
   });
 
+  it("OTX datetimes without a timezone (real OTX wire shape) normalize to ISO instead of 500", async () => {
+    // Given: OTX returns created/modified with no timezone suffix, plus one garbage value
+    stubFetch(200, {
+      count: 2,
+      results: [
+        {
+          id: "p-tz",
+          name: "TZ-less pulse",
+          public: true,
+          TLP: "GREEN",
+          tags: [],
+          indicator_count: 1,
+          created: "2026-03-01T00:00:00",
+          modified: "2026-03-02T12:30:00.000000",
+        },
+        {
+          id: "p-bad",
+          name: "Bad date pulse",
+          public: false,
+          TLP: "RED",
+          tags: [],
+          indicator_count: 0,
+          created: "not-a-date",
+          modified: "",
+        },
+      ],
+    });
+
+    // When: pulses are listed
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses?page=1",
+      headers: { authorization: admin },
+    });
+
+    // Then: 200 with normalized ISO datetimes and nulls — never a serialization 500
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      items: Array<{ id: string; created: string | null; modified: string | null }>;
+    };
+    expect(body.items[0]?.created).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(body.items[0]?.modified).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(body.items[1]?.created).toBeNull();
+    expect(body.items[1]?.modified).toBeNull();
+  });
+
   it("OTX upstream failure surfaces as a 502 error envelope", async () => {
     // Given: an upstream outage
     stubFetch(503, { error: "unavailable" });

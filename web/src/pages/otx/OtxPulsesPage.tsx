@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatTimestamp } from "../../lib/datetime";
 import { useOtxPulses } from "../../lib/useBulletin";
 
 export function OtxPulsesPage() {
@@ -51,7 +52,7 @@ export function OtxPulsesPage() {
                 <td className="py-2 pr-4 text-slate-500">{pulse.indicatorCount}</td>
                 <td className="py-2 pr-4 text-slate-500">{pulse.tags.join(", ")}</td>
                 <td className="py-2 text-slate-500">
-                  {new Date(pulse.modified).toLocaleDateString()}
+                  {pulse.modified === null ? "—" : formatTimestamp(pulse.modified)}
                 </td>
               </tr>
             ))}

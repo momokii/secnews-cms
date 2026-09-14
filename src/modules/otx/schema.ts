@@ -26,8 +26,8 @@ export const OtxPulseSchema = z.object({
   tlp: OtxTlpEnum,
   tags: z.array(z.string()),
   indicatorCount: z.number().int().min(0),
-  created: z.iso.datetime(),
-  modified: z.iso.datetime(),
+  created: z.iso.datetime().nullable(),
+  modified: z.iso.datetime().nullable(),
 });
 export type OtxPulse = z.infer<typeof OtxPulseSchema>;
 

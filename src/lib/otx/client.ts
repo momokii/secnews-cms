@@ -96,8 +96,8 @@ export type SubscribedPulse = {
   tlp: OtxTlp;
   tags: string[];
   indicatorCount: number;
-  created: string;
-  modified: string;
+  created: string | null;
+  modified: string | null;
 };
 
 type OtxPulseResponse = {
@@ -115,6 +115,15 @@ type OtxSubscribedResponse = { count?: unknown; results?: unknown };
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+/** OTX sends datetimes without a timezone; normalize to ISO, null when unparseable. */
+function asIsoDateTime(value: unknown): string | null {
+  if (typeof value !== "string" || value === "") {
+    return null;
+  }
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : new Date(time).toISOString();
 }
 
 /** OTX tags arrive as strings or {name} objects — normalize to strings. */
@@ -143,8 +152,8 @@ function asPulse(row: unknown): SubscribedPulse | null {
     tlp: OTX_TLPS.includes(rawTlp) ? rawTlp : "AMBER",
     tags: asTags(pulse.tags),
     indicatorCount: typeof pulse.indicator_count === "number" ? pulse.indicator_count : 0,
-    created: asString(pulse.created),
-    modified: asString(pulse.modified),
+    created: asIsoDateTime(pulse.created),
+    modified: asIsoDateTime(pulse.modified),
   };
 }
 
