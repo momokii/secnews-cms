@@ -188,5 +188,17 @@ export const ListTicketsQuerySchema = pageQuery.extend({
   status: TicketStatusEnum.optional(),
   origin: TicketOriginEnum.optional(),
   findingType: FindingTypeEnum.optional(),
-});
+  from: z.union([z.iso.date(), z.iso.datetime()]).optional(),
+  to: z.union([z.iso.date(), z.iso.datetime()]).optional(),
+}).refine(
+  ({ from, to }) =>
+    from === undefined || to === undefined || dateBound(from, false) <= dateBound(to, true),
+  { message: "from must be before or equal to to", path: ["from"] },
+);
+
+function dateBound(value: string, endOfDay: boolean): Date {
+  return value.length === 10
+    ? new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`)
+    : new Date(value);
+}
 export const ListTicketsResponseSchema = paginated(TicketSchema);

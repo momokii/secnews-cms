@@ -36,7 +36,7 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
       onRequest: [app.requireRole("ADMIN", "EDITOR", "ANALYST")],
     },
     async (request) => {
-      const { q, status, origin, findingType, page, pageSize } = request.query;
+      const { q, status, origin, findingType, page, pageSize, from, to } = request.query;
       const where: Prisma.TicketWhereInput = {};
       if (q !== undefined) {
         where.title = { contains: q, mode: "insensitive" };
@@ -49,6 +49,12 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
       }
       if (findingType !== undefined) {
         where.findingType = findingType;
+      }
+      if (from !== undefined || to !== undefined) {
+        where.createdAt = {
+          ...(from === undefined ? {} : { gte: dateBound(from, false) }),
+          ...(to === undefined ? {} : { lte: dateBound(to, true) }),
+        };
       }
       const [rows, total] = await prisma.$transaction([
         prisma.ticket.findMany({
@@ -232,4 +238,10 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
       return toTicketDto(updated);
     },
   );
+}
+
+function dateBound(value: string, endOfDay: boolean): Date {
+  return value.length === 10
+    ? new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`)
+    : new Date(value);
 }
