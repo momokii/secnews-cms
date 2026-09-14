@@ -46,11 +46,31 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   if (response.status === 401) {
     clearToken();
     unauthorizedNavigator(LOGIN_PATH);
-    throw new ApiError(401, "Session expired. Please sign in again.");
+    let message = "Session expired. Please sign in again.";
+    try {
+      const body: unknown = await response.clone().json();
+      if (typeof body === "object" && body !== null && "error" in body) {
+        const error = body.error;
+        if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") message = error.message;
+      }
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+    }
+    throw new ApiError(401, message);
   }
 
   if (!response.ok) {
-    throw new ApiError(response.status, `API request failed with status ${response.status}`);
+    let message = `API request failed with status ${response.status}`;
+    try {
+      const body: unknown = await response.clone().json();
+      if (typeof body === "object" && body !== null && "error" in body) {
+        const error = body.error;
+        if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") message = error.message;
+      }
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+    }
+    throw new ApiError(response.status, message);
   }
 
   return response;

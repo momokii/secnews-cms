@@ -31,3 +31,7 @@ src/generated/
 logs/
 *.log
 npm-debug.log*
+
+# Agent/tooling state — never commit
+.omo/
+.codegraph

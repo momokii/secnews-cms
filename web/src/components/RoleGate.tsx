@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { Navigate } from "react-router";
+import { getToken, getUser } from "../lib/tokenStore";
 
 interface RoleGateProps {
   /** Roles allowed to view the children. */
@@ -11,5 +13,9 @@ interface RoleGateProps {
  * attribute. Real role enforcement lands with the auth context wave (F1).
  */
 export function RoleGate({ roles, children }: RoleGateProps) {
-  return <div data-allowed-roles={roles.join(",")}>{children}</div>;
+  const current = getUser();
+  const allowed = current === null
+    ? getToken() !== null
+    : roles.map((role) => role.toUpperCase()).includes(current.role);
+  return allowed ? <>{children}</> : <Navigate to="/feeds" replace />;
 }

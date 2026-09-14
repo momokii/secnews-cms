@@ -1,0 +1,179 @@
+/**
+ * Wire types for the ticket workflow (contract #21-36, #47-48, #52).
+ * Shapes mirror src/modules/{tickets,ai,delivery,otx}/schema.ts — ticket ids are
+ * uuid strings; client/channel/delivery ids are numeric.
+ * Fetch functions live in ticketsApi.ts; this file is the pure contract mirror.
+ */
+
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** OPEN → RESEARCH → READY → SENT → CLOSED; cancel path into CLOSED (docs/STATES.md §1). */
+export const TICKET_STATUSES = ["OPEN", "RESEARCH", "READY", "SENT", "CLOSED"] as const;
+export type TicketStatus = (typeof TICKET_STATUSES)[number];
+
+export const TICKET_ORIGINS = ["AUTO_FEED", "MANUAL"] as const;
+export type TicketOrigin = (typeof TICKET_ORIGINS)[number];
+
+export const FINDING_TYPES = ["VULNERABILITY_CVE", "THREAT_CAMPAIGN", "OTHER"] as const;
+export type FindingType = (typeof FINDING_TYPES)[number];
+
+export const TLP_LEVELS = ["CLEAR", "GREEN", "AMBER", "RED"] as const;
+export type Tlp = (typeof TLP_LEVELS)[number];
+
+/** The 12 confirmed IOC types (docs/STATES.md §3). */
+export const IOC_TYPES = [
+  "DOMAIN",
+  "IPV4",
+  "IPV6",
+  "URL",
+  "EMAIL",
+  "MD5",
+  "SHA1",
+  "SHA256",
+  "FILEPATH",
+  "MUTEX",
+  "CIDR",
+  "OTHER",
+] as const;
+export type IocType = (typeof IOC_TYPES)[number];
+
+export const SUGGESTION_STATUSES = ["PENDING", "ACCEPTED", "REJECTED"] as const;
+export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
+
+export const CHANNEL_TYPES = ["WHATSAPP", "TELEGRAM", "EMAIL"] as const;
+export type ChannelType = (typeof CHANNEL_TYPES)[number];
+
+export const DELIVERY_STATUSES = ["SENT", "FAILED"] as const;
+export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
+
+export interface Ticket {
+  id: string;
+  title: string;
+  origin: TicketOrigin;
+  findingType: FindingType;
+  status: TicketStatus;
+  cveIds: string[];
+  affectedProduct: string | null;
+  affectedVersions: string | null;
+  mitigation: string | null;
+  threatName: string | null;
+  /** Final (client-facing) output fields. */
+  overview: string | null;
+  description: string | null;
+  recommendations: string | null;
+  references: string[];
+  tlp: Tlp;
+  feedItemId: string | null;
+  otxPulseId: string | null;
+  otxPulseUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketSource {
+  id: string;
+  ticketId: string;
+  url: string | null;
+  note: string | null;
+  createdById: string | null;
+  createdAt: string;
+}
+
+export interface Ioc {
+  id: string;
+  ticketId: string;
+  type: IocType;
+  value: string;
+  context: string | null;
+  origin: string | null;
+  includeInBulletin: boolean;
+  createdById: string | null;
+  createdAt: string;
+}
+
+/** Detail envelope — pendingSuggestions > 0 is the FE hard-block banner signal (S2). */
+export interface TicketDetail extends Ticket {
+  sources: TicketSource[];
+  iocs: Ioc[];
+  pendingSuggestions: number;
+}
+
+export interface AiSuggestion {
+  id: string;
+  ticketId: string;
+  /** Final-field path targeted: overview | description | recommendations | … */
+  field: string;
+  currentValue: string | null;
+  suggestedValue: string;
+  status: SuggestionStatus;
+  model: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeliveryAudit {
+  id: number;
+  ticketId: number;
+  channelId: number;
+  channelType: ChannelType;
+  clientId: number;
+  clientName: string;
+  target: string;
+  /** Exact message body sent — compliance requirement. */
+  payload: string;
+  status: DeliveryStatus;
+  errorDetail: string | null;
+  sentById: number;
+  sentAt: string;
+}
+
+export interface SendResponse {
+  ticket: Ticket;
+  audit: DeliveryAudit[];
+}
+
+export interface OtxPushResponse {
+  pulseId: string;
+  pulseUrl: string;
+  isPublic: boolean;
+  tlpMarking: "WHITE" | "GREEN" | "AMBER" | "RED";
+}
+
+export interface TicketsQuery {
+  q?: string;
+  status?: TicketStatus;
+  origin?: TicketOrigin;
+  findingType?: FindingType;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PatchTicketFieldsBody {
+  title?: string;
+  overview?: string;
+  description?: string;
+  recommendations?: string;
+  references?: string[];
+  tlp?: Tlp;
+}
+
+export interface CreateIocBody {
+  type: IocType;
+  value: string;
+  context?: string;
+  origin?: string;
+  includeInBulletin: boolean;
+}
+
+export interface UpdateIocBody {
+  value?: string;
+  context?: string;
+  origin?: string;
+  includeInBulletin?: boolean;
+}
+

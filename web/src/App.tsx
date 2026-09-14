@@ -5,10 +5,13 @@ import { RoleGate } from "./components/RoleGate";
 import { BootstrapPage } from "./pages/BootstrapPage";
 import { BulletinPage } from "./pages/BulletinPage";
 import { ClientsPage } from "./pages/ClientsPage";
-import { FeedsPage } from "./pages/FeedsPage";
+import { FeedItemsPage } from "./pages/feeds/FeedItemsPage";
+import { FeedSourcesPage } from "./pages/feeds/FeedSourcesPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { LoginPage } from "./pages/LoginPage";
-import { TicketsPage } from "./pages/TicketsPage";
+import { OtxPulsesPage } from "./pages/otx/OtxPulsesPage";
+import { TicketDetailPage } from "./pages/tickets/TicketDetailPage";
+import { TicketsListPage } from "./pages/tickets/TicketsListPage";
 import { UsersPage } from "./pages/UsersPage";
 
 export function App() {
@@ -18,11 +21,35 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/bootstrap" element={<BootstrapPage />} />
         <Route element={<RequireAuth />}>
-          <Route path="/feeds" element={<FeedsPage />} />
-          <Route path="/tickets" element={<TicketsPage />} />
-          <Route path="/integrations" element={<IntegrationsPage />} />
+          <Route
+            path="/feeds"
+            element={
+              <RoleGate roles={["admin", "editor"]}>
+                <FeedSourcesPage />
+              </RoleGate>
+            }
+          />
+          <Route path="/feeds/items" element={<FeedItemsPage />} />
+          <Route path="/tickets" element={<TicketsListPage />} />
+          <Route path="/tickets/:id" element={<TicketDetailPage />} />
+          <Route
+            path="/integrations"
+            element={
+              <RoleGate roles={["admin"]}>
+                <IntegrationsPage />
+              </RoleGate>
+            }
+          />
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/bulletin" element={<BulletinPage />} />
+          <Route
+            path="/otx"
+            element={
+              <RoleGate roles={["admin", "editor"]}>
+                <OtxPulsesPage />
+              </RoleGate>
+            }
+          />
           <Route
             path="/users"
             element={

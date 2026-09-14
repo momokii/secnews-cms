@@ -1,13 +1,18 @@
+import { useState } from "react";
+import { Modal } from "../components/Modal";
 import { RoleGate } from "../components/RoleGate";
-import { PageStub } from "../components/PageStub";
+import { useSaveUser, useUsers, type User } from "../lib/usersApi";
+import { USER_ROLES, type UserRole } from "../lib/tokenStore";
 
 export function UsersPage() {
-  return (
-    <RoleGate roles={["admin"]}>
-      <PageStub
-        title="Users"
-        description="User administration lands with the users wave."
-      />
-    </RoleGate>
-  );
+  const [page, setPage] = useState(1); const [editing, setEditing] = useState<User | null>(null); const [open, setOpen] = useState(false); const query = useUsers(page); const save = useSaveUser();
+  const [form, setForm] = useState({ name: "", email: "", role: "ANALYST" as UserRole, password: "" });
+  const start = (user: User | null): void => { setEditing(user); setForm(user === null ? { name: "", email: "", role: "ANALYST", password: "" } : { name: user.name, email: user.email, role: user.role, password: "" }); setOpen(true); save.reset(); };
+  const submit = (): void => { save.mutate({ id: editing?.id ?? null, user: { ...form, ...(form.password === "" ? {} : { password: form.password }) } }, { onSuccess: () => setOpen(false) }); };
+  const total = query.data?.total ?? 0; const pageSize = query.data?.pageSize ?? 20; const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  return <RoleGate roles={["admin"]}><section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center justify-between"><h1 className="text-lg font-semibold text-slate-900">Users</h1><button type="button" onClick={() => start(null)} className="rounded-md bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-500">Add user</button></div>
+    {query.isPending ? <p className="mt-4 text-sm text-slate-500">Loading users…</p> : query.isError ? <p role="alert" className="mt-4 text-sm text-red-600">{query.error.message}</p> : <table className="mt-4 w-full text-left text-sm"><thead><tr className="border-b border-slate-200 text-slate-500"><th className="py-2">Name</th><th className="py-2">Email</th><th className="py-2">Role</th><th className="py-2">Actions</th></tr></thead><tbody>{query.data.items.map((user) => <tr key={user.id} className="border-b border-slate-100"><td className="py-2">{user.name}</td><td className="py-2">{user.email}</td><td className="py-2">{user.role}</td><td className="py-2"><button type="button" onClick={() => start(user)} className="rounded-md border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100">Edit</button></td></tr>)}</tbody></table>}
+    <div className="mt-4 flex justify-between text-sm text-slate-500"><span>Page {page} of {totalPages}</span><span className="flex gap-2"><button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded-md border border-slate-200 px-3 py-1 disabled:opacity-50">Previous</button><button type="button" disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="rounded-md border border-slate-200 px-3 py-1 disabled:opacity-50">Next</button></span></div>
+    {open ? <Modal open onClose={() => setOpen(false)} title={editing === null ? "Create user" : "Edit user"}><form className="flex flex-col gap-4" onSubmit={(event) => { event.preventDefault(); submit(); }}><label className="flex flex-col gap-1"><span>Name</span><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="rounded-md border border-slate-200 px-3 py-2" /></label><label className="flex flex-col gap-1"><span>Email</span><input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className="rounded-md border border-slate-200 px-3 py-2" /></label><label className="flex flex-col gap-1"><span>Role</span><select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as UserRole })} className="rounded-md border border-slate-200 px-3 py-2">{USER_ROLES.map((role) => <option key={role}>{role}</option>)}</select></label><label className="flex flex-col gap-1"><span>Password{editing === null ? "" : " (leave blank to keep)"}</span><input required={editing === null} minLength={8} type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} className="rounded-md border border-slate-200 px-3 py-2" /></label>{save.isError ? <p role="alert" className="text-sm text-red-600">{save.error.message}</p> : null}<button type="submit" disabled={save.isPending} className="rounded-md bg-indigo-600 px-3 py-2 text-sm text-white">{editing === null ? "Create user" : "Save changes"}</button></form></Modal> : null}
+  </section></RoleGate>;
 }
