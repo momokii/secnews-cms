@@ -8,6 +8,7 @@ import { useTicket, useTransitionTicket } from "../../lib/useTickets";
 import { AiPanel } from "./AiPanel";
 import { AuditTimeline } from "./AuditTimeline";
 import { ActivityTimeline } from "./ActivityTimeline";
+import { CopyButton } from "../../components/CopyButton";
 import { DeliveryActions } from "./DeliveryActions";
 import { FinalFieldsForm } from "./FinalFieldsForm";
 import { IocTable } from "./IocTable";
@@ -79,6 +80,19 @@ export function TicketDetailPage() {
                 className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[ticket.status]}`}
               >
                 {ticket.status}
+              </span>
+              <span
+                className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700"
+                title={ticket.id}
+              >
+                ID {ticket.id.slice(0, 8)}
+                <CopyButton
+                  text={ticket.id}
+                  label="Copy"
+                  ariaLabel="Copy ticket ID"
+                  className="rounded px-1 text-xs text-slate-600 hover:text-slate-900"
+                  feedbackClassName="text-xs text-emerald-700"
+                />
               </span>
               <span>{ticket.origin}</span>
               <span>·</span>

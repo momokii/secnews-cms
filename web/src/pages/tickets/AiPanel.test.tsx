@@ -164,4 +164,18 @@ describe("FE-AI-01: AI panel", () => {
     );
     expect(screen.queryByRole("alert")).toBeNull();
   });
+
+  it("explains the difference between AI fill and AI enrich above the buttons", async () => {
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch(routes()));
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={0} blocked={false} />,
+    );
+
+    const explainer = await screen.findByText(/Fill: drafts Overview\/Description\/etc\. ONLY/);
+    expect(explainer.textContent).toContain("never invents facts");
+    expect(explainer.textContent).toContain("researches extra context first");
+    expect(explainer.textContent).toContain("Accept/Edit/Reject");
+    expect(explainer.textContent).toContain("sending is blocked while any is pending");
+  });
 });

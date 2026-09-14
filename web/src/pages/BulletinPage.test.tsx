@@ -148,3 +148,78 @@ describe("FE-BUL-02: save persists the template and refetches", () => {
     await screen.findByDisplayValue("v2 body");
   });
 });
+
+describe("TASK-UXB: copy bulletin", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(window.navigator, "clipboard");
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it("copies the exact preview text with line breaks intact and confirms", async () => {
+    // Given: an async clipboard and a multi-line rendered preview
+    setToken("test-token");
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    expect(defangedRendered.includes("\n")).toBe(true);
+    const fetchMock = routeFetch([
+      {
+        match: (url, method) =>
+          method === "GET" && url === "/api/bulletin/template",
+        respond: () => jsonResponse(defaultTemplate),
+      },
+      {
+        match: (url, method) =>
+          method === "POST" &&
+          url === `/api/tickets/${PREVIEW_TICKET_ID}/bulletin/preview`,
+        respond: () => jsonResponse({ rendered: defangedRendered }),
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    // When: the operator previews a ticket then clicks Copy bulletin
+    renderPage();
+    fireEvent.change(await screen.findByLabelText("Ticket ID"), {
+      target: { value: PREVIEW_TICKET_ID },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    const pane = await screen.findByLabelText("Bulletin preview");
+    expect(pane.textContent).toContain("hxxp://203[.]0[.]113[.]7");
+    expect(writeText).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Copy bulletin" }));
+
+    // Then: the clipboard receives the raw preview string — newlines intact,
+    // not innerText — and a Copied confirmation shows
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(defangedRendered),
+    );
+    expect(await screen.findByText("Copied")).toBeTruthy();
+  });
+
+  it("disables Copy bulletin until a preview exists", async () => {
+    // Given: the template loaded but no preview rendered yet
+    setToken("test-token");
+    vi.stubGlobal(
+      "fetch",
+      routeFetch([
+        {
+          match: (url, method) =>
+            method === "GET" && url === "/api/bulletin/template",
+          respond: () => jsonResponse(defaultTemplate),
+        },
+      ]),
+    );
+
+    // When: the page renders
+    renderPage();
+
+    // Then: the copy button is disabled with nothing to copy
+    const copy = (await screen.findByRole("button", {
+      name: "Copy bulletin",
+    })) as HTMLButtonElement;
+    expect(copy.disabled).toBe(true);
+  });
+});

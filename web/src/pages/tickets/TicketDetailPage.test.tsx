@@ -18,6 +18,7 @@ import {
 import { TicketDetailPage } from "./TicketDetailPage";
 
 afterEach(() => {
+  Reflect.deleteProperty(window.navigator, "clipboard");
   vi.unstubAllGlobals();
   localStorage.clear();
 });
@@ -178,5 +179,34 @@ describe("TicketDetailPage: workspace composition", () => {
         }),
       ),
     );
+  });
+});
+
+describe("TASK-UXB: ticket ID chip", () => {
+  it("renders the ID chip with the prefix, the full id in the title, and copies it", async () => {
+    // Given: a loaded ticket and a working async clipboard
+    setToken("test-token");
+    setUser({ id: "7e1a9c3b-5d2f-48e4-b6a8-9c0d2e4f6a8b", email: "e@example.com", name: "Editor", role: "EDITOR" });
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    vi.stubGlobal("fetch", routeFetch(detailRoutes()));
+
+    // When: the detail page renders and the operator copies the ID
+    renderDetail();
+
+    // Then: the chip shows the 8-char prefix and carries the full id in title
+    expect(await screen.findByText(`ID ${TICKET_ID.slice(0, 8)}`)).toBeTruthy();
+    const chip = screen.getByText(`ID ${TICKET_ID.slice(0, 8)}`).closest("span");
+    expect(chip?.getAttribute("title")).toBe(TICKET_ID);
+
+    // When: Copy is clicked
+    fireEvent.click(screen.getByRole("button", { name: "Copy ticket ID" }));
+
+    // Then: the full id lands on the clipboard and feedback shows
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(TICKET_ID));
+    expect(await screen.findByText("Copied")).toBeTruthy();
   });
 });

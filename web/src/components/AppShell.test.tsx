@@ -155,3 +155,91 @@ describe("SHELL-03: signed-in users skip guest routes", () => {
     expect(await screen.findByRole("heading", { name: "Feeds" })).toBeTruthy();
   });
 });
+
+describe("TASK-UXB: collapsible sidebar", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), {
+          status: 200,
+        }),
+      ),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearToken();
+  });
+
+  function signInAsAdmin(): void {
+    setToken("admin-token");
+    setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" });
+  }
+
+  function asideClasses(): string {
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    const aside = nav.closest("aside");
+    expect(aside).toBeTruthy();
+    return aside?.className ?? "";
+  }
+
+  it("collapses to the icon rail, persists the choice, and expands again", () => {
+    // Given: an authenticated session with the rail expanded
+    signInAsAdmin();
+    renderApp("/feeds/items");
+    const toggle = screen.getByRole("button", { name: "Collapse navigation" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(asideClasses()).toContain("w-60");
+
+    // When: the operator toggles the rail collapsed
+    fireEvent.click(toggle);
+
+    // Then: the rail narrows to the icon width, the flag flips, and the
+    // collapsed state is persisted under secnews_nav_collapsed
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(asideClasses()).toContain("w-16");
+    expect(localStorage.getItem("secnews_nav_collapsed")).toBe("1");
+
+    // When: the operator expands the rail again
+    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
+
+    // Then: the wide rail and the stored flag are restored
+    expect(screen.getByRole("button", { name: "Collapse navigation" }).getAttribute("aria-expanded")).toBe("true");
+    expect(asideClasses()).toContain("w-60");
+    expect(localStorage.getItem("secnews_nav_collapsed")).toBe("0");
+  });
+
+  it("restores the collapsed rail on the next mount from localStorage", () => {
+    // Given: a previous session stored the collapsed choice
+    signInAsAdmin();
+    localStorage.setItem("secnews_nav_collapsed", "1");
+
+    // When: the app renders fresh
+    renderApp("/feeds/items");
+
+    // Then: the rail starts collapsed with the toggle reflecting it
+    const toggle = screen.getByRole("button", { name: "Expand navigation" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(asideClasses()).toContain("w-16");
+  });
+
+  it("hides nav label text while collapsed but keeps accessible link names", () => {
+    // Given: an authenticated session
+    signInAsAdmin();
+    renderApp("/feeds/items");
+
+    // When: the rail is collapsed
+    fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
+
+    // Then: the visible label span is hidden yet the link keeps its name
+    const feeds = screen.getByRole("link", { name: "Feeds" });
+    const label = Array.from(feeds.querySelectorAll("span")).find(
+      (span) => span.textContent === "Feeds",
+    );
+    expect(label).toBeTruthy();
+    expect(label?.className).toContain("hidden");
+  });
+});

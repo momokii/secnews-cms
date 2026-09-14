@@ -57,8 +57,10 @@ export function AiPanel({ ticketId, pendingSuggestions, blocked }: AiPanelProps)
         </span>
       </div>
       <p className="mt-1 text-sm text-slate-500">
-        Fill suggests only missing final fields; enrich proposes full rewrites. Every
-        proposal must be accepted or rejected before Send or OTX push.
+        Fill: drafts Overview/Description/etc. ONLY from this ticket's materials
+        (never invents facts). Enrich: researches extra context first; every
+        addition lands as a reviewable suggestion you must Accept/Edit/Reject —
+        sending is blocked while any is pending.
       </p>
 
       {deliveryBlocked ? (

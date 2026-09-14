@@ -82,17 +82,39 @@ export function OtxPulsesPage() {
           Search results for “{query}” — clear the search box to return to the selected tab.
         </p>
       ) : null}
+      {searching && pulsesQuery.isFetching ? (
+        <p role="status" className="mt-1 text-xs text-slate-500">
+          Searching…
+        </p>
+      ) : null}
 
       {pulsesQuery.isPending ? (
-        <p className="mt-4 text-sm text-slate-500">Loading pulses…</p>
+        <div
+          role="status"
+          aria-label="Loading pulses"
+          className="mt-4 flex flex-col gap-2"
+        >
+          {[0, 1, 2, 3, 4].map((row) => (
+            <div key={row} className="h-8 animate-pulse rounded-md bg-slate-100" />
+          ))}
+        </div>
       ) : pulsesQuery.isError ? (
-        <p role="alert" className="mt-4 text-sm text-red-600">
-          {pulsesQuery.error instanceof Error
-            ? pulsesQuery.error.message
-            : "Failed to load OTX pulses."}
-        </p>
+        <div role="alert" className="mt-4 flex items-center gap-3">
+          <p className="text-sm text-red-600">
+            {pulsesQuery.error instanceof Error
+              ? pulsesQuery.error.message
+              : "Failed to load OTX pulses."}
+          </p>
+          <button
+            type="button"
+            onClick={() => pulsesQuery.refetch()}
+            className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+          >
+            Retry
+          </button>
+        </div>
       ) : pulses.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-500">No pulses yet.</p>
+        <p className="mt-4 text-sm text-slate-500">No pulses found.</p>
       ) : (
         <table className="mt-4 w-full text-left text-sm">
           <thead>

@@ -379,3 +379,108 @@ describe("FE-OTX-03: pulse details modal", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url) === "/api/otx/pulses/1")).toBe(true);
   });
 });
+
+describe("TASK-UXB: loading, empty, and error states", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it("shows skeleton rows while the first page is pending instead of dead text", async () => {
+    // Given: the pulses endpoint holds its response in flight
+    setToken("test-token");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Promise<Response>(() => {})),
+    );
+
+    // When: the page renders
+    renderPage();
+
+    // Then: a labelled loading status with skeleton rows shows and no table yet
+    expect(screen.getByRole("status", { name: "Loading pulses" })).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("shows a Searching… status while a search request is in flight and clears it on results", async () => {
+    // Given: the search source never answers until the test releases it
+    setToken("test-token");
+    const searchGate: { resolve: ((response: Response) => void) | null } = {
+      resolve: null,
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("source=search")) {
+        return new Promise<Response>((resolve) => {
+          searchGate.resolve = resolve;
+        });
+      }
+      if (url.includes("source=subscribed")) return envelope(1, [pulse(1, "Subscribed pulse")]);
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    await screen.findByText("Subscribed pulse");
+
+    // When: the operator runs a keyword search
+    fireEvent.click(screen.getByRole("tab", { name: "Search" }));
+    const search = await screen.findByLabelText("Search pulses");
+    fireEvent.change(search, { target: { value: "ransomware" } });
+
+    // Then: a Searching… status shows while the request is in flight…
+    expect(await screen.findByText("Searching…")).toBeTruthy();
+
+    // …and disappears once the results land
+    searchGate.resolve?.(envelope(1, [pulse(9, "Search hit")]));
+    await screen.findByText("Search hit");
+    expect(screen.queryByText("Searching…")).toBeNull();
+  });
+
+  it("shows 'No pulses found' when the source returns zero rows", async () => {
+    // Given: the subscribed feed answers with an empty envelope
+    setToken("test-token");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/otx/pulses")) return envelope(1, []);
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    // When: the page renders
+    renderPage();
+
+    // Then: the proper empty state is shown, not a loading or error state
+    expect(await screen.findByText(/No pulses found/)).toBeTruthy();
+  });
+
+  it("shows an error alert with a working Retry button when the query fails", async () => {
+    // Given: the pulses endpoint answers 502 first, then recovers
+    setToken("test-token");
+    let failing = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        if (failing) {
+          return new Response(
+            JSON.stringify({ error: { code: "UPSTREAM", message: "OTX upstream unavailable", details: null } }),
+            { status: 502 },
+          );
+        }
+        return envelope(1, [pulse(1, "Emerald phishing")]);
+      }),
+    );
+
+    // When: the page renders and the operator clicks Retry after recovery
+    renderPage();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("OTX upstream unavailable");
+    failing = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    // Then: the rows load and the alert is gone
+    await screen.findByText("Emerald phishing");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});

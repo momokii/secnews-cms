@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CopyButton } from "../components/CopyButton";
 import { getUser } from "../lib/tokenStore";
 import { useBulletinPreview, useBulletinTemplate, useSaveBulletinTemplate } from "../lib/useBulletin";
 
@@ -109,6 +110,11 @@ export function BulletinPage() {
           >
             Preview
           </button>
+          <CopyButton
+            text={rendered}
+            label="Copy bulletin"
+            feedbackClassName="text-xs text-emerald-700"
+          />
         </div>
 
         {preview.isError ? (
