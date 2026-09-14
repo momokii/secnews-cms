@@ -1,17 +1,41 @@
-import { useState } from "react";
-import type { OtxPulseSource } from "../../lib/bulletinApi";
+import { useEffect, useState } from "react";
+import { Pagination } from "../../components/Pagination";
 import { formatTimestamp } from "../../lib/datetime";
 import { useOtxPulses } from "../../lib/useBulletin";
+import type { OtxPulseSource } from "../../lib/bulletinApi";
+import { OtxPulseDetailModal } from "./OtxPulseDetailModal";
+
+const SEARCH_DEBOUNCE_MS = 300;
+
+const OTX_PAGE_SIZES = [10, 20, 50] as const;
 
 export function OtxPulsesPage() {
   const [page, setPage] = useState(1);
   const [source, setSource] = useState<OtxPulseSource>("subscribed");
-  const pulsesQuery = useOtxPulses(page, source);
+  const [pageSize, setPageSize] = useState(20);
+  const [searchInput, setSearchInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [detailId, setDetailId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const next = searchInput.trim();
+      setQuery(next);
+      setPage((current) => (next === query ? current : 1));
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchInput, query]);
+
+  const pulsesQuery = useOtxPulses({
+    page,
+    source,
+    pageSize,
+    q: source === "search" ? query : "",
+  });
 
   const pulses = pulsesQuery.data?.items ?? [];
   const total = pulsesQuery.data?.total ?? 0;
-  const pageSize = pulsesQuery.data?.pageSize ?? 20;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const effectivePageSize = pulsesQuery.data?.pageSize ?? pageSize;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
@@ -20,6 +44,7 @@ export function OtxPulsesPage() {
         {([
           ["subscribed", "Subscribed"],
           ["mine", "My pulses"],
+          ["search", "Search"],
         ] as const).map(([value, label]) => (
           <button
             key={value}
@@ -36,6 +61,19 @@ export function OtxPulsesPage() {
           </button>
         ))}
       </div>
+
+      {source === "search" ? (
+        <div className="mt-4">
+          <input
+            aria-label="Search pulses"
+            type="search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search pulses by keyword"
+            className="w-64 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
+          />
+        </div>
+      ) : null}
 
       {pulsesQuery.isPending ? (
         <p className="mt-4 text-sm text-slate-500">Loading pulses…</p>
@@ -56,7 +94,8 @@ export function OtxPulsesPage() {
               <th scope="col" className="py-2 pr-4 font-medium">Visibility</th>
               <th scope="col" className="py-2 pr-4 font-medium">Indicators</th>
               <th scope="col" className="py-2 pr-4 font-medium">Tags</th>
-              <th scope="col" className="py-2 font-medium">Modified</th>
+              <th scope="col" className="py-2 pr-4 font-medium">Modified</th>
+              <th scope="col" className="py-2 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -73,8 +112,17 @@ export function OtxPulsesPage() {
                 </td>
                 <td className="py-2 pr-4 text-slate-500">{pulse.indicatorCount}</td>
                 <td className="py-2 pr-4 text-slate-500">{pulse.tags.join(", ")}</td>
-                <td className="py-2 text-slate-500">
+                <td className="py-2 pr-4 text-slate-500">
                   {pulse.modified === null ? "—" : formatTimestamp(pulse.modified)}
+                </td>
+                <td className="py-2">
+                  <button
+                    type="button"
+                    onClick={() => setDetailId(pulse.id)}
+                    className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                  >
+                    Details
+                  </button>
                 </td>
               </tr>
             ))}
@@ -82,29 +130,27 @@ export function OtxPulsesPage() {
         </table>
       )}
 
-      <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-        <span>
-          Page {page} of {totalPages} — {total} pulses
-        </span>
-        <span className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page <= 1 || pulsesQuery.isPlaceholderData}
-            className="rounded-md border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            onClick={() => setPage((current) => current + 1)}
-            disabled={page >= totalPages || pulsesQuery.isPlaceholderData}
-            className="rounded-md border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Next
-          </button>
-        </span>
-      </div>
+      <Pagination
+        page={page}
+        pageSize={effectivePageSize}
+        total={total}
+        disabled={pulsesQuery.isPlaceholderData}
+        itemLabel="pulses"
+        options={OTX_PAGE_SIZES}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
+      />
+
+      {detailId !== null ? (
+        <OtxPulseDetailModal
+          pulseId={detailId}
+          name={pulses.find((pulse) => pulse.id === detailId)?.name ?? ""}
+          onClose={() => setDetailId(null)}
+        />
+      ) : null}
     </section>
   );
 }

@@ -55,15 +55,48 @@ export async function previewBulletin(
   return (await response.json()) as BulletinPreview;
 }
 
-export type OtxPulseSource = "subscribed" | "mine";
+export type OtxPulseSource = "subscribed" | "mine" | "search";
 
-/** GET /otx/pulses — source selects the subscribed or My pulses feed. */
-export async function listOtxPulses(
-  page: number,
-  source: OtxPulseSource = "subscribed",
-): Promise<Paginated<OtxPulse>> {
-  const response = await apiFetch(`/otx/pulses?page=${page}&source=${source}`, {
+export interface OtxPulseDetail {
+  id: string;
+  name: string;
+  description: string;
+  isPublic: boolean;
+  tlp: OtxTlp;
+  tags: string[];
+  references: string[];
+  indicators: Array<{ value: string; type: string }>;
+  created: string | null;
+  modified: string | null;
+}
+
+/** GET /otx/pulses — source picks subscribed / My pulses / server-side search;
+ * pageSize is clamped server-side to the OTX limit ceiling of 50. */
+export interface OtxPulsesQuery {
+  page: number;
+  source: OtxPulseSource;
+  pageSize?: number;
+  q?: string;
+}
+
+export async function listOtxPulses({
+  page,
+  source,
+  pageSize = 20,
+  q,
+}: OtxPulsesQuery): Promise<Paginated<OtxPulse>> {
+  const search = q === undefined || q === "" ? "" : `&q=${encodeURIComponent(q)}`;
+  const response = await apiFetch(
+    `/otx/pulses?page=${page}&source=${source}&pageSize=${pageSize}${search}`,
+    { method: "GET" },
+  );
+  return (await response.json()) as Paginated<OtxPulse>;
+}
+
+/** GET /otx/pulses/:id — full pulse detail behind the server proxy. */
+export async function getOtxPulse(id: string): Promise<OtxPulseDetail> {
+  const response = await apiFetch(`/otx/pulses/${encodeURIComponent(id)}`, {
     method: "GET",
   });
-  return (await response.json()) as Paginated<OtxPulse>;
+  return (await response.json()) as OtxPulseDetail;
 }

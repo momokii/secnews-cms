@@ -223,15 +223,23 @@ TLP→OTX mapping: `docs/STATES.md` §4.
 | 50 | `PUT /bulletin/template` | ADMIN | `PutTemplateBodySchema` | 200 `BulletinTemplateSchema` | |
 | 51 | `POST /tickets/:id/bulletin/preview` | WORK | `{}` | 200 `PreviewResponseSchema` `{rendered}` | 422 `VALIDATION` missing required final fields (PREV-02) |
 | 52 | `POST /tickets/:id/otx` | MGR | `{}` | 200 `PushOtxResponseSchema` `{pulseId, pulseUrl, isPublic, tlpMarking}` | 422 `VALIDATION` not `READY`; 409 `PENDING_SUGGESTIONS` (S2, OTX-02) |
-| 53 | `GET /otx/pulses` | MGR + ANALYST (read-only) | `?page&source=subscribed\|mine` (`source` defaults to `subscribed`) | 200 `ListPulsesResponseSchema` | 400 `VALIDATION` for an unsupported source; upstream failure → 502-style error envelope |
+| 53 | `GET /otx/pulses` | MGR + ANALYST (read-only) | `?page&pageSize&source=subscribed\|mine\|search&q` (`source` defaults to `subscribed`; `pageSize` clamps into 1..50, default 20; `q` used only by `search`) | 200 `ListPulsesResponseSchema` | 400 `VALIDATION` for an unsupported source; upstream failure → 502-style error envelope |
+| 54 | `GET /otx/pulses/:id` | MGR + ANALYST (read-only) | — | 200 `OtxPulseDetailSchema` `{id, name, description, isPublic, tlp, tags, references, indicators[{value,type}], created, modified}` | upstream failure or pulse the key cannot access → 502-style error envelope (never leaks the key) |
 
 Push includes only IOCs with `includeInBulletin = true`; stores
 `otxPulseId`/`otxPulseUrl` on the ticket. `TLP CLEAR→WHITE`; `AMBER`/`RED`
 force `public=false`.
 
-The `subscribed` source proxies OTX `GET /api/v1/pulses/subscribed?page=<page>`.
+The `subscribed` source proxies OTX `GET /api/v1/pulses/subscribed?limit=<pageSize>&page=<page>`.
 The `mine` source proxies OTX `GET /api/v1/pulses/my?limit=<pageSize>&page=<page>`;
-both use the configured `X-OTX-API-KEY` header. The OTX `q` parameter is not sent.
+both use the configured `X-OTX-API-KEY` header. Search is a server-side
+source: `source=search` proxies OTX `GET /api/v1/search/pulses?q=&limit=<pageSize>&page=<page>`.
+`subscribed`/`my` do NOT accept `q` upstream (OTX documents only
+`limit`/`page`/`since` for them), so keyword search goes through the search
+source rather than being filtered client-side; a blank `q` omits the param
+upstream. Pulse detail (#54) proxies OTX `GET /api/v1/pulses/{id}`; private
+pulses load because the configured key can access them, everything else is a
+502 envelope. All datetimes normalize timezone-less upstream values to ISO.
 
 ---
 

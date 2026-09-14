@@ -31,8 +31,40 @@ export const OtxPulseSchema = z.object({
 });
 export type OtxPulse = z.infer<typeof OtxPulseSchema>;
 
-// GET /otx/pulses
+// GET /otx/pulses — pageSize clamps into 1..50 (OTX's limit ceiling);
+// `search` is the only source carrying q (upstream subscribed/my lack it).
 export const ListPulsesQuerySchema = pageQuery.pick({ page: true }).extend({
-  source: z.enum(["subscribed", "mine"]).default("subscribed"),
+  source: z.enum(["subscribed", "mine", "search"]).default("subscribed"),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .default(20)
+    .transform((size) => Math.min(50, Math.max(1, size))),
+  q: z.string().trim().max(200).optional(),
 });
 export const ListPulsesResponseSchema = paginated(OtxPulseSchema);
+
+// GET /otx/pulses/:id — OTX pulse ids are Mongo hex ids, not our uuids.
+export const GetPulseParamsSchema = z.object({
+  id: z.string().min(1).max(64),
+});
+
+export const OtxPulseIndicatorSchema = z.object({
+  value: z.string(),
+  type: z.string(),
+});
+
+/** Full pulse detail rendered by the web Details modal. */
+export const OtxPulseDetailSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  isPublic: z.boolean(),
+  tlp: OtxTlpEnum,
+  tags: z.array(z.string()),
+  references: z.array(z.string()),
+  indicators: z.array(OtxPulseIndicatorSchema),
+  created: z.iso.datetime().nullable(),
+  modified: z.iso.datetime().nullable(),
+});
+export type OtxPulseDetail = z.infer<typeof OtxPulseDetailSchema>;

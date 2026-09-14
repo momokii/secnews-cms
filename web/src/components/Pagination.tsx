@@ -8,6 +8,8 @@ interface PaginationProps {
   disabled?: boolean;
   /** Plural noun for the count line, e.g. "items", "tickets". */
   itemLabel: string;
+  /** Page-size choices; defaults to every shared option. */
+  options?: readonly number[];
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }
@@ -21,6 +23,7 @@ export function Pagination({
   total,
   disabled = false,
   itemLabel,
+  options = PAGE_SIZE_OPTIONS,
   onPageChange,
   onPageSizeChange,
 }: PaginationProps) {
@@ -40,7 +43,7 @@ export function Pagination({
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
             className="rounded-md border border-slate-200 px-1 py-0.5 text-slate-700 focus:border-indigo-600 focus:outline-none"
           >
-            {PAGE_SIZE_OPTIONS.map((size) => (
+            {options.map((size) => (
               <option key={size} value={size}>
                 {size}
               </option>

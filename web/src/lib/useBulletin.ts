@@ -6,11 +6,12 @@ import {
 } from "@tanstack/react-query";
 import {
   getBulletinTemplate,
+  getOtxPulse,
   listOtxPulses,
   previewBulletin,
   putBulletinTemplate,
 } from "./bulletinApi";
-import type { OtxPulseSource } from "./bulletinApi";
+import type { OtxPulsesQuery } from "./bulletinApi";
 
 /** React Query bindings for Surface 8. Saving invalidates the template so the
  * editor refetches persisted state; pulses keep previous rows while paging. */
@@ -38,10 +39,21 @@ export function useBulletinPreview() {
   });
 }
 
-export function useOtxPulses(page: number, source: OtxPulseSource) {
+export function useOtxPulses(query: OtxPulsesQuery) {
   return useQuery({
-    queryKey: ["otx-pulses", source, page],
-    queryFn: () => listOtxPulses(page, source),
+    queryKey: ["otx-pulses", query.source, query.page, query.pageSize ?? 20, query.q ?? ""],
+    queryFn: () =>
+      listOtxPulses({
+        ...query,
+        q: query.q === "" ? undefined : query.q,
+      }),
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useOtxPulseDetail(id: string) {
+  return useQuery({
+    queryKey: ["otx-pulse-detail", id],
+    queryFn: () => getOtxPulse(id),
   });
 }

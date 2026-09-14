@@ -274,7 +274,7 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
       page: 2,
       pageSize: 20,
     });
-    expect(calls[0]?.url).toBe(`${SUBSCRIBED_URL}?page=2`);
+    expect(calls[0]?.url).toBe(`${SUBSCRIBED_URL}?limit=20&page=2`);
     const headers = calls[0]?.init.headers as Record<string, string>;
     expect(headers["X-OTX-API-KEY"]).toBe(OTX_KEY);
   });
@@ -408,5 +408,207 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
     } finally {
       await cleanupTicket(ticketId);
     }
+  });
+});
+
+describe("TASK-OTXPLUS pulses upgrades", () => {
+  const SEARCH_URL = "https://otx.alienvault.com/api/v1/search/pulses";
+  const PULSE_URL = "https://otx.alienvault.com/api/v1/pulses";
+
+  let app: FastifyInstance;
+  let admin = "";
+
+  beforeAll(async () => {
+    app = await buildApp();
+    admin = await bearerFor(app, "ADMIN");
+    await prisma.integrationConfig.deleteMany({ where: { kind: "OTX" } });
+    const put = await app.inject({
+      method: "PUT",
+      url: "/integrations/OTX",
+      headers: { authorization: admin },
+      payload: { apiKey: OTX_KEY },
+    });
+    expect(put.statusCode).toBe(200);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterAll(async () => {
+    await prisma.integrationConfig.deleteMany({ where: { kind: "OTX" } });
+    await cleanupUsers();
+    await prisma.$disconnect();
+    await app.close();
+  });
+
+  it("OTXP-01: pageSize is forwarded as the OTX limit for subscribed", async () => {
+    // Given: a subscribed page stub
+    const { calls } = stubFetch(200, { count: 0, results: [] });
+
+    // When: the operator requests 50 per page
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses?pageSize=50&page=3",
+      headers: { authorization: admin },
+    });
+
+    // Then: the upstream call carries limit=50 and the envelope echoes pageSize
+    expect(res.statusCode).toBe(200);
+    expect(calls[0]?.url).toBe(`${SUBSCRIBED_URL}?limit=50&page=3`);
+    expect((res.json() as { pageSize: number }).pageSize).toBe(50);
+  });
+
+  it("OTXP-02: pageSize is clamped into 1..50 before it reaches OTX", async () => {
+    // Given: out-of-range page sizes
+    const { calls } = stubFetch(200, { count: 0, results: [] });
+
+    // When: both extremes are requested
+    await app.inject({
+      method: "GET",
+      url: "/otx/pulses?pageSize=500",
+      headers: { authorization: admin },
+    });
+    await app.inject({
+      method: "GET",
+      url: "/otx/pulses?pageSize=0",
+      headers: { authorization: admin },
+    });
+
+    // Then: OTX never sees a limit outside 1..50
+    expect(calls.map((call) => call.url)).toEqual([
+      `${SUBSCRIBED_URL}?limit=50&page=1`,
+      `${SUBSCRIBED_URL}?limit=1&page=1`,
+    ]);
+  });
+
+  it("OTXP-03: pageSize is forwarded as the OTX limit for My pulses", async () => {
+    // Given: the My pulses stub
+    const { calls } = stubFetch(200, { count: 0, results: [] });
+
+    // When: 10 per page of the caller's own pulses are requested
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses?source=mine&pageSize=10&page=1",
+      headers: { authorization: admin },
+    });
+
+    // Then: limit=10 reaches the wire
+    expect(res.statusCode).toBe(200);
+    expect(calls[0]?.url).toBe(`${MY_PULSES_URL}?limit=10&page=1`);
+  });
+
+  it("OTXP-04: GET /otx/pulses/:id proxies the upstream pulse and maps indicators, references, and TZ-less dates", async () => {
+    // Given: an OTX pulse detail with timezone-less datetimes and indicators
+    const { calls } = stubFetch(200, {
+      id: "pulse-abc",
+      name: "Ransomware wave",
+      description: "Detailed narrative.",
+      public: false,
+      TLP: "AMBER",
+      tags: [{ name: "ransomware" }, "lockbit"],
+      references: ["https://example.com/advisory", "https://example.org/ioc"],
+      indicators: [
+        { indicator: "evil.com", type: "domain" },
+        { indicator: "1.2.3.4", type: "IPv4" },
+      ],
+      created: "2026-03-01T00:00:00",
+      modified: "2026-03-02T12:30:00.000000",
+    });
+
+    // When: the pulse detail is fetched through the proxy
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses/pulse-abc",
+      headers: { authorization: admin },
+    });
+
+    // Then: the wire shape matches OtxPulseDetailSchema with ISO datetimes
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      id: "pulse-abc",
+      name: "Ransomware wave",
+      description: "Detailed narrative.",
+      isPublic: false,
+      tlp: "AMBER",
+      tags: ["ransomware", "lockbit"],
+      references: ["https://example.com/advisory", "https://example.org/ioc"],
+      indicators: [
+        { value: "evil.com", type: "domain" },
+        { value: "1.2.3.4", type: "IPv4" },
+      ],
+      created: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      modified: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+    expect(calls[0]?.url).toBe(`${PULSE_URL}/pulse-abc`);
+    const headers = calls[0]?.init.headers as Record<string, string>;
+    expect(headers["X-OTX-API-KEY"]).toBe(OTX_KEY);
+  });
+
+  it("OTXP-05: a pulse the key cannot access yields a 502 envelope that never leaks the key", async () => {
+    // Given: OTX answers 404 for a private pulse outside the key's reach
+    const { calls } = stubFetch(404, { detail: "Not found" });
+
+    // When: its detail is requested
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses/inaccessible",
+      headers: { authorization: admin },
+    });
+
+    // Then: the canonical 502 envelope is returned and the key stays secret
+    expect(res.statusCode).toBe(502);
+    expect((res.json() as { error: { code: string } }).error.code).toBe("INTERNAL");
+    expect(res.body).not.toContain(OTX_KEY);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("OTXP-06: source=search proxies /api/v1/search/pulses with q, limit, and page", async () => {
+    // Given: a search result page with one matching pulse
+    const { calls } = stubFetch(200, {
+      count: 1,
+      results: [
+        { id: "hit-1", name: "Ransom note", public: true, TLP: "GREEN", tags: [], indicator_count: 4 },
+      ],
+    });
+
+    // When: a keyword search is executed on page 2 with 10 per page
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses?source=search&q=ransomware&page=2&pageSize=10",
+      headers: { authorization: admin },
+    });
+
+    // Then: the upstream search endpoint receives q, limit, and page
+    expect(res.statusCode).toBe(200);
+    expect(calls[0]?.url).toBe(`${SEARCH_URL}?q=ransomware&limit=10&page=2`);
+    const body = res.json() as { items: Array<{ id: string }>; total: number };
+    expect(body.items[0]?.id).toBe("hit-1");
+    expect(body.total).toBe(1);
+    const headers = calls[0]?.init.headers as Record<string, string>;
+    expect(headers["X-OTX-API-KEY"]).toBe(OTX_KEY);
+  });
+
+  it("OTXP-07: invalid source stays 400 VALIDATION and blank q searches without the param", async () => {
+    // Given: an unsupported source
+    const bad = await app.inject({
+      method: "GET",
+      url: "/otx/pulses?source=created",
+      headers: { authorization: admin },
+    });
+
+    // And: a search with no q typed yet
+    const { calls } = stubFetch(200, { count: 0, results: [] });
+    const blank = await app.inject({
+      method: "GET",
+      url: "/otx/pulses?source=search",
+      headers: { authorization: admin },
+    });
+
+    // Then: the 400 is preserved and the blank search omits q upstream
+    expect(bad.statusCode).toBe(400);
+    expect((bad.json() as { error: { code: string } }).error.code).toBe("VALIDATION");
+    expect(blank.statusCode).toBe(200);
+    expect(calls[0]?.url).toBe(`${SEARCH_URL}?limit=20&page=1`);
   });
 });
