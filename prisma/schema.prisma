@@ -71,6 +71,25 @@ enum TlpLevel {
   RED
 }
 
+/** Ticket audit-trail actions (TASK-ACT). One TicketActivity row per event. */
+enum TicketActivityAction {
+  CREATED
+  TAKEN
+  STATUS_CHANGED
+  FIELDS_UPDATED
+  IOC_ADDED
+  IOC_UPDATED
+  IOC_REMOVED
+  SOURCE_ADDED
+  SOURCE_REMOVED
+  AI_FILL
+  AI_ENRICH
+  SUGGESTION_ACCEPTED
+  SUGGESTION_REJECTED
+  SENT
+  OTX_PUSHED
+}
+
 enum SuggestionStatus {
   PENDING
   ACCEPTED
@@ -102,6 +121,7 @@ model User {
   updatedAt    DateTime        @updatedAt
   sources      TicketSource[]
   iocs         Ioc[]
+  activities   TicketActivity[]
 }
 
 model FeedSource {
@@ -159,6 +179,7 @@ model Ticket {
   iocs          Ioc[]
   suggestions   AiSuggestion[]
   deliveries    DeliveryAudit[]
+  activities    TicketActivity[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -253,4 +274,19 @@ model BulletinTemplate {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// TASK-ACT: append-only audit trail of every ticket change. actorId is
+// nullable because system-originated events have no user (future ingest).
+model TicketActivity {
+  id        String               @id @default(uuid())
+  ticketId  String
+  ticket    Ticket               @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?                @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    TicketActivityAction
+  detail    String?
+  createdAt DateTime             @default(now())
+
+  @@index([ticketId, createdAt])
 }
