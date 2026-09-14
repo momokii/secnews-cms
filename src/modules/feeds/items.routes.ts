@@ -45,8 +45,8 @@ export default async function feedItemRoutes(app: FastifyInstance): Promise<void
       }
       if (from !== undefined || to !== undefined) {
         where.publishedAt = {
-          ...(from === undefined ? {} : { gte: from }),
-          ...(to === undefined ? {} : { lte: to }),
+          ...(from === undefined ? {} : { gte: dateBound(from, false) }),
+          ...(to === undefined ? {} : { lte: dateBound(to, true) }),
         };
       }
       const [rows, total] = await prisma.$transaction([
@@ -112,4 +112,10 @@ export default async function feedItemRoutes(app: FastifyInstance): Promise<void
       return toFeedItemWire(viewed);
     },
   );
+}
+
+function dateBound(value: string, endOfDay: boolean): Date {
+  return value.length === 10
+    ? new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`)
+    : new Date(value);
 }

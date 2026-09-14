@@ -68,9 +68,19 @@ export const ListFeedItemsQuerySchema = pageQuery.extend({
   feedSourceId: z.uuid().optional(),
   q: z.string().min(1).optional(),
   /** publishedAt range (inclusive). */
-  from: z.iso.datetime().optional(),
-  to: z.iso.datetime().optional(),
-});
+  from: z.union([z.iso.date(), z.iso.datetime()]).optional(),
+  to: z.union([z.iso.date(), z.iso.datetime()]).optional(),
+}).refine(
+  ({ from, to }) =>
+    from === undefined || to === undefined || dateBound(from, false) <= dateBound(to, true),
+  { message: "from must be before or equal to to", path: ["from"] },
+);
+
+function dateBound(value: string, endOfDay: boolean): Date {
+  return value.length === 10
+    ? new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`)
+    : new Date(value);
+}
 export const ListFeedItemsResponseSchema = paginated(FeedItemSchema);
 
 // GET /feed-items/:id — normalized fields + verbatim raw payload
