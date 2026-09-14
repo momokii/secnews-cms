@@ -83,13 +83,17 @@ Schemas: `src/modules/auth/schema.ts`, `src/modules/bootstrap/schema.ts`, `src/m
 | 5 | `POST /auth/change-password` | ANY | `ChangePasswordBodySchema` | 204 | 401 if currentPassword wrong |
 | 6 | `POST /bootstrap` | PUB | `BootstrapBodySchema` | 201 `BootstrapResponseSchema` `{user, token}` | 409 `CONFLICT` if any user exists (S4, BST-01) |
 | 7 | `GET /users` | ADMIN | `ListUsersQuerySchema` `?q&role&page&pageSize` | 200 `ListUsersResponseSchema` | |
-| 8 | `POST /users` | ADMIN | `CreateUserBodySchema` | 201 `UserPublicSchema` | 403 any non-ADMIN (S4, USR-01); 409 `CONFLICT` duplicate email |
+| 8 | `POST /users` | ADMIN; ANALYST (§4, role forced) | `CreateUserBodySchema` (`role` optional) | 201 `UserPublicSchema` | 403 ANALYST attempting any non-ANALYST role (S4, USR-01/05); 409 `CONFLICT` duplicate email |
 | 9 | `PATCH /users/:id` | ADMIN | `UpdateUserBodySchema` | 200 `UserPublicSchema` | 409 `CONFLICT` email taken |
 | 10 | `POST /users/:id/reset-password` | ADMIN | `ResetPasswordBodySchema` | 204 | |
 | 11 | `DELETE /users/:id` | ADMIN | — | 204 | |
 
-S4 regression contract: an ANALYST token on any users mutation → `403
-FORBIDDEN` (only ADMIN creates users; analyst-create-admin is therefore 403).
+§4 RBAC contract for `POST /users`: ANALYST may create users, but only with
+role `ANALYST` — an omitted role defaults to ANALYST, and an ANALYST token
+attempting any explicit non-ANALYST role (the USR-01 escalation to ADMIN, or
+EDITOR) gets `403 FORBIDDEN` with no row created. ADMIN keeps unrestricted
+role choice (any role, omitted role → ANALYST). `PATCH /users/:id`,
+`POST /users/:id/reset-password` and `DELETE /users/:id` remain ADMIN-only.
 
 ## 3. Surface 2 — Feeds, Feed items, External ingest
 

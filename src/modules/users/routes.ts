@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
+import { AppError } from "../../common/errors.js";
 import { idParam } from "../../common/pagination.js";
+import { getAuthUser } from "../../plugins/auth.js";
 import { UserPublicSchema } from "../auth/schema.js";
 import * as service from "./service.js";
 import {
@@ -11,8 +13,9 @@ import {
   UpdateUserBodySchema,
 } from "./schema.js";
 
-/** ADMIN-only user CRUD. Every route gates through requireRole("ADMIN"),
- * which first authenticates (per-route onRequest, no global hook). */
+/** User CRUD (§4 RBAC): every route except POST gates through
+ * requireRole("ADMIN"); POST also admits ANALYST under the forced-ANALYST
+ * rule. Each gate runs per-route onRequest, no global hook. */
 export default async function userRoutes(app: FastifyInstance): Promise<void> {
   const f = app.withTypeProvider<ZodTypeProvider>();
 
@@ -25,12 +28,16 @@ export default async function userRoutes(app: FastifyInstance): Promise<void> {
   }, async (request) => service.listUsers(request.query));
 
   f.post("/", {
-    onRequest: [app.requireRole("ADMIN")],
+    onRequest: [app.requireRole("ADMIN", "ANALYST")],
     schema: {
       body: CreateUserBodySchema,
       response: { 201: UserPublicSchema },
     },
   }, async (request, reply) => {
+    const caller = getAuthUser(request);
+    if (caller.role !== "ADMIN" && request.body.role !== "ANALYST") {
+      throw new AppError("FORBIDDEN", "ANALYST may only create ANALYST users");
+    }
     const user = await service.createUser(request.body);
     void reply.code(201);
     return user;

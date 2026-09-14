@@ -2,15 +2,16 @@ import { z } from "zod/v4";
 import { RoleEnum, UserPublicSchema, emailField, passwordField } from "../auth/schema.js";
 import { paginated, pageQuery } from "../../common/pagination.js";
 
-/** ADMIN-only surface (confirmed RBAC: only ADMIN creates users; an ANALYST
- * token hitting any mutation here gets 403 — covers the S4 regression). */
+/** User CRUD surface (§4 RBAC): GET/PATCH/reset-password/DELETE stay ADMIN-only;
+ * POST also admits ANALYST, but only for role ANALYST (omitted role → ANALYST,
+ * any other explicit role → 403). See docs/API_CONTRACT.md §2. */
 
 // POST /users
 export const CreateUserBodySchema = z.object({
   name: z.string().min(1),
   email: emailField,
   password: passwordField,
-  role: RoleEnum,
+  role: RoleEnum.default("ANALYST"),
 });
 export type CreateUserBody = z.infer<typeof CreateUserBodySchema>;
 

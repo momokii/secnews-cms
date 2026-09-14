@@ -38,7 +38,11 @@ const IP = {
   okLogin: "10.9.0.4",
   flood: "10.9.0.5",
   analyst: "10.9.0.6",
+  analystCreate: "10.9.0.7",
 } as const;
+
+const JUNIOR_ANALYST_EMAIL = "c1-junior-analyst@secnews.test";
+const EDITOR_ATTEMPT_EMAIL = "c1-analyst-editor-attempt@secnews.test";
 
 function loginBody(email: string, password: string): { email: string; password: string } {
   return { email, password };
@@ -70,7 +74,11 @@ describe("TASK-C1 auth/bootstrap/users", () => {
 
   afterAll(async () => {
     await prisma.user.deleteMany({
-      where: { email: { in: [ADMIN.email, ANALYST.email, EDITOR.email] } },
+      where: {
+        email: {
+          in: [ADMIN.email, ANALYST.email, EDITOR.email, JUNIOR_ANALYST_EMAIL, EDITOR_ATTEMPT_EMAIL],
+        },
+      },
     });
     await prisma.$disconnect();
     await app.close();
@@ -316,5 +324,59 @@ describe("TASK-C1 auth/bootstrap/users", () => {
     expect(emails1).not.toContain(body2.items.map((u) => u.email)[0]);
     expect(page1.body).not.toContain(ADMIN.password);
     expect(page2.body).not.toContain(EDITOR.password);
+  });
+
+  // USR-04 (§4) — ANALYST may create ANALYST users; omitted role → ANALYST.
+  it("USR-04: ANALYST creates an ANALYST with role omitted → 201 role ANALYST", async () => {
+    // Given: an authenticated ANALYST (from USR-01)
+    const analystLogin = await loginAs(app, IP.analystCreate, ANALYST.email, ANALYST.password) as {
+      statusCode: number;
+      body: { token: string };
+    };
+    expect(analystLogin.statusCode).toBe(200);
+
+    // When: POST /users without a role field
+    const res = await app.inject({
+      method: "POST",
+      url: "/users",
+      remoteAddress: IP.analystCreate,
+      headers: { authorization: `Bearer ${analystLogin.body.token}` },
+      payload: { name: "Junior Analyst", email: JUNIOR_ANALYST_EMAIL, password: "junior-pass-123" },
+    });
+
+    // Then: 201 and the created user's role is ANALYST (omitted → ANALYST)
+    expect(res.statusCode).toBe(201);
+    expect((res.json() as { role: string; email: string }).role).toBe("ANALYST");
+    const row = await prisma.user.findUniqueOrThrow({ where: { email: JUNIOR_ANALYST_EMAIL } });
+    expect(row.role).toBe("ANALYST");
+  });
+
+  // USR-05 (§4) — ANALYST attempting any non-ANALYST role is 403, no row.
+  it("USR-05: ANALYST attempting role EDITOR → 403 FORBIDDEN and no row", async () => {
+    // Given: an authenticated ANALYST
+    const analystLogin = await loginAs(app, IP.analystCreate, ANALYST.email, ANALYST.password) as {
+      statusCode: number;
+      body: { token: string };
+    };
+    expect(analystLogin.statusCode).toBe(200);
+
+    // When: POST /users with role EDITOR
+    const res = await app.inject({
+      method: "POST",
+      url: "/users",
+      remoteAddress: IP.analystCreate,
+      headers: { authorization: `Bearer ${analystLogin.body.token}` },
+      payload: {
+        name: "Escalated Editor",
+        email: EDITOR_ATTEMPT_EMAIL,
+        password: "escalate-123",
+        role: "EDITOR",
+      },
+    });
+
+    // Then: 403 FORBIDDEN and no user row was created
+    expect(res.statusCode).toBe(403);
+    expect((res.json() as { error: { code: string } }).error.code).toBe("FORBIDDEN");
+    expect(await prisma.user.count({ where: { email: EDITOR_ATTEMPT_EMAIL } })).toBe(0);
   });
 });

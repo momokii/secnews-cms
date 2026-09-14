@@ -6,12 +6,13 @@ import {
   loadState,
   ok,
   step,
+  uniqueId,
 } from "./lib.js";
 
 /**
- * E2E-S4 RBAC: a second bootstrap → 409 CONFLICT (BST-01); an ANALYST token
- * creating a user (escalating to ADMIN) → 403 FORBIDDEN (USR-01 — only
- * ADMIN creates users).
+ * E2E-S4 RBAC: a second bootstrap → 409 CONFLICT (BST-01). §4 rule on
+ * POST /users: an ANALYST token may create ANALYST users (omitted role →
+ * ANALYST) but any non-ANALYST role attempt → 403 FORBIDDEN (USR-01/05).
  */
 
 async function main(): Promise<void> {
@@ -35,6 +36,18 @@ async function main(): Promise<void> {
     body: { email: ANALYST_EMAIL, password: ANALYST_PASSWORD },
   });
   ok(analystLogin.status === 200 && analystLogin.body.user.role === "ANALYST", "analyst login → 200", analystLogin.body);
+
+  // §4: ANALYST creates an ANALYST user (role omitted → ANALYST).
+  const selfCreate = await api<{ role: string }>("POST", "/users", {
+    token: analystLogin.body.token,
+    body: {
+      name: "E2E Junior Analyst",
+      email: `e2e-junior-analyst-${uniqueId()}@secnews.test`,
+      password: "e2e-junior-password-1",
+    },
+  });
+  ok(selfCreate.status === 201 && selfCreate.body.role === "ANALYST", "analyst created an ANALYST user (role omitted)", selfCreate.body);
+  step("analyst-create-analyst (role omitted) → 201 ANALYST");
 
   // Analyst attempts analyst-create-admin → 403 FORBIDDEN.
   const escalation = await api<unknown>("POST", "/users", {

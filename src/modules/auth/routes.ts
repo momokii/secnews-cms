@@ -3,9 +3,11 @@ import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { AppError } from "../../common/errors.js";
 import { getAuthUser } from "../../plugins/auth.js";
+import { hashPassword } from "../users/service.js";
 import { toPublicUser } from "./user-public.js";
 import {
   AuthStatusResponseSchema,
+  ChangePasswordBodySchema,
   LoginBodySchema,
   LoginResponseSchema,
   UserPublicSchema,
@@ -42,6 +44,27 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     onRequest: [app.authenticate],
     schema: { response: { 200: UserPublicSchema } },
   }, async (request) => toPublicUser(getAuthUser(request)));
+
+  f.post("/change-password", {
+    onRequest: [app.authenticate],
+    schema: { body: ChangePasswordBodySchema },
+  }, async (request, reply) => {
+    const { currentPassword, newPassword } = request.body;
+    const userId = getAuthUser(request).id;
+    const user = await app.prisma.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+    const currentMatches = await bcrypt.compare(currentPassword, user?.passwordHash ?? DUMMY_HASH);
+    if (!currentMatches) {
+      throw new AppError("UNAUTHORIZED", "Current password is incorrect");
+    }
+    await app.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await hashPassword(newPassword) },
+    });
+    return reply.code(204).send();
+  });
 
   f.get("/status", {
     schema: { response: { 200: AuthStatusResponseSchema } },
