@@ -1,10 +1,12 @@
 import { useState } from "react";
+import type { OtxPulseSource } from "../../lib/bulletinApi";
 import { formatTimestamp } from "../../lib/datetime";
 import { useOtxPulses } from "../../lib/useBulletin";
 
 export function OtxPulsesPage() {
   const [page, setPage] = useState(1);
-  const pulsesQuery = useOtxPulses(page);
+  const [source, setSource] = useState<OtxPulseSource>("subscribed");
+  const pulsesQuery = useOtxPulses(page, source);
 
   const pulses = pulsesQuery.data?.items ?? [];
   const total = pulsesQuery.data?.total ?? 0;
@@ -14,6 +16,26 @@ export function OtxPulsesPage() {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
       <h1 className="text-lg font-semibold text-slate-900">OTX pulses</h1>
+      <div className="mt-4 flex gap-1 border-b border-slate-200" role="tablist" aria-label="Pulse source">
+        {([
+          ["subscribed", "Subscribed"],
+          ["mine", "My pulses"],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={source === value}
+            onClick={() => {
+              setSource(value);
+              setPage(1);
+            }}
+            className={`border-b-2 px-3 py-2 text-sm font-medium ${source === value ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {pulsesQuery.isPending ? (
         <p className="mt-4 text-sm text-slate-500">Loading pulses…</p>

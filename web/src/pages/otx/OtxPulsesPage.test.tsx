@@ -83,4 +83,28 @@ describe("FE-OTX-01: pulses list paginates with the page param", () => {
     await screen.findByText("Cobalt waltz");
     expect(screen.queryByText("Emerald phishing")).toBeNull();
   });
+
+  it("requests My pulses when its tab is selected and returns to subscribed", async () => {
+    // Given: both pulse sources are available
+    setToken("test-token");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("source=mine")) return envelope(1, [pulse(2, "My pulse")]);
+      if (url.includes("source=subscribed")) return envelope(1, [pulse(1, "Subscribed pulse")]);
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    // When: the operator switches to My pulses, then back to Subscribed
+    renderPage();
+    await screen.findByText("Subscribed pulse");
+    fireEvent.click(screen.getByRole("tab", { name: "My pulses" }));
+    await screen.findByText("My pulse");
+    fireEvent.click(screen.getByRole("tab", { name: "Subscribed" }));
+
+    // Then: each tab requests its explicit source and the original rows return
+    await screen.findByText("Subscribed pulse");
+    expect(fetchMock).toHaveBeenCalledWith("/api/otx/pulses?page=1&source=subscribed", expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith("/api/otx/pulses?page=1&source=mine", expect.anything());
+  });
 });
