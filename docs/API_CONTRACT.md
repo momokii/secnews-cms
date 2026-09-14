@@ -111,11 +111,17 @@ Source management = MGR; triage = ANY/WORK; push = KEY.
 | 13 | `POST /feeds` | MGR | `CreateFeedBodySchema` | 201 `FeedSourceSchema` | 409 `CONFLICT` duplicate url (FEED-02) |
 | 14 | `PATCH /feeds/:id` | MGR | `UpdateFeedBodySchema` | 200 `FeedSourceSchema` | |
 | 15 | `DELETE /feeds/:id` | MGR | — | 204 | |
-| 16 | `GET /feed-items` | ANY | `ListFeedItemsQuerySchema` `?status&feedSourceId&q&page&pageSize` | 200 `ListFeedItemsResponseSchema` | |
+| 16 | `GET /feed-items` | ANY | `ListFeedItemsQuerySchema` `?status&feedSourceId&q&from&to&page&pageSize` | 200 `ListFeedItemsResponseSchema` | |
 | 17 | `GET /feed-items/:id` | ANY | — | 200 `FeedItemDetailSchema` (incl. verbatim `raw`) | |
 | 18 | `POST /feed-items/:id/view` | WORK | — | 200 `FeedItemSchema` (status→`VIEWED`) | 409 `CONFLICT` already `TAKEN` |
 | 19 | `POST /feed-items/:id/take` | WORK | — | 201 ticket `TicketSchema` (item→`TAKEN`, ticket origin `AUTO_FEED`, item back-links) | 409 `CONFLICT` double-take (TAKE-02) |
 | 20 | `POST /ingest` | KEY | header `x-api-key`; `IngestBodySchema` | 201 `IngestResponseSchema` `{item}` | 401 wrong key |
+
+For both list endpoints, `from` and `to` accept an ISO date (`YYYY-MM-DD`) or
+ISO datetime. Bounds are inclusive; a date-only `from` means the start of that
+day and a date-only `to` means the end of that day. Feed items filter
+`publishedAt`; tickets filter `createdAt`. Invalid bounds and `from > to`
+return `400 VALIDATION`.
 
 Ingest is an idempotent upsert per (sourceName, link) — re-poll / re-push
 never duplicates rows (ING-01). RSS cron polling (FEED_POLL_CRON) shares the
@@ -128,7 +134,7 @@ Schemas: `src/modules/tickets/schema.ts`. State machine + role gates:
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 21 | `GET /tickets` | ANY | `ListTicketsQuerySchema` `?q&status&origin&findingType&page&pageSize` | 200 `ListTicketsResponseSchema` (rows include `createdAt`, `updatedAt`, and `takenByName`; `takenByName` is null for manual tickets) | |
+| 21 | `GET /tickets` | ANY | `ListTicketsQuerySchema` `?q&status&origin&findingType&from&to&page&pageSize` | 200 `ListTicketsResponseSchema` (rows include `createdAt`, `updatedAt`, and `takenByName`; `takenByName` is null for manual tickets) | 400 `VALIDATION` for malformed dates or `from` after `to` |
 | 22 | `POST /tickets` | WORK | `CreateTicketBodySchema` (discriminated on findingType) | 201 `TicketSchema` (origin `MANUAL`, status `OPEN`) | |
 | 23 | `GET /tickets/:id` | ANY | — | 200 `TicketDetailSchema` (+`sources[]`, `iocs[]`, `pendingSuggestions`, `takenByName`) | |
 | 24 | `PATCH /tickets/:id` | WORK | `UpdateTicketBodySchema` | 200 `TicketSchema` | |

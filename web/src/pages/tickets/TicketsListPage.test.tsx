@@ -146,4 +146,25 @@ describe("FE-TKT-01: tickets list", () => {
       ),
     );
   });
+
+  it("sends a date preset and resets the list page", async () => {
+    // Given: the ticket list is available and the clock is fixed in WIB
+    setToken("test-token");
+    vi.setSystemTime(new Date("2026-09-14T03:00:00.000Z"));
+    const fetchMock = routeFetch(listRoutes());
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(<TicketsListPage />);
+
+    // When: Today is selected
+    fireEvent.click(await screen.findByRole("button", { name: "Today" }));
+
+    // Then: today's Jakarta bounds are sent and the request starts at page 1
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) =>
+        String(url).includes("from=2026-09-13T17%3A00%3A00.000Z") &&
+        String(url).includes("to=2026-09-14T16%3A59%3A59.999Z") &&
+        String(url).includes("page=1"),
+      )).toBe(true),
+    );
+  });
 });

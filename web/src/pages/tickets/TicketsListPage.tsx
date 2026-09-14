@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Pagination } from "../../components/Pagination";
+import { DateFilter } from "../../components/DateFilter";
 import {
   FINDING_TYPES,
   TICKET_ORIGINS,
@@ -10,7 +11,7 @@ import {
   type TicketStatus,
 } from "../../lib/ticketsApi";
 import { useTickets } from "../../lib/useTickets";
-import { formatTimestamp } from "../../lib/datetime";
+import { formatTimestamp, type DateRange } from "../../lib/datetime";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -34,6 +35,7 @@ export function TicketsListPage() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [dateRange, setDateRange] = useState<DateRange>({});
 
   // Debounce the search box: only the value settled for SEARCH_DEBOUNCE_MS
   // reaches the API query.
@@ -52,6 +54,7 @@ export function TicketsListPage() {
     findingType: findingType === "" ? undefined : findingType,
     page,
     pageSize,
+    ...dateRange,
   });
 
   const tickets = ticketsQuery.data?.items ?? [];
@@ -71,6 +74,14 @@ export function TicketsListPage() {
           className="w-64 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
         />
       </div>
+
+      <DateFilter
+        value={dateRange}
+        onChange={(range) => {
+          setDateRange(range);
+          setPage(1);
+        }}
+      />
 
       <div className="mt-4 flex flex-wrap gap-2">
         <label className="flex flex-col gap-1">
