@@ -55,9 +55,14 @@ export async function previewBulletin(
   return (await response.json()) as BulletinPreview;
 }
 
-/** GET /otx/pulses — page is the only query param the contract accepts. */
-export async function listOtxPulses(page: number): Promise<Paginated<OtxPulse>> {
-  const response = await apiFetch(`/otx/pulses?page=${page}`, {
+export type OtxPulseSource = "subscribed" | "mine";
+
+/** GET /otx/pulses — source selects the subscribed or My pulses feed. */
+export async function listOtxPulses(
+  page: number,
+  source: OtxPulseSource = "subscribed",
+): Promise<Paginated<OtxPulse>> {
+  const response = await apiFetch(`/otx/pulses?page=${page}&source=${source}`, {
     method: "GET",
   });
   return (await response.json()) as Paginated<OtxPulse>;
