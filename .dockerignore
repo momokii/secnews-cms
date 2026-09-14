@@ -1,0 +1,22 @@
+# API image build context: only package.json/lock, tsconfig.json,
+# prisma.config.ts, prisma/, src/ are COPYed — everything else is excluded.
+.git
+.claude
+.codegraph
+.omo
+docs
+node_modules
+web
+tests
+scripts
+dist
+src/generated
+.env
+.env.*
+!.env.example
+*.md
+docker-compose*.yml
+Dockerfile
+.dockerignore
+logs
+*.log

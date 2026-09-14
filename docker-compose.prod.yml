@@ -1,0 +1,69 @@
+# SecNews CMS — production overlay.
+# Usage (from the repo root, with .env configured — see README):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Dev conveniences in docker-compose.override.yml are NOT merged when -f files
+# are given explicitly. Only the web port is published; api and db stay on the
+# internal compose network. Project name (and volumes) are isolated from the
+# dev stack.
+name: secnews-cms-prod
+
+services:
+  db:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-secnews}
+      # Fail fast if secrets were never configured (no silent dev defaults).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-secnews_prod}
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Replaces the base `image: node:22-alpine` tag and the dev command.
+    image: secnews-api:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      APP_ENV: production
+      PORT: "3000"
+      HOST: 0.0.0.0
+      # Inside the compose network the DB hostname is `db`, not localhost.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secnews}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-secnews_prod}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env}
+      INGEST_API_KEY: ${INGEST_API_KEY:?Set INGEST_API_KEY in .env}
+    # Overrides the base dev command (`npm ci && npm run dev`) — identical to
+    # the image CMD: generate client, apply migrations, start.
+    command: ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && npm start"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: secnews-web:local
+    restart: unless-stopped
+    # The only published port. Override with WEB_PORT in .env or the shell
+    # (e.g. WEB_PORT=18080) if 8080 is already taken on the host.
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    depends_on:
+      api:
+        condition: service_healthy
