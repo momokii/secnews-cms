@@ -7,6 +7,7 @@ import { assertNoPendingSuggestions } from "../../lib/guards/pending.js";
 import { createPulse, publicAllowed, toOtxMarking } from "../../lib/otx/client.js";
 import { prisma } from "../../lib/db.js";
 import { PushOtxResponseSchema } from "./schema.js";
+import { recordActivity } from "../tickets/activity.js";
 
 /**
  * Route 52 — lives in otx/ but serves the contract's POST /tickets/:id/otx
@@ -65,9 +66,17 @@ export default async function otxPushRoutes(app: FastifyInstance): Promise<void>
         indicators: ticket.iocs.map((ioc) => ioc.value),
       });
 
-      await prisma.ticket.update({
-        where: { id },
-        data: { otxPulseId: pulse.id, otxPulseUrl: pulse.url },
+      await prisma.$transaction(async (tx) => {
+        await tx.ticket.update({
+          where: { id },
+          data: { otxPulseId: pulse.id, otxPulseUrl: pulse.url },
+        });
+        await recordActivity(tx, {
+          ticketId: id,
+          actorId: request.user.sub,
+          action: "OTX_PUSHED",
+          detail: pulse.id,
+        });
       });
       return {
         pulseId: pulse.id,

@@ -7,6 +7,7 @@ import { DEFAULT_TEMPLATE, renderBulletin } from "../bulletin/render.js";
 import { assertNoPendingSuggestions } from "../../lib/guards/pending.js";
 import { prisma } from "../../lib/db.js";
 import { getAuthUser } from "../../plugins/auth.js";
+import { recordActivity } from "../tickets/activity.js";
 import { toTicketDto } from "../tickets/mappers.js";
 import { UuidIdParamSchema } from "../tickets/schema.js";
 import { channelTargetSummary, deliverToChannel } from "./dispatch.js";
@@ -152,10 +153,22 @@ export default async function deliveryRoutes(app: FastifyInstance): Promise<void
           data: { ticketId: id, channelId: channel.id, status, error, payload, sentById: actor.id },
           include: { channel: { include: { client: { select: { name: true } } } } },
         });
+        await recordActivity(prisma, {
+          ticketId: id,
+          actorId: actor.id,
+          action: "SENT",
+          detail: `${channel.type} → ${row.channel.client.name}: ${status}`,
+        });
         audit.push(toDeliveryAuditWire(row));
       }
 
       const sent = await prisma.ticket.update({ where: { id }, data: { status: "SENT" } });
+      await recordActivity(prisma, {
+        ticketId: id,
+        actorId: actor.id,
+        action: "STATUS_CHANGED",
+        detail: "status READY→SENT",
+      });
       return { ticket: toTicketDto(sent), audit };
     },
   );
