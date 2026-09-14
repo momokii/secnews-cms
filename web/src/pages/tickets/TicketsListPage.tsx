@@ -143,6 +143,37 @@ export function TicketsListPage() {
         </label>
       </div>
 
+      <section
+        aria-label="How tickets work"
+        className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4"
+      >
+        <h2 className="text-sm font-semibold text-slate-900">How tickets work</h2>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+          <li>
+            Lifecycle: OPEN → RESEARCH → READY → SENT → CLOSED. Transitions only
+            move forward — there is no reopen, CLOSED is terminal. ADMIN/EDITOR
+            may close any not-yet-sent ticket early (cancel path).
+          </li>
+          <li>
+            TLP is the traffic-light sharing control: CLEAR, GREEN, AMBER, RED.
+            New tickets default AMBER; AMBER and RED are never pushed public.
+          </li>
+          <li>
+            Finding type: VULNERABILITY_CVE for CVE-tracked vulnerabilities,
+            THREAT_CAMPAIGN for named threats/campaigns, OTHER for anything else.
+          </li>
+          <li>
+            Origin: AUTO_FEED tickets are spawned by taking a feed item;
+            MANUAL tickets are created by an analyst directly.
+          </li>
+          <li>
+            Enrichment review is a hard block: sending (READY → SENT) fails with
+            409 PENDING_SUGGESTIONS while any AI suggestion is still PENDING,
+            and requires at least one active target channel.
+          </li>
+        </ul>
+      </section>
+
       {ticketsQuery.isPending ? (
         <p className="mt-4 text-sm text-slate-500">Loading tickets…</p>
       ) : ticketsQuery.isError ? (

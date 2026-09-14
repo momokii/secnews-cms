@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setToken } from "../../lib/tokenStore";
 import {
@@ -13,6 +13,7 @@ import { TicketsListPage } from "./TicketsListPage";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
   localStorage.clear();
 });
 
@@ -166,5 +167,30 @@ describe("FE-TKT-01: tickets list", () => {
         String(url).includes("page=1"),
       )).toBe(true),
     );
+  });
+
+  it("renders the How tickets work explainer above the table", async () => {
+    // Given: a signed-in user viewing the tickets list
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch(listRoutes()));
+    renderWithProviders(<TicketsListPage />);
+
+    // When: the page renders
+    const panel = await screen.findByRole("region", { name: "How tickets work" });
+    const link = await screen.findByRole("link", { name: "OpenSSL vulnerability" });
+
+    // Then: the panel sits above the table and documents the lifecycle,
+    // TLP, finding types, origins and the send hard-block per STATES.md
+    expect(panel.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(panel).getAllByText(/OPEN → RESEARCH → READY → SENT → CLOSED/).length).toBeGreaterThan(0);
+    for (const tlp of ["CLEAR", "GREEN", "AMBER", "RED"]) {
+      expect(within(panel).getAllByText(new RegExp(tlp)).length).toBeGreaterThan(0);
+    }
+    expect(within(panel).getByText(/default AMBER/)).toBeTruthy();
+    expect(within(panel).getAllByText(/VULNERABILITY_CVE/).length).toBeGreaterThan(0);
+    expect(within(panel).getAllByText(/THREAT_CAMPAIGN/).length).toBeGreaterThan(0);
+    expect(within(panel).getAllByText(/AUTO_FEED/).length).toBeGreaterThan(0);
+    expect(within(panel).getAllByText(/MANUAL/).length).toBeGreaterThan(0);
+    expect(within(panel).getAllByText(/PENDING_SUGGESTIONS/).length).toBeGreaterThan(0);
   });
 });
