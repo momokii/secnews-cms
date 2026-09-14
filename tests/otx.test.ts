@@ -15,6 +15,7 @@ import { bearerFor, cleanupTicket, cleanupUsers, createTestTicket, createTestSug
 const OTX_KEY = "5m3jkh-otx-key-9876";
 const CREATE_URL = "https://otx.alienvault.com/api/v1/pulses/create";
 const SUBSCRIBED_URL = "https://otx.alienvault.com/api/v1/pulses/subscribed";
+const MY_PULSES_URL = "https://otx.alienvault.com/api/v1/pulses/my";
 
 async function readyTicket(tlp: "CLEAR" | "GREEN" | "AMBER" | "RED"): Promise<string> {
   const ticketId = await createTestTicket({
@@ -276,6 +277,42 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
     expect(calls[0]?.url).toBe(`${SUBSCRIBED_URL}?page=2`);
     const headers = calls[0]?.init.headers as Record<string, string>;
     expect(headers["X-OTX-API-KEY"]).toBe(OTX_KEY);
+  });
+
+  it("GET /otx/pulses?source=mine proxies My pulses with limit, page, and API key", async () => {
+    // Given: OTX returns the caller's own pulses
+    const { calls } = stubFetch(200, {
+      count: 1,
+      results: [{ id: "mine-1", name: "My pulse", public: false, TLP: "GREEN", tags: [], indicator_count: 2 }],
+    });
+
+    // When: an ADMIN lists My pulses on page 2
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses?source=mine&page=2",
+      headers: { authorization: admin },
+    });
+
+    // Then: the route returns mapped results and uses the documented endpoint
+    expect(res.statusCode).toBe(200);
+    expect(res.json().items[0].id).toBe("mine-1");
+    expect(calls[0]?.url).toBe(`${MY_PULSES_URL}?limit=20&page=2`);
+    const headers = calls[0]?.init.headers as Record<string, string>;
+    expect(headers["X-OTX-API-KEY"]).toBe(OTX_KEY);
+  });
+
+  it("rejects an invalid pulse source with 400 VALIDATION", async () => {
+    // Given: an authenticated operator requests an unsupported source
+    // When: the pulse list route validates the query
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses?source=created",
+      headers: { authorization: admin },
+    });
+
+    // Then: validation fails before reading the integration or calling OTX
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: { code: string } }).error.code).toBe("VALIDATION");
   });
 
   it("OTX datetimes without a timezone (real OTX wire shape) normalize to ISO instead of 500", async () => {

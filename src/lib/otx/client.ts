@@ -84,6 +84,7 @@ export async function createPulse(input: CreatePulseInput): Promise<CreatedPulse
 export type ListPulsesInput = {
   apiKey: string;
   page: number;
+  pageSize?: number;
   baseUrl?: string;
   fetchImpl?: FetchLike;
 };
@@ -162,6 +163,26 @@ export async function listSubscribed(input: ListPulsesInput): Promise<{ total: n
   const base = input.baseUrl ?? OTX_BASE;
   const doFetch = input.fetchImpl ?? ((url: string, init?: RequestInit) => globalThis.fetch(url, init));
   const response = await doFetch(`${base}/api/v1/pulses/subscribed?page=${input.page}`, {
+    headers: { "X-OTX-API-KEY": input.apiKey },
+  });
+  if (!response.ok) {
+    throw new Error(`OTX request failed with upstream status ${response.status}`);
+  }
+  const body = (await response.json()) as OtxSubscribedResponse;
+  const rows = Array.isArray(body.results) ? body.results : [];
+  const pulses = rows.map(asPulse).filter((pulse): pulse is SubscribedPulse => pulse !== null);
+  return {
+    total: typeof body.count === "number" ? body.count : pulses.length,
+    pulses,
+  };
+}
+
+/** GET /api/v1/pulses/my?limit=<pageSize>&page=<page>. Returns the mapped page. */
+export async function listMyPulses(input: ListPulsesInput): Promise<{ total: number; pulses: SubscribedPulse[] }> {
+  const base = input.baseUrl ?? OTX_BASE;
+  const doFetch = input.fetchImpl ?? ((url: string, init?: RequestInit) => globalThis.fetch(url, init));
+  const pageSize = input.pageSize ?? 20;
+  const response = await doFetch(`${base}/api/v1/pulses/my?limit=${pageSize}&page=${input.page}`, {
     headers: { "X-OTX-API-KEY": input.apiKey },
   });
   if (!response.ok) {

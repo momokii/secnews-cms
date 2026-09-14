@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { AppError } from "../../common/errors.js";
-import { listSubscribed } from "../../lib/otx/client.js";
+import { listMyPulses, listSubscribed } from "../../lib/otx/client.js";
 import { decryptSecret } from "../../lib/crypto.js";
 import { ListPulsesQuerySchema, ListPulsesResponseSchema } from "./schema.js";
 
@@ -32,8 +32,10 @@ export default async function otxRoutes(app: FastifyInstance): Promise<void> {
         throw new AppError("VALIDATION", "No OTX key configured — set it under integrations first", undefined, 422);
       }
       const { apiKey } = JSON.parse(decryptSecret(row.encryptedKey)) as { apiKey: string };
-      const { page } = request.query;
-      const feed = await listSubscribed({ apiKey, page }).catch((error: unknown) => {
+      const { page, source } = request.query;
+      const feed = await (source === "mine"
+        ? listMyPulses({ apiKey, page, pageSize: PROXY_PAGE_SIZE })
+        : listSubscribed({ apiKey, page })).catch((error: unknown) => {
         throw new AppError(
           "INTERNAL",
           `OTX upstream request failed: ${(error as Error).message}`,

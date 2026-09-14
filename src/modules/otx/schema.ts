@@ -32,5 +32,7 @@ export const OtxPulseSchema = z.object({
 export type OtxPulse = z.infer<typeof OtxPulseSchema>;
 
 // GET /otx/pulses
-export const ListPulsesQuerySchema = pageQuery.pick({ page: true });
+export const ListPulsesQuerySchema = pageQuery.pick({ page: true }).extend({
+  source: z.enum(["subscribed", "mine"]).default("subscribed"),
+});
 export const ListPulsesResponseSchema = paginated(OtxPulseSchema);
