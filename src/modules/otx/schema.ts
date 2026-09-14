@@ -22,6 +22,7 @@ export const OtxTlpEnum = z.enum(["WHITE", "GREEN", "AMBER", "RED"]);
 export const OtxPulseSchema = z.object({
   id: z.string(),
   name: z.string(),
+  authorName: z.string(),
   isPublic: z.boolean(),
   tlp: OtxTlpEnum,
   tags: z.array(z.string()),
@@ -58,6 +59,7 @@ export const OtxPulseIndicatorSchema = z.object({
 export const OtxPulseDetailSchema = z.object({
   id: z.string(),
   name: z.string(),
+  authorName: z.string(),
   description: z.string(),
   isPublic: z.boolean(),
   tlp: OtxTlpEnum,

@@ -26,11 +26,14 @@ export function OtxPulsesPage() {
     return () => window.clearTimeout(timer);
   }, [searchInput, query]);
 
+  const searching = query !== "";
+  const activeSource: OtxPulseSource = searching ? "search" : source;
+
   const pulsesQuery = useOtxPulses({
     page,
-    source,
+    source: activeSource,
     pageSize,
-    q: source === "search" ? query : "",
+    q: searching ? query : "",
   });
 
   const pulses = pulsesQuery.data?.items ?? [];
@@ -40,6 +43,16 @@ export function OtxPulsesPage() {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
       <h1 className="text-lg font-semibold text-slate-900">OTX pulses</h1>
+      <div className="mt-4">
+        <input
+          aria-label="Search pulses"
+          type="search"
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+          placeholder="Search pulses by keyword — searching switches to OTX search"
+          className="w-64 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
+        />
+      </div>
       <div className="mt-4 flex gap-1 border-b border-slate-200" role="tablist" aria-label="Pulse source">
         {([
           ["subscribed", "Subscribed"],
@@ -54,6 +67,8 @@ export function OtxPulsesPage() {
             onClick={() => {
               setSource(value);
               setPage(1);
+              setSearchInput("");
+              setQuery("");
             }}
             className={`border-b-2 px-3 py-2 text-sm font-medium ${source === value ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}
           >
@@ -62,17 +77,10 @@ export function OtxPulsesPage() {
         ))}
       </div>
 
-      {source === "search" ? (
-        <div className="mt-4">
-          <input
-            aria-label="Search pulses"
-            type="search"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Search pulses by keyword"
-            className="w-64 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
-          />
-        </div>
+      {searching ? (
+        <p role="status" className="mt-2 text-xs text-slate-500">
+          Search results for “{query}” — clear the search box to return to the selected tab.
+        </p>
       ) : null}
 
       {pulsesQuery.isPending ? (
@@ -90,6 +98,7 @@ export function OtxPulsesPage() {
           <thead>
             <tr className="border-b border-slate-200 text-slate-500">
               <th scope="col" className="py-2 pr-4 font-medium">Name</th>
+              <th scope="col" className="py-2 pr-4 font-medium">Author</th>
               <th scope="col" className="py-2 pr-4 font-medium">TLP</th>
               <th scope="col" className="py-2 pr-4 font-medium">Visibility</th>
               <th scope="col" className="py-2 pr-4 font-medium">Indicators</th>
@@ -102,6 +111,9 @@ export function OtxPulsesPage() {
             {pulses.map((pulse) => (
               <tr key={pulse.id} className="border-b border-slate-100">
                 <td className="py-2 pr-4 text-slate-900">{pulse.name}</td>
+                <td className="py-2 pr-4 text-slate-500">
+                  {pulse.authorName === "" ? "—" : pulse.authorName}
+                </td>
                 <td className="py-2 pr-4">
                   <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
                     {pulse.tlp}

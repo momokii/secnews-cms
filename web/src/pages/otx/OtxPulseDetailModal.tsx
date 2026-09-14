@@ -8,6 +8,8 @@ interface OtxPulseDetailModalProps {
   onClose: () => void;
 }
 
+const OTX_PULSE_URL_BASE = "https://otx.alienvault.com/pulse/";
+
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-2 py-1">
@@ -47,6 +49,19 @@ export function OtxPulseDetailModal({ pulseId, name, onClose }: OtxPulseDetailMo
       ) : (
         <dl className="text-sm">
           <DetailRow label="Name">{detail.data.name === "" ? name : detail.data.name}</DetailRow>
+          <DetailRow label="Author">
+            {detail.data.authorName === "" ? "—" : detail.data.authorName}
+          </DetailRow>
+          <DetailRow label="OTX">
+            <a
+              href={`${OTX_PULSE_URL_BASE}${detail.data.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-indigo-600 hover:text-indigo-500"
+            >
+              View on OTX
+            </a>
+          </DetailRow>
           <DetailRow label="Description">{detail.data.description === "" ? "—" : detail.data.description}</DetailRow>
           <DetailRow label="TLP">
             <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">

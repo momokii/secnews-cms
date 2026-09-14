@@ -21,6 +21,7 @@ export type ListPulsesInput = {
 export type SubscribedPulse = {
   id: string;
   name: string;
+  authorName: string;
   isPublic: boolean;
   tlp: OtxTlp;
   tags: string[];
@@ -32,10 +33,12 @@ export type SubscribedPulse = {
 type OtxPulseResponse = {
   id?: unknown;
   name?: unknown;
+  author_name?: unknown;
   public?: unknown;
   TLP?: unknown;
   tags?: unknown;
   indicator_count?: unknown;
+  indicators?: unknown;
   created?: unknown;
   modified?: unknown;
 };
@@ -65,6 +68,21 @@ function asTags(value: unknown): string[] {
 
 const OTX_TLPS: readonly OtxTlp[] = ["WHITE", "GREEN", "AMBER", "RED"];
 
+/**
+ * Subscribed/my list rows omit indicator_count and carry an embedded
+ * indicators array instead (search rows carry the count). Prefer the explicit
+ * count; derive from the embedded array when absent; 0 only when neither.
+ */
+function asIndicatorCount(count: unknown, indicators: unknown): number {
+  if (typeof count === "number" && Number.isFinite(count) && count >= 0) {
+    return count;
+  }
+  if (Array.isArray(indicators)) {
+    return asIndicators(indicators).length;
+  }
+  return 0;
+}
+
 function asPulse(row: unknown): SubscribedPulse | null {
   if (typeof row !== "object" || row === null) {
     return null;
@@ -77,10 +95,11 @@ function asPulse(row: unknown): SubscribedPulse | null {
   return {
     id: pulse.id,
     name: asString(pulse.name),
+    authorName: asString(pulse.author_name),
     isPublic: pulse.public === true,
     tlp: OTX_TLPS.includes(rawTlp) ? rawTlp : "AMBER",
     tags: asTags(pulse.tags),
-    indicatorCount: typeof pulse.indicator_count === "number" ? pulse.indicator_count : 0,
+    indicatorCount: asIndicatorCount(pulse.indicator_count, pulse.indicators),
     created: asIsoDateTime(pulse.created),
     modified: asIsoDateTime(pulse.modified),
   };
@@ -168,6 +187,7 @@ export async function searchPulses(input: SearchPulsesInput): Promise<{ total: n
 export type PulseDetail = {
   id: string;
   name: string;
+  authorName: string;
   description: string;
   isPublic: boolean;
   tlp: OtxTlp;
@@ -226,6 +246,7 @@ export async function getPulse(input: {
   return {
     id: body.id,
     name: asString(body.name),
+    authorName: asString(body.author_name),
     description: asString(body.description),
     isPublic: body.public === true,
     tlp: OTX_TLPS.includes(rawTlp) ? rawTlp : "AMBER",

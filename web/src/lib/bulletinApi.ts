@@ -18,6 +18,7 @@ export type OtxTlp = "WHITE" | "GREEN" | "AMBER" | "RED";
 export interface OtxPulse {
   id: string;
   name: string;
+  authorName: string;
   isPublic: boolean;
   tlp: OtxTlp;
   tags: string[];
@@ -60,6 +61,7 @@ export type OtxPulseSource = "subscribed" | "mine" | "search";
 export interface OtxPulseDetail {
   id: string;
   name: string;
+  authorName: string;
   description: string;
   isPublic: boolean;
   tlp: OtxTlp;

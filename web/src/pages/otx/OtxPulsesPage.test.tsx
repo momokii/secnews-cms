@@ -198,6 +198,130 @@ describe("FE-OTX-02: page size and search controls", () => {
   });
 });
 
+describe("TASK-OTXFIX author, unified search box, and OTX link", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it("renders the Author column with the pulse author and an em-dash when absent", async () => {
+    // Given: a subscribed envelope with one authored pulse and one without an author
+    setToken("test-token");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/otx/pulses")) {
+          return envelope(1, [
+            { ...pulse(1, "Emerald phishing"), authorName: "SampleUser" },
+            { ...pulse(2, "Ransom note"), authorName: "" },
+          ]);
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    // When: the page renders
+    renderPage();
+    await screen.findByText("Emerald phishing");
+
+    // Then: the author shows in its column and the missing author is an em-dash
+    expect(screen.getByRole("columnheader", { name: "Author" })).toBeTruthy();
+    expect(screen.getByText("SampleUser")).toBeTruthy();
+    const row = screen.getByText("Ransom note").closest("tr");
+    expect(row?.textContent).toContain("—");
+  });
+
+  it("switches the listing to source=search while typing from any tab and restores the tab on clear", async () => {
+    // Given: both the subscribed feed and the search source answer
+    setToken("test-token");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("source=search")) return envelope(1, [pulse(9, "Search hit")]);
+      if (url.includes("source=subscribed")) return envelope(1, [pulse(1, "Subscribed pulse")]);
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    await screen.findByText("Subscribed pulse");
+
+    // When: the operator types into the single search box above the tabs
+    const search = await screen.findByLabelText("Search pulses");
+    fireEvent.change(search, { target: { value: "ransomware" } });
+    await screen.findByText("Search hit");
+
+    // Then: the listing fetched the server-side search source with q
+    expect(
+      fetchMock.mock.calls.some(
+        ([url]) =>
+          String(url) === "/api/otx/pulses?page=1&source=search&pageSize=20&q=ransomware",
+      ),
+    ).toBe(true);
+
+    // When: the operator clears the search box
+    fireEvent.change(search, { target: { value: "" } });
+
+    // Then: the listing restores the active (subscribed) tab
+    await waitFor(
+      () => {
+        const calls = fetchMock.mock.calls.map(([url]) => String(url));
+        const searchIndex = calls.findIndex((url) => url.includes("q=ransomware"));
+        const restoreIndex = calls.findIndex(
+          (url, index) =>
+            index > searchIndex &&
+            url === "/api/otx/pulses?page=1&source=subscribed&pageSize=20",
+        );
+        expect(searchIndex).toBeGreaterThanOrEqual(0);
+        expect(restoreIndex).toBeGreaterThan(searchIndex);
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it("shows the Author row and a View on OTX link pointing at the pulse in the detail modal", async () => {
+    // Given: a list row and its detail carrying an author
+    setToken("test-token");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/otx/pulses/1") {
+        return new Response(
+          JSON.stringify({
+            id: "1",
+            name: "Emerald phishing",
+            description: "Phishing kit narrative.",
+            authorName: "SampleUser",
+            isPublic: true,
+            tlp: "GREEN",
+            tags: [],
+            references: [],
+            indicators: [],
+            created: "2026-09-01T10:00:00.000Z",
+            modified: "2026-09-02T10:00:00.000Z",
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.startsWith("/api/otx/pulses")) {
+        return envelope(1, [pulse(1, "Emerald phishing")]);
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    // When: the operator opens the row's Details
+    renderPage();
+    await screen.findByText("Emerald phishing");
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    await screen.findByText("Phishing kit narrative.");
+
+    // Then: the author renders and the OTX link targets the pulse page
+    expect(screen.getByText("SampleUser")).toBeTruthy();
+    const link = screen.getByRole("link", { name: "View on OTX" });
+    expect(link.getAttribute("href")).toBe("https://otx.alienvault.com/pulse/1");
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
+});
+
 describe("FE-OTX-03: pulse details modal", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

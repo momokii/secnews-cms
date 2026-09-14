@@ -218,6 +218,7 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
         {
           id: "p1",
           name: "Pulse one",
+          author_name: "AlienVault",
           public: true,
           TLP: "WHITE",
           tags: [{ name: "apt" }, "ransomware"],
@@ -228,6 +229,7 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
         {
           id: "p2",
           name: "Pulse two",
+          author_name: "Malwaremustdie",
           public: false,
           TLP: "AMBER",
           tags: [],
@@ -252,6 +254,7 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
         {
           id: "p1",
           name: "Pulse one",
+          authorName: "AlienVault",
           isPublic: true,
           tlp: "WHITE",
           tags: ["apt", "ransomware"],
@@ -262,6 +265,7 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
         {
           id: "p2",
           name: "Pulse two",
+          authorName: "Malwaremustdie",
           isPublic: false,
           tlp: "AMBER",
           tags: [],
@@ -504,6 +508,7 @@ describe("TASK-OTXPLUS pulses upgrades", () => {
       id: "pulse-abc",
       name: "Ransomware wave",
       description: "Detailed narrative.",
+      author_name: "AlienVault",
       public: false,
       TLP: "AMBER",
       tags: [{ name: "ransomware" }, "lockbit"],
@@ -528,6 +533,7 @@ describe("TASK-OTXPLUS pulses upgrades", () => {
     expect(res.json()).toEqual({
       id: "pulse-abc",
       name: "Ransomware wave",
+      authorName: "AlienVault",
       description: "Detailed narrative.",
       isPublic: false,
       tlp: "AMBER",
@@ -610,5 +616,168 @@ describe("TASK-OTXPLUS pulses upgrades", () => {
     expect((bad.json() as { error: { code: string } }).error.code).toBe("VALIDATION");
     expect(blank.statusCode).toBe(200);
     expect(calls[0]?.url).toBe(`${SEARCH_URL}?limit=20&page=1`);
+  });
+});
+
+describe("TASK-OTXFIX real upstream shapes", () => {
+  let app: FastifyInstance;
+  let admin = "";
+
+  beforeAll(async () => {
+    app = await buildApp();
+    admin = await bearerFor(app, "ADMIN");
+    await prisma.integrationConfig.deleteMany({ where: { kind: "OTX" } });
+    const put = await app.inject({
+      method: "PUT",
+      url: "/integrations/OTX",
+      headers: { authorization: admin },
+      payload: { apiKey: OTX_KEY },
+    });
+    expect(put.statusCode).toBe(200);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterAll(async () => {
+    await prisma.integrationConfig.deleteMany({ where: { kind: "OTX" } });
+    await cleanupUsers();
+    await prisma.$disconnect();
+    await app.close();
+  });
+
+  it("OTXFIX-01: subscribed rows without indicator_count derive the count from the embedded indicators array and map author_name", async () => {
+    // Given: the REAL OTX subscribed wire shape — no indicator_count field,
+    // an embedded indicators array, and author_name on every pulse
+    stubFetch(200, {
+      count: 3,
+      results: [
+        {
+          id: "64e38336d783f91d6948a7b1",
+          name: "Sample Pulse",
+          description: "",
+          author_name: "SampleUser",
+          public: true,
+          TLP: "GREEN",
+          tags: ["cisa", "backdoor"],
+          references: ["https://www.cisa.gov/news-events/analysis-reports/ar23-230a"],
+          indicators: [
+            { indicator: "pinup-casino-tr.site", type: "domain" },
+            { indicator: "1.2.3.4", type: "IPv4" },
+            { indicator: "evil.example", type: "hostname" },
+          ],
+          created: "2023-08-22T09:43:18.855000",
+          modified: "2023-08-22T09:43:18.855000",
+          adversary: "",
+          revision: 1,
+        },
+        {
+          id: "counted-1",
+          name: "Counted pulse",
+          author_name: "AlienVault",
+          public: true,
+          TLP: "WHITE",
+          tags: [],
+          indicator_count: 7,
+          indicators: [{ indicator: "a.example", type: "domain" }],
+          created: "2023-08-22T09:43:18.855000",
+          modified: "2023-08-22T09:43:18.855000",
+        },
+        {
+          id: "empty-1",
+          name: "Empty pulse",
+          author_name: "",
+          public: false,
+          TLP: "AMBER",
+          tags: [],
+          created: "2023-08-22T09:43:18.855000",
+          modified: "2023-08-22T09:43:18.855000",
+        },
+      ],
+    });
+
+    // When: the subscribed feed is listed
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses?source=subscribed",
+      headers: { authorization: admin },
+    });
+
+    // Then: counts derive from embedded indicators, known-good counts are
+    // never blanked, and author_name flows through (empty stays empty)
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      items: Array<{ id: string; indicatorCount: number; authorName: string }>;
+    };
+    expect(body.items[0]).toMatchObject({ id: "64e38336d783f91d6948a7b1", indicatorCount: 3, authorName: "SampleUser" });
+    expect(body.items[1]).toMatchObject({ id: "counted-1", indicatorCount: 7, authorName: "AlienVault" });
+    expect(body.items[2]).toMatchObject({ id: "empty-1", indicatorCount: 0, authorName: "" });
+  });
+
+  it("OTXFIX-02: My pulses rows map the same real shape (embedded indicators, author_name)", async () => {
+    // Given: an OTX My-pulses page without indicator_count
+    const { calls } = stubFetch(200, {
+      count: 1,
+      results: [
+        {
+          id: "mine-real",
+          name: "My real pulse",
+          author_name: "operator",
+          public: true,
+          TLP: "GREEN",
+          tags: [],
+          indicators: [
+            { indicator: "bad.example", type: "domain" },
+            { indicator: "5.6.7.8", type: "IPv4" },
+          ],
+          created: "2023-08-22T09:43:18.855000",
+          modified: "2023-08-22T09:43:18.855000",
+        },
+      ],
+    });
+
+    // When: My pulses are listed
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses?source=mine",
+      headers: { authorization: admin },
+    });
+
+    // Then: the count derives from the embedded array and the author flows through
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      items: Array<{ id: string; indicatorCount: number; authorName: string }>;
+    };
+    expect(body.items[0]).toMatchObject({ id: "mine-real", indicatorCount: 2, authorName: "operator" });
+    expect(calls[0]?.url).toBe(`${MY_PULSES_URL}?limit=20&page=1`);
+  });
+
+  it("OTXFIX-03: pulse detail maps author_name from the real upstream shape", async () => {
+    // Given: an OTX pulse detail carrying author_name (real shape)
+    stubFetch(200, {
+      id: "pulse-auth",
+      name: "Authored pulse",
+      description: "Narrative.",
+      author_name: "SampleUser",
+      public: true,
+      TLP: "GREEN",
+      tags: [],
+      references: [],
+      indicators: [{ indicator: "bad.example", type: "domain" }],
+      created: "2023-08-22T09:43:18.855000",
+      modified: "2023-08-22T09:43:18.855000",
+    });
+
+    // When: the detail is fetched through the proxy
+    const res = await app.inject({
+      method: "GET",
+      url: "/otx/pulses/pulse-auth",
+      headers: { authorization: admin },
+    });
+
+    // Then: authorName is part of the wire response
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { authorName: string }).authorName).toBe("SampleUser");
   });
 });
