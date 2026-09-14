@@ -4,6 +4,7 @@ import {
   createClient,
   deleteChannel,
   deleteClient,
+  listChannels,
   listClients,
   updateChannel,
   updateClient,
@@ -13,9 +14,9 @@ import {
   type CreateChannelBody,
 } from "./clientsApi";
 
-/** React Query bindings for Surface 6 (contract #40-46). Channels are not
- * query-cached — the contract has no list endpoint, so the channels editor
- * owns its session-local list and consumes mutation responses directly. */
+/** React Query bindings for Surface 6 (contract #40-46). The channel list is
+ * server-truth (#44b): every mutation invalidates ["channels"] so the editor
+ * re-renders from the refetched list — no local channel state. */
 
 export function useClients(page: number, pageSize: number = 20) {
   return useQuery({
@@ -55,23 +56,42 @@ export function useDeleteClient() {
   });
 }
 
-/** Channel mutations return the wire Channel; the panel folds it into its
- * local list via onSuccess handlers passed at mutate() call sites. */
+/** Channel mutations invalidate the persisted list (#44b) so the editor
+ * re-renders from the refetched server list. */
+export function useChannels(clientId: string) {
+  return useQuery({
+    queryKey: ["channels", clientId],
+    queryFn: () => listChannels(clientId),
+  });
+}
+
 export function useCreateChannel(clientId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateChannelBody) => createChannel(clientId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["channels", clientId] });
+    },
   });
 }
 
 export function useUpdateChannel() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: ChannelPatch }) =>
       updateChannel(id, patch),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["channels"] });
+    },
   });
 }
 
 export function useDeleteChannel() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteChannel(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["channels"] });
+    },
   });
 }

@@ -43,6 +43,10 @@ export const ChannelSchema = z.discriminatedUnion("type", [
 ]);
 export type Channel = z.infer<typeof ChannelSchema>;
 
+// GET /clients/:clientId/channels — persisted list for the web channels editor
+export const ChannelListSchema = z.array(ChannelSchema);
+export type ChannelList = z.infer<typeof ChannelListSchema>;
+
 // POST /clients/:clientId/channels
 export const CreateChannelBodySchema = z.discriminatedUnion("type", [
   z.object({

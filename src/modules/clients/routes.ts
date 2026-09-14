@@ -4,7 +4,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { sendError } from "../../common/errors.js";
 import { prisma } from "../../lib/db.js";
 import { encodeChannelTarget, toChannelWire } from "../channels/map.js";
-import { ChannelSchema, CreateChannelBodySchema } from "../channels/schema.js";
+import { ChannelListSchema, ChannelSchema, CreateChannelBodySchema } from "../channels/schema.js";
 import { toClientWire } from "./map.js";
 import {
   ClientIdParamSchema,
@@ -16,9 +16,9 @@ import {
   UpdateClientBodySchema,
 } from "./schema.js";
 
-/** Surface 6 — clients (#40–43) plus channel creation (#44). Read: ANY role
- * (send-dialog context); mutations: MGR. Deleting a client that still owns
- * channels is a FK violation → 409 CONFLICT. */
+/** Surface 6 — clients (#40–43), channel creation (#44) and the persisted
+ * channel list (#44b). Read: ANY role (send-dialog context); mutations: MGR.
+ * Deleting a client that still owns channels is a FK violation → 409 CONFLICT. */
 
 function prismaErrorToReply(reply: Parameters<typeof sendError>[0], err: unknown) {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -131,6 +131,24 @@ export default async function clientRoutes(app: FastifyInstance): Promise<void> 
       } catch (err) {
         return prismaErrorToReply(reply, err);
       }
+    },
+  );
+
+  f.get(
+    "/:clientId/channels",
+    {
+      schema: {
+        params: ClientIdParamSchema,
+        response: { 200: ChannelListSchema },
+      },
+      onRequest: [app.requireRole("ADMIN", "EDITOR", "ANALYST")],
+    },
+    async (request) => {
+      const rows = await prisma.channel.findMany({
+        where: { clientId: request.params.clientId },
+        orderBy: { createdAt: "asc" },
+      });
+      return rows.map(toChannelWire);
     },
   );
 }

@@ -7,6 +7,7 @@ import type {
   CreateChannelBody,
 } from "../../lib/clientsApi";
 import {
+  useChannels,
   useCreateChannel,
   useDeleteChannel,
   useUpdateChannel,
@@ -55,48 +56,35 @@ interface ChannelsPanelProps {
 }
 
 /**
- * Per-client channels editor. The contract defines no channel-list endpoint,
- * so the panel tracks channels created/updated through it (FE-CHN-01/02).
- * Telegram rows show the server-masked token only — the raw token exists
- * solely in the create request.
+ * Per-client channels editor. The server list (#44b) is the single source of
+ * truth: it is fetched on open and refetched after every mutation via query
+ * invalidation. Telegram rows show the server-masked token only — the raw
+ * token exists solely in the create request.
  */
 export function ChannelsPanel({ client, onClose }: ChannelsPanelProps) {
-  const [channels, setChannels] = useState<Channel[]>([]);
   const [form, setForm] = useState<ChannelForm>(EMPTY_FORM);
+  const channelsQuery = useChannels(client.id);
+  const channels = channelsQuery.data ?? [];
   const createChannel = useCreateChannel(client.id);
   const updateChannel = useUpdateChannel();
   const deleteChannel = useDeleteChannel();
 
   const submit = (): void => {
     createChannel.mutate(buildCreateBody(form), {
-      onSuccess: (created) => {
-        setChannels((current) => [...current, created]);
-        setForm(EMPTY_FORM);
-      },
+      onSuccess: () => setForm(EMPTY_FORM),
     });
   };
 
-  const toggle = (channel: Channel, active: boolean): void => {
-    updateChannel.mutate(
-      { id: channel.id, patch: { active } },
-      {
-        onSuccess: (updated) =>
-          setChannels((current) =>
-            current.map((entry) => (entry.id === updated.id ? updated : entry)),
-          ),
-      },
-    );
+  const toggle = (channel: { id: string; active: boolean }, active: boolean): void => {
+    updateChannel.mutate({ id: channel.id, patch: { active } });
   };
 
-  const remove = (channel: Channel): void => {
-    deleteChannel.mutate(channel.id, {
-      onSuccess: () =>
-        setChannels((current) =>
-          current.filter((entry) => entry.id !== channel.id),
-        ),
-    });
+  const remove = (channel: { id: string }): void => {
+    deleteChannel.mutate(channel.id);
   };
 
+  const queryError =
+    channelsQuery.error instanceof Error ? channelsQuery.error.message : null;
   const mutationError =
     createChannel.error instanceof Error
       ? createChannel.error.message
@@ -108,7 +96,9 @@ export function ChannelsPanel({ client, onClose }: ChannelsPanelProps) {
 
   return (
     <Modal open onClose={onClose} title={`Channels — ${client.name}`}>
-      {channels.length === 0 ? (
+      {channelsQuery.isPending ? (
+        <p className="text-sm text-slate-500">Loading channels…</p>
+      ) : channels.length === 0 ? (
         <p className="text-sm text-slate-500">No channels yet.</p>
       ) : (
         <table className="w-full text-left text-sm">
@@ -217,9 +207,9 @@ export function ChannelsPanel({ client, onClose }: ChannelsPanelProps) {
             />
           </label>
         ) : null}
-        {mutationError !== null ? (
+        {queryError !== null || mutationError !== null ? (
           <p role="alert" className="text-sm text-red-600">
-            {mutationError}
+            {queryError ?? mutationError}
           </p>
         ) : null}
         <div className="flex justify-end">

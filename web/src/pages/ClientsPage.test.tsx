@@ -18,6 +18,8 @@ const TELEGRAM_CHANNEL_ID = "a9b8c7d6-5e4f-4321-8765-ba0987654321";
 const WHATSAPP_CHANNEL_ID = "1a2b3c4d-5e6f-4789-9abc-def012345678";
 const EMAIL_CHANNEL_ID = "0f1e2d3c-4b5a-4678-9abc-def012345679";
 
+const CHANNELS_LIST_URL = `/api/clients/${acme.id}/channels`;
+
 function telegramChannel(
   overrides: Partial<Extract<Channel, { type: "TELEGRAM" }>> = {},
 ): Channel {
@@ -67,7 +69,8 @@ interface RecordedCall {
 
 /**
  * Fetch stub with the routeFetch shape used by the other page tests, plus a
- * `calls` log of mutating requests so tests assert on exact wire bodies.
+ * `calls` log of every request (GET included) so tests can assert the panel
+ * reads the server list instead of echoing mutation responses.
  */
 function stubFetch(
   routes: Array<{
@@ -79,13 +82,14 @@ function stubFetch(
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
-    if (method !== "GET" && init?.body !== undefined) {
-      calls.push({
-        url,
-        method,
-        body: JSON.parse(String(init.body)) as Record<string, unknown>,
-      });
-    }
+    calls.push({
+      url,
+      method,
+      body:
+        method !== "GET" && init?.body !== undefined
+          ? (JSON.parse(String(init.body)) as Record<string, unknown>)
+          : null,
+    });
     const route = routes.find((candidate) => candidate.match(url, method));
     if (route === undefined) {
       throw new Error(`Unexpected fetch: ${method} ${url}`);
@@ -105,6 +109,57 @@ function clientsRoute(): {
         JSON.stringify({ items: [acme], total: 1, page: 1, pageSize: 20 }),
         { status: 200 },
       ),
+  };
+}
+
+/** GET /clients/:clientId/channels — serves the mutable "server" state. */
+function channelsListRoute(channels: Channel[]): {
+  match: (url: string, method: string) => boolean;
+  respond: () => Response;
+} {
+  return {
+    match: (url, method) => method === "GET" && url === CHANNELS_LIST_URL,
+    respond: () =>
+      new Response(JSON.stringify(channels), { status: 200 }),
+  };
+}
+
+/** POST /clients/:clientId/channels — persists then answers 201 (real server). */
+function createChannelRoute(channels: Channel[]): {
+  match: (url: string, method: string) => boolean;
+  respond: (init?: RequestInit) => Response;
+} {
+  return {
+    match: (url, method) => method === "POST" && url === CHANNELS_LIST_URL,
+    respond: (init) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const channel =
+        body.type === "TELEGRAM"
+          ? telegramChannel({ chatId: String(body.chatId) })
+          : body.type === "WHATSAPP"
+            ? whatsappChannel(String(body.chatId))
+            : emailChannel(body.bcc as string[]);
+      channels.push(channel);
+      return new Response(JSON.stringify(channel), { status: 201 });
+    },
+  };
+}
+
+/** PATCH /channels/:id — applies {active} to the "server" state. */
+function toggleChannelRoute(channels: Channel[], id: string, active: boolean): {
+  match: (url: string, method: string) => boolean;
+  respond: () => Response;
+} {
+  return {
+    match: (url, method) => method === "PATCH" && url === `/api/channels/${id}`,
+    respond: () => {
+      const updated = channels.map((channel) =>
+        channel.id === id ? ({ ...channel, active } as Channel) : channel,
+      );
+      channels.splice(0, channels.length, ...updated);
+      const row = updated.find((channel) => channel.id === id);
+      return new Response(JSON.stringify(row ?? null), { status: 200 });
+    },
   };
 }
 
@@ -129,6 +184,49 @@ async function openChannelsPanel(): Promise<HTMLElement> {
   return dialog;
 }
 
+function listGetCount(calls: RecordedCall[]): number {
+  return calls.filter((c) => c.method === "GET" && c.url === CHANNELS_LIST_URL)
+    .length;
+}
+
+describe("FE-CHN-LIST: the panel lists channels from the server, surviving reopen", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it("fetches GET /clients/:id/channels on open and shows persisted rows after reopen", async () => {
+    // Given: Acme has one Telegram channel created in a previous session
+    setToken("test-token");
+    const persisted: Channel[] = [telegramChannel()];
+    const calls: RecordedCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      stubFetch([clientsRoute(), channelsListRoute(persisted)], calls),
+    );
+
+    // When: the channels popup opens
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Channels" }));
+    const dialog = await screen.findByRole("dialog");
+
+    // Then: the panel fetched the server list and renders the persisted row
+    await waitFor(() => expect(listGetCount(calls)).toBe(1));
+    expect(await within(dialog).findByText(/@secops/)).not.toBeNull();
+    expect(within(dialog).getByText(/111222:AA…x9Z/)).not.toBeNull();
+
+    // When: the popup is closed and reopened
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(await screen.findByRole("button", { name: "Channels" }));
+    const reopened = await screen.findByRole("dialog");
+
+    // Then: the server list is fetched again and the channel is still there
+    await waitFor(() => expect(listGetCount(calls)).toBe(2));
+    expect(await within(reopened).findByText(/@secops/)).not.toBeNull();
+  });
+});
+
 describe("FE-CHN-01: channel create sends the per-type discriminated body", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -138,26 +236,15 @@ describe("FE-CHN-01: channel create sends the per-type discriminated body", () =
   it("creates WHATSAPP, TELEGRAM, and EMAIL channels with contract-exact shapes", async () => {
     // Given: Acme Corp exists and its channels panel is open and empty
     setToken("test-token");
+    const persisted: Channel[] = [];
     const calls: RecordedCall[] = [];
     vi.stubGlobal(
       "fetch",
       stubFetch(
         [
           clientsRoute(),
-          {
-            match: (url, method) =>
-              method === "POST" && url === `/api/clients/${acme.id}/channels`,
-            respond: (init) => {
-              const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-              const channel =
-                body.type === "TELEGRAM"
-                  ? telegramChannel({ chatId: String(body.chatId) })
-                  : body.type === "WHATSAPP"
-                    ? whatsappChannel(String(body.chatId))
-                    : emailChannel(body.bcc as string[]);
-              return new Response(JSON.stringify(channel), { status: 201 });
-            },
-          },
+          channelsListRoute(persisted),
+          createChannelRoute(persisted),
         ],
         calls,
       ),
@@ -199,7 +286,7 @@ describe("FE-CHN-01: channel create sends the per-type discriminated body", () =
 
     // Then: each create body is exactly the discriminated contract shape (#44)
     const posts = calls.filter((c) => c.method === "POST");
-    expect(posts[0].url).toBe(`/api/clients/${acme.id}/channels`);
+    expect(posts[0].url).toBe(CHANNELS_LIST_URL);
     expect(posts[0].body).toEqual({ type: "WHATSAPP", chatId: "12025550123" });
     expect(posts[1].body).toEqual({
       type: "TELEGRAM",
@@ -211,8 +298,12 @@ describe("FE-CHN-01: channel create sends the per-type discriminated body", () =
       bcc: ["a@corp.io", "b@corp.io"],
     });
 
-    // And: the Telegram row shows the masked token only — never the raw one
-    expect(await within(dialog).findByText(/111222:AA…x9Z/)).not.toBeNull();
+    // And: every add refetched the server list — rows come from the refetch,
+    // not from a local echo of the create responses
+    await waitFor(() => expect(listGetCount(calls)).toBe(4));
+    expect(await within(dialog).findByText("12025550123")).not.toBeNull();
+    expect(within(dialog).getByText(/111222:AA…x9Z/)).not.toBeNull();
+    expect(within(dialog).getByText(/a@corp.io/)).not.toBeNull();
     expect(document.body.textContent).not.toContain("AAE-rawtoken");
   });
 });
@@ -224,34 +315,25 @@ describe("FE-CHN-02: channel active toggle PATCHes only {active}", () => {
   });
 
   it("flips a channel to inactive via PATCH /channels/:id and renders the new state", async () => {
-    // Given: Acme's panel holds one active Telegram channel
+    // Given: Acme's panel is open with no channels yet
     setToken("test-token");
+    const persisted: Channel[] = [];
     const calls: RecordedCall[] = [];
     vi.stubGlobal(
       "fetch",
       stubFetch(
         [
           clientsRoute(),
-          {
-            match: (url, method) =>
-              method === "POST" && url === `/api/clients/${acme.id}/channels`,
-            respond: () =>
-              new Response(JSON.stringify(telegramChannel()), { status: 201 }),
-          },
-          {
-            match: (url, method) => method === "PATCH" && url === `/api/channels/${TELEGRAM_CHANNEL_ID}`,
-            respond: () =>
-              new Response(JSON.stringify(telegramChannel({ active: false })), {
-                status: 200,
-              }),
-          },
+          channelsListRoute(persisted),
+          createChannelRoute(persisted),
+          toggleChannelRoute(persisted, TELEGRAM_CHANNEL_ID, false),
         ],
         calls,
       ),
     );
     const dialog = await openChannelsPanel();
 
-    // Seed one channel through the editor
+    // Seed one channel through the editor (persisted server-side by the stub)
     fireEvent.change(within(dialog).getByLabelText("Type"), {
       target: { value: "TELEGRAM" },
     });
@@ -281,7 +363,8 @@ describe("FE-CHN-02: channel active toggle PATCHes only {active}", () => {
     expect(patch?.body).toEqual({ active: false });
     expect(JSON.stringify(patch?.body)).not.toContain("token");
 
-    // And: the row reflects the server state
+    // And: the row reflects the server state via the post-toggle refetch
+    await waitFor(() => expect(listGetCount(calls)).toBe(3));
     expect(await within(dialog).findByText("Inactive")).not.toBeNull();
   });
 });

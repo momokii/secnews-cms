@@ -2,8 +2,8 @@ import { apiFetch } from "./api";
 
 /** Wire types + fetch functions for Surface 6 — clients + channels
  * (contract #40-46). Telegram responses carry tokenMasked/hasToken, never the
- * raw token (CHN-02). The contract defines no channel-list endpoint, so the
- * channels editor tracks channels via create/patch/delete responses. */
+ * raw token (CHN-02). Channels are read from the persisted list endpoint
+ * (#44b); create/patch/delete mutate it. */
 
 export interface Paginated<T> {
   items: T[];
@@ -108,6 +108,13 @@ export async function updateClient(
 
 export async function deleteClient(id: string): Promise<void> {
   await apiFetch(`/clients/${id}`, { method: "DELETE" });
+}
+
+export async function listChannels(clientId: string): Promise<Channel[]> {
+  const response = await apiFetch(`/clients/${clientId}/channels`, {
+    method: "GET",
+  });
+  return (await response.json()) as Channel[];
 }
 
 export async function createChannel(

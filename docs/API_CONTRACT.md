@@ -191,6 +191,7 @@ Read ANY (send-dialog context); mutations MGR.
 | 42 | `PATCH /clients/:id` | MGR | `UpdateClientBodySchema` | 200 `ClientSchema` | |
 | 43 | `DELETE /clients/:id` | MGR | — | 204 | |
 | 44 | `POST /clients/:clientId/channels` | MGR | `CreateChannelBodySchema` (discriminated on type) | 201 `ChannelSchema` | |
+| 44b | `GET /clients/:clientId/channels` | ANY | — | 200 `[ChannelSchema]` (plain array, `createdAt` asc) | |
 | 45 | `PATCH /channels/:id` | MGR | `UpdateChannelBodySchema` | 200 `ChannelSchema` | |
 | 46 | `DELETE /channels/:id` | MGR | — | 204 | |
 
