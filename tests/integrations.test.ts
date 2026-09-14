@@ -185,6 +185,32 @@ describe("TASK-C4 integrations surface (encrypted at rest, masked out)", () => {
     expect((res.json() as { error: { code: string } }).error.code).toBe("FORBIDDEN");
   });
 
+  it("OTX test-connection probes the real subscribed-pulses endpoint, not a guessed path", async () => {
+    // Given: an OTX key is configured
+    await app.inject({
+      method: "PUT",
+      url: "/integrations/OTX",
+      headers: { authorization: admin },
+      payload: { apiKey: "5m3jkh-otx-key-9876" },
+    });
+    // When: the connection is tested against a healthy upstream
+    let probedUrl = "";
+    vi.stubGlobal("fetch", async (url: unknown) => {
+      probedUrl = String(url);
+      return new Response(JSON.stringify({ results: [] }), { status: 200 });
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/integrations/OTX/test",
+      headers: { authorization: admin },
+      payload: {},
+    });
+    // Then: the probe hits /api/v1/pulses/subscribed (OTX has no /subscriber/mine — it 404s) and reports ok
+    expect(probedUrl).toBe("https://otx.alienvault.com/api/v1/pulses/subscribed?limit=1");
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { ok: boolean }).ok).toBe(true);
+  });
+
   it("unknown integration kind is a 400 VALIDATION", async () => {
     // Given: an undefined kind
     // When: it is requested

@@ -27,7 +27,8 @@ const testBody = z.object({}).strict();
 /** Unconfigured kinds still satisfy the response schema. */
 const EPOCH = "1970-01-01T00:00:00.000Z";
 const OTX_BASE = "https://otx.alienvault.com";
-const OTX_TEST_PATH = "/api/v1/pulses/subscriber/mine?limit=1";
+/** Probe path: the same subscribed-pulses endpoint the app itself uses (OTX has no /subscriber/mine). */
+const OTX_TEST_PATH = "/api/v1/pulses/subscribed?limit=1";
 
 type StoredConfig = { apiKey: string; model?: string };
 
