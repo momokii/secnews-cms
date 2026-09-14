@@ -220,7 +220,7 @@ describe("POST /tickets/:id/send (SND-01…03, AUD-01)", () => {
     expect(res.statusCode).toBe(200);
     const audit = (res.body as { audit: SentAuditRow[] }).audit;
     expect(audit).toHaveLength(2);
-    const expectedPayload = `Title: ${(await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } })).title}\nIOCs:\n- DOMAIN: evil[.]com`;
+    const expectedPayload = `Title: ${(await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } })).title}\nIOCs:\n- DOMAIN evil[.]com`;
     for (const row of audit) {
       expect(row.status).toBe("SENT");
       expect(row.errorDetail).toBeNull();

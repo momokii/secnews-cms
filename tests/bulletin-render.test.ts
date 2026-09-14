@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_BULLETIN_TEMPLATE,
+  DEFAULT_TEMPLATE,
   defangIoc,
   renderBulletin,
-  type BulletinInput,
-} from "../src/lib/bulletin/render.js";
+  type BulletinData,
+} from "../src/modules/bulletin/render.js";
 
 /** BUL-01 placeholders + optional-section dropping, BUL-02 defang map +
- * includeInBulletin exclusion (docs/STATES.md §3). Pure-function suite. */
+ * includeInBulletin exclusion (docs/STATES.md §3). Pure-function suite.
+ * Single canonical renderer: src/modules/bulletin/render.ts. */
 
-function input(overrides: Partial<BulletinInput> = {}): BulletinInput {
+function input(overrides: Partial<BulletinData> = {}): BulletinData {
   return {
     title: "SSH brute force campaign",
     overview: "Overview text",
@@ -45,7 +46,7 @@ describe("bulletin renderer (BUL-01)", () => {
     expect(rendered).toContain("Title: SSH brute force campaign");
     expect(rendered).toContain("Overview: Overview text");
     expect(rendered).toContain("Description: Description text");
-    expect(rendered).toContain("- DOMAIN: evil[.]com");
+    expect(rendered).toContain("- DOMAIN evil[.]com");
     expect(rendered).toContain("Recommendations: Rotate credentials");
     expect(rendered).toContain("https://example.com/advisory");
   });
@@ -84,11 +85,11 @@ describe("bulletin renderer (BUL-01)", () => {
     });
 
     // When: the default template is rendered
-    const rendered = renderBulletin(DEFAULT_BULLETIN_TEMPLATE, data);
+    const rendered = renderBulletin(DEFAULT_TEMPLATE, data);
 
     // Then: title and defanged IOC appear
     expect(rendered).toContain("SSH brute force campaign");
-    expect(rendered).toContain("1.2.3[.]4");
+    expect(rendered).toContain("1[.]2[.]3[.]4");
   });
 });
 
@@ -98,8 +99,8 @@ describe("bulletin defang map (BUL-02)", () => {
     // When: each is defanged
     // Then: separators are bracketed / schemes rewritten exactly as documented
     expect(defangIoc("DOMAIN", "evil.com")).toBe("evil[.]com");
-    expect(defangIoc("IPV4", "1.2.3.4")).toBe("1.2.3[.]4");
-    expect(defangIoc("IPV6", "2001:db8::1")).toBe("2001:db8:[:]1");
+    expect(defangIoc("IPV4", "1.2.3.4")).toBe("1[.]2[.]3[.]4");
+    expect(defangIoc("IPV6", "2001:db8::1")).toBe("2001[:]db8[:][:]1");
     expect(defangIoc("URL", "https://evil.com/payload")).toBe("hxxps://evil[.]com/payload");
     expect(defangIoc("URL", "http://evil.com/payload")).toBe("hxxp://evil[.]com/payload");
     expect(defangIoc("EMAIL", "user@evil.com")).toBe("user(at)evil[.]com");
@@ -132,7 +133,7 @@ describe("bulletin defang map (BUL-02)", () => {
     });
 
     // When: the ioc_block is rendered
-    const rendered = renderBulletin(DEFAULT_BULLETIN_TEMPLATE, data);
+    const rendered = renderBulletin(DEFAULT_TEMPLATE, data);
 
     // Then: only the opted-in IOC appears
     expect(rendered).toContain("included[.]example");

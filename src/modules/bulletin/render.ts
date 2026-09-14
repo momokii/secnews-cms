@@ -37,6 +37,7 @@ export type RequiredPreviewField = (typeof REQUIRED_PREVIEW_FIELDS)[number];
 export type BulletinIoc = {
   type: IocType;
   value: string;
+  includeInBulletin: boolean;
 };
 
 export type BulletinData = {
@@ -96,31 +97,55 @@ export function missingPreviewFields(data: BulletinData): RequiredPreviewField[]
   return REQUIRED_PREVIEW_FIELDS.filter((field) => empty[field] === "");
 }
 
-/** Render the template: substitute placeholders, drop lines whose only
- * content is an unfilled placeholder, collapse the resulting blank runs. */
-export function renderBulletin(template: string, data: BulletinData): string {
-  const iocBlock = data.iocs.map((ioc) => `- ${ioc.type} ${defangIoc(ioc.type, ioc.value)}`).join("\n");
-  const values: Record<string, string> = {
+/** "- TYPE defanged-value" lines for the included IOCs, in input order. */
+function renderIocBlock(iocs: BulletinIoc[]): string {
+  return iocs
+    .filter((ioc) => ioc.includeInBulletin)
+    .map((ioc) => `- ${ioc.type} ${defangIoc(ioc.type, ioc.value)}`)
+    .join("\n");
+}
+
+type SectionValues = Record<
+  "title" | "overview" | "description" | "ioc_block" | "recommendations" | "references",
+  string
+>;
+
+function sectionValues(data: BulletinData): SectionValues {
+  const references = data.references.join("\n");
+  return {
     title: data.title,
     overview: nonBlank(data.overview),
     description: nonBlank(data.description),
     recommendations: nonBlank(data.recommendations),
-    references: data.references.join("\n"),
-    ioc_block: iocBlock,
+    references,
+    ioc_block: renderIocBlock(data.iocs),
   };
+}
 
-  let out = template;
-  for (const [key, value] of Object.entries(values)) {
-    const token = `{{${key}}}`;
-    if (value === "") {
-      out = out
-        .split("\n")
-        .filter((line) => line.trim() !== token)
-        .join("\n")
-        .replaceAll(token, "");
-    } else {
-      out = out.replaceAll(token, value);
+const PLACEHOLDER = /\{\{(title|overview|description|ioc_block|recommendations|references)\}\}/g;
+
+function placeholderKeys(line: string): (keyof SectionValues)[] {
+  const found = line.match(PLACEHOLDER);
+  return (found ?? []).map((name) => name.slice(2, -2) as keyof SectionValues);
+}
+
+/** Render the template: substitute placeholders. A line whose placeholders all
+ * resolve to "" is dropped, together with a trailing-colon label line directly
+ * above it — unfilled optional sections leave no orphan headers and no
+ * fabricated text (BUL-01); blank runs collapse. */
+export function renderBulletin(template: string, data: BulletinData): string {
+  const values = sectionValues(data);
+  const output: string[] = [];
+  for (const line of template.split("\n")) {
+    const keys = placeholderKeys(line);
+    if (keys.length > 0 && keys.every((key) => values[key] === "")) {
+      const previous = output[output.length - 1];
+      if (previous !== undefined && previous.trimEnd().endsWith(":")) {
+        output.pop();
+      }
+      continue;
     }
+    output.push(line.replace(PLACEHOLDER, (_match, key: keyof SectionValues) => values[key]));
   }
-  return out.replace(/\n{3,}/g, "\n\n").trim();
+  return output.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }

@@ -135,10 +135,23 @@ async function main(): Promise<void> {
   const mail = recorded.smtp.find((message) => message.to.includes(EMAIL_BCC));
   ok(mail !== undefined, "SMTP sink captured the email send", recorded.smtp);
   ok(mail !== undefined && mail.data.includes(`Subject: ${title}`), "email subject is the ticket title", mail?.data.split("\n").slice(0, 6));
+
+  // Nodemailer picks quoted-printable for longer text bodies (RFC 2045); the
+  // bulletin content on the wire is the QP-decoded body, so decode before
+  // comparing to the stored payload.
+  function decodedMailBody(data: string): string {
+    const bodyStart = data.indexOf("\r\n\r\n");
+    const body = bodyStart === -1 ? data : data.slice(bodyStart + 4);
+    return body
+      .replace(/=\r?\n/g, "")
+      .replace(/=([0-9A-F]{2})/g, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
+  }
+
   const emailPayload = sent.body.audit.find((row) => row.channelType === "EMAIL")?.payload;
   ok(
-    mail !== undefined && emailPayload !== undefined && mail.data.includes(emailPayload),
+    mail !== undefined && emailPayload !== undefined && decodedMailBody(mail.data).includes(emailPayload),
     "email body carries the exact rendered payload (SND-P-03)",
+    { dataTail: mail?.data.split("\n").slice(-12), payload: emailPayload },
   );
   step("sender shapes verified against mock traffic (SND-P-01..03)");
 

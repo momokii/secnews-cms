@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { AppError } from "../../common/errors.js";
 import { pageQuery } from "../../common/pagination.js";
-import { DEFAULT_BULLETIN_TEMPLATE, renderBulletin } from "../../lib/bulletin/render.js";
+import { DEFAULT_TEMPLATE, renderBulletin } from "../bulletin/render.js";
 import { assertNoPendingSuggestions } from "../../lib/guards/pending.js";
 import { prisma } from "../../lib/db.js";
 import { getAuthUser } from "../../plugins/auth.js";
@@ -128,7 +128,7 @@ export default async function deliveryRoutes(app: FastifyInstance): Promise<void
         where: { isActive: true },
         orderBy: { createdAt: "desc" },
       });
-      const payload = renderBulletin(template?.body ?? DEFAULT_BULLETIN_TEMPLATE, {
+      const payload = renderBulletin(template?.body ?? DEFAULT_TEMPLATE, {
         title: ticket.title,
         overview: ticket.overview,
         description: ticket.description,
