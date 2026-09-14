@@ -17,10 +17,10 @@ import {
  * query-cached — the contract has no list endpoint, so the channels editor
  * owns its session-local list and consumes mutation responses directly. */
 
-export function useClients(page: number) {
+export function useClients(page: number, pageSize: number = 20) {
   return useQuery({
-    queryKey: ["clients", page],
-    queryFn: () => listClients({ page }),
+    queryKey: ["clients", page, pageSize],
+    queryFn: () => listClients({ page, pageSize }),
   });
 }
 

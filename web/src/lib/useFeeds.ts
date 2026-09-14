@@ -21,12 +21,13 @@ import {
 
 export function feedItemsQueryKey(
   filters: FeedItemsQuery,
-): readonly ["feed-items", string | null, string | null, number] {
+): readonly ["feed-items", string | null, string | null, number, number] {
   return [
     "feed-items",
     filters.status ?? null,
     filters.q ?? null,
     filters.page ?? 1,
+    filters.pageSize ?? 20,
   ];
 }
 

@@ -71,11 +71,11 @@ export type ChannelPatch = Partial<
 const DEFAULT_PAGE_SIZE = 20;
 
 export async function listClients(
-  query: { page?: number; q?: string } = {},
+  query: { page?: number; pageSize?: number; q?: string } = {},
 ): Promise<Paginated<Client>> {
   const search = new URLSearchParams();
   search.set("page", String(query.page ?? 1));
-  search.set("pageSize", String(DEFAULT_PAGE_SIZE));
+  search.set("pageSize", String(query.pageSize ?? DEFAULT_PAGE_SIZE));
   if (query.q !== undefined && query.q !== "") {
     search.set("q", query.q);
   }

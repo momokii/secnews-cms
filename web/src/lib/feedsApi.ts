@@ -35,12 +35,15 @@ export interface FeedItem {
   guid: string;
   title: string;
   url: string;
-  publishedAt: string;
+  /** Null when neither isoDate nor pubDate could be parsed upstream. */
+  publishedAt: string | null;
   summary: string | null;
   status: FeedItemStatus;
   /** Set when TAKEN — back-reference to the spawned ticket. */
   ticketId: string | null;
   fetchedAt: string;
+  /** Source display name; the list endpoint joins it in. */
+  sourceName?: string;
 }
 
 export interface FeedItemsQuery {

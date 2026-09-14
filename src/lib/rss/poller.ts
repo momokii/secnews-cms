@@ -35,7 +35,8 @@ function parseDate(value: unknown): Date | null {
 }
 
 /** Polls one feed: malformed items are skipped (counted, never persisted),
- * parser failures are swallowed (a dead upstream must not kill the sweep). */
+ * same-title-same-feed duplicates count as skipped (ING-D), parser failures
+ * are swallowed (a dead upstream must not kill the sweep). */
 export async function pollFeedSource(
   feed: { id: string; url: string },
   parser: FeedParser = createFeedParser(),
@@ -58,7 +59,7 @@ export async function pollFeedSource(
       skipped += 1;
       continue;
     }
-    await upsertFeedItem({
+    const { deduped } = await upsertFeedItem({
       feedId: feed.id,
       guid,
       title: item.title,
@@ -66,7 +67,11 @@ export async function pollFeedSource(
       publishedAt: parseDate(item.isoDate ?? item.pubDate),
       raw: item,
     });
-    stored += 1;
+    if (deduped) {
+      skipped += 1;
+    } else {
+      stored += 1;
+    }
   }
   return { fetched: items.length, stored, skipped };
 }

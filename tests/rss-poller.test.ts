@@ -103,6 +103,27 @@ describe("RSS poller (ING-02)", () => {
     expect(rows[0]?.title).toBe("dedupe item v2");
   });
 
+  it("ING-D: a duplicate title under the same feed counts as skipped, not stored", async () => {
+    // Given: an item already stored under its guid
+    const title = `poller dupe ${tag}`;
+    const first = fakeParser([
+      { title, link: `https://poller.example/${tag}/dupe-a`, guid: "g-dupe-a" },
+    ]);
+    await pollFeedSource({ id: feedId, url: feedUrl() }, first);
+
+    // When: the same title arrives under a different guid on the next poll
+    const again = fakeParser([
+      { title, link: `https://poller.example/${tag}/dupe-b`, guid: "g-dupe-b" },
+    ]);
+    const stats = await pollFeedSource({ id: feedId, url: feedUrl() }, again);
+
+    // Then: the poll reports the item as skipped and no new row exists
+    expect(stats).toEqual({ fetched: 1, stored: 0, skipped: 1 });
+    const rows = await prisma.feedItem.findMany({ where: { feedId, title } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.guid).toBe("g-dupe-a");
+  });
+
   it("pollAllFeeds aggregates across active sources only and never rejects", async () => {
     // Given: an active source and a parser serving one item for every url
     const parser = fakeParser([

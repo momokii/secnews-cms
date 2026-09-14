@@ -179,7 +179,7 @@ describe("GET /feed-items (ITEM-01, #12/#16/#17/#18)", () => {
     // Given/When: the delta row (raw carries a summary string)
     const response = await list({ feedSourceId: sourceB });
 
-    // Then: summary derived from raw, fetchedAt ISO, ticketId null
+    // Then: summary derived from raw, fetchedAt ISO, ticketId null, source named
     const item = response.json().items[0];
     expect(item).toMatchObject({
       guid: "seed-b",
@@ -187,6 +187,7 @@ describe("GET /feed-items (ITEM-01, #12/#16/#17/#18)", () => {
       summary: "raw summary text",
       status: "UNREVIEWED",
       ticketId: null,
+      sourceName: `items-b-${tag}`,
     });
     expect(() => new Date(item.fetchedAt).toISOString()).not.toThrow();
   });

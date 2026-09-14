@@ -52,7 +52,10 @@ export default async function feedItemRoutes(app: FastifyInstance): Promise<void
       const [rows, total] = await prisma.$transaction([
         prisma.feedItem.findMany({
           where,
-          include: { ticket: { select: { id: true } } },
+          include: {
+            feed: { select: { name: true } },
+            ticket: { select: { id: true } },
+          },
           orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
           skip: (page - 1) * pageSize,
           take: pageSize,

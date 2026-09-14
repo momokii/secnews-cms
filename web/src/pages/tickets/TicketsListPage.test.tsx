@@ -123,4 +123,22 @@ describe("FE-TKT-01: tickets list", () => {
       ),
     );
   });
+
+  it("refetches with the selected page size", async () => {
+    setToken("test-token");
+    const fetchMock = routeFetch(listRoutes());
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(<TicketsListPage />);
+
+    await screen.findByRole("link", { name: "OpenSSL vulnerability" });
+    fireEvent.change(screen.getByLabelText("Items per page"), {
+      target: { value: "100" },
+    });
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes("pageSize=100"))).toBe(
+        true,
+      ),
+    );
+  });
 });

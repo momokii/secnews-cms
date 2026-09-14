@@ -40,16 +40,17 @@ describe("FE-ITEM-01: feed item filters drive the queryKey and refetch", () => {
 
   it("maps every filter into the queryKey so combinations cache independently", () => {
     // Given / When: query keys are derived from filter combinations
-    // Then: status, q, and page each own a slot in the key
+    // Then: status, q, page, and pageSize each own a slot in the key
     expect(feedItemsQueryKey({ status: "UNREVIEWED" })).toEqual([
       "feed-items",
       "UNREVIEWED",
       null,
       1,
+      20,
     ]);
     expect(
-      feedItemsQueryKey({ status: "VIEWED", q: "openssl", page: 2 }),
-    ).toEqual(["feed-items", "VIEWED", "openssl", 2]);
+      feedItemsQueryKey({ status: "VIEWED", q: "openssl", page: 2, pageSize: 50 }),
+    ).toEqual(["feed-items", "VIEWED", "openssl", 2, 50]);
   });
 
   it("refetches with a new query string when status, q, or page change", async () => {
@@ -82,6 +83,34 @@ describe("FE-ITEM-01: feed item filters drive the queryKey and refetch", () => {
     expect(secondUrl).toBe(
       "/api/feed-items?page=2&pageSize=20&status=VIEWED&q=openssl",
     );
+  });
+
+  it("sends a custom pageSize and refetches when it changes", async () => {
+    // Given: a stored token and a stubbed list API
+    setToken("test-token");
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ items: [itemA], total: 1, page: 1, pageSize: 50 }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    // When: the hook renders at the default size and rerenders at 50
+    const initialFilters: { filters: FeedItemsQuery } = {
+      filters: { status: "UNREVIEWED", page: 1 },
+    };
+    const { rerender, result } = renderHook(
+      (props: { filters: FeedItemsQuery }) => useFeedItems(props.filters),
+      { wrapper: createWrapper(), initialProps: initialFilters },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    rerender({ filters: { status: "UNREVIEWED", page: 1, pageSize: 50 } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    // Then: the second request carries pageSize=50
+    const secondUrl = fetchMock.mock.calls[1][0] as string;
+    expect(secondUrl).toBe("/api/feed-items?page=1&pageSize=50&status=UNREVIEWED");
   });
 
   it("keeps previous data visible via placeholderData while the next page loads", async () => {

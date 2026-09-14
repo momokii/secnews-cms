@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import type { FeedItemStatus, TicketSummary } from "../../lib/feedsApi";import {
+import { Pagination } from "../../components/Pagination";
+import { formatTimestamp } from "../../lib/datetime";
+import type { FeedItemStatus, TicketSummary } from "../../lib/feedsApi";
+import {
   useFeedItems,
   useTakeFeedItem,
   useViewFeedItem,
@@ -15,6 +18,7 @@ export function FeedItemsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [takenTickets, setTakenTickets] = useState<Record<string, TicketSummary>>(
     {},
   );
@@ -29,14 +33,18 @@ export function FeedItemsPage() {
     return () => window.clearTimeout(timer);
   }, [searchInput]);
 
-  const itemsQuery = useFeedItems({ status, q: query === "" ? undefined : query, page });
+  const itemsQuery = useFeedItems({
+    status,
+    q: query === "" ? undefined : query,
+    page,
+    pageSize,
+  });
   const viewItem = useViewFeedItem();
   const takeItem = useTakeFeedItem();
 
   const items = itemsQuery.data?.items ?? [];
   const total = itemsQuery.data?.total ?? 0;
-  const pageSize = itemsQuery.data?.pageSize ?? 20;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const effectivePageSize = itemsQuery.data?.pageSize ?? pageSize;
 
   const handleTake = (id: string): void => {
     takeItem.mutate(id, {
@@ -97,6 +105,7 @@ export function FeedItemsPage() {
           <thead>
             <tr className="border-b border-slate-200 text-slate-500">
               <th scope="col" className="py-2 pr-4 font-medium">Title</th>
+              <th scope="col" className="py-2 pr-4 font-medium">Source</th>
               <th scope="col" className="py-2 pr-4 font-medium">Published</th>
               <th scope="col" className="py-2 pr-4 font-medium">Status</th>
               <th scope="col" className="py-2 font-medium">Actions</th>
@@ -121,8 +130,9 @@ export function FeedItemsPage() {
                       {item.title}
                     </a>
                   </td>
-                  <td className="py-2 pr-4 text-slate-500">
-                    {new Date(item.publishedAt).toLocaleDateString()}
+                  <td className="py-2 pr-4 text-slate-500">{item.sourceName}</td>
+                  <td className="py-2 pr-4 text-slate-500" title={item.publishedAt ?? undefined}>
+                    {item.publishedAt === null ? "—" : formatTimestamp(item.publishedAt)}
                   </td>
                   <td className="py-2 pr-4">
                     <span
@@ -173,29 +183,18 @@ export function FeedItemsPage() {
         </table>
       )}
 
-      <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-        <span>
-          Page {page} of {totalPages} — {total} items
-        </span>
-        <span className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page <= 1 || itemsQuery.isPlaceholderData}
-            className="rounded-md border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            onClick={() => setPage((current) => current + 1)}
-            disabled={page >= totalPages || itemsQuery.isPlaceholderData}
-            className="rounded-md border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Next
-          </button>
-        </span>
-      </div>
+      <Pagination
+        page={page}
+        pageSize={effectivePageSize}
+        total={total}
+        disabled={itemsQuery.isPlaceholderData}
+        itemLabel="items"
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
+      />
     </section>
   );
 }

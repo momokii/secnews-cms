@@ -20,9 +20,9 @@ describe("POST /ingest (ING-01, ING-03, ING-04)", () => {
       payload,
     });
 
-  const body = (link: string) => ({
+  const body = (link: string, title: string = `ING push ${tag}`) => ({
     sourceName,
-    title: `ING push ${tag}`,
+    title,
     link,
     publishedAt: "2026-03-01T10:30:00.000Z",
     summary: "pushed summary",
@@ -118,16 +118,117 @@ describe("POST /ingest (ING-01, ING-03, ING-04)", () => {
     expect(after[0]?.id).toBe(before[0]?.id);
   });
 
-  it("ING-01: a new link under the same source creates a second distinct row", async () => {
+  it("ING-01: a new link with a distinct title creates a second distinct row", async () => {
     // Given: the source from previous pushes
-    // When: a payload with a fresh link is pushed
+    // When: a payload with a fresh link AND a distinct title is pushed
+    // (same-title-same-source is deduped by ING-D, so distinctness needs a
+    // new title too)
     const link = `https://push.example/${tag}/item-2`;
-    const response = await push(body(link));
+    const response = await push(body(link, `ING push ${tag} second`));
 
     // Then: 201 and the source now owns two items
     expect(response.statusCode).toBe(201);
     const source = await prisma.feedSource.findFirstOrThrow({ where: { name: sourceName } });
     const count = await prisma.feedItem.count({ where: { feedId: source.id } });
     expect(count).toBe(2);
+  });
+});
+
+/** ING-D: a source never stores two items with the same (trimmed, case-exact)
+ * title. Enforced at the shared store write path, not by a DB index. */
+describe("POST /ingest title dedupe (ING-D-01, ING-D-02, ING-D-03)", () => {
+  let app: FastifyInstance;
+  const tag = randomUUID();
+  const sourceName = `ingest-dedupe-${tag}`;
+  const otherName = `ingest-dedupe-other-${tag}`;
+  const apiKey = process.env["INGEST_API_KEY"] ?? "";
+
+  const push = (payload: Record<string, unknown>, key: string = apiKey) =>
+    app.inject({
+      method: "POST",
+      url: "/ingest",
+      headers: key === "" ? {} : { "x-api-key": key },
+      payload,
+    });
+
+  const body = (link: string, title: string) => ({
+    sourceName,
+    title,
+    link,
+    publishedAt: "2026-03-01T10:30:00.000Z",
+    raw: {},
+  });
+
+  beforeAll(async () => {
+    app = await buildApp();
+  });
+
+  afterAll(async () => {
+    const sources = await prisma.feedSource.findMany({
+      where: { name: { in: [sourceName, otherName] } },
+      select: { id: true },
+    });
+    await prisma.feedItem.deleteMany({ where: { feedId: { in: sources.map((s) => s.id) } } });
+    await prisma.feedSource.deleteMany({ where: { id: { in: sources.map((s) => s.id) } } });
+    await app.close();
+    await prisma.$disconnect();
+  });
+
+  it("ING-D-01: re-ingest with the same title but a different guid creates no row", async () => {
+    // Given: a stored item with a unique title
+    const title = `ING-D dupe ${tag}`;
+    const first = await push(body(`https://push.example/${tag}/d-1`, title));
+    expect(first.statusCode).toBe(201);
+
+    // When: the same title is pushed again under a different guid
+    const second = await push(body(`https://push.example/${tag}/d-2`, title));
+
+    // Then: 201 idempotent and still exactly one row, owned by the first guid
+    expect(second.statusCode).toBe(201);
+    const source = await prisma.feedSource.findFirstOrThrow({ where: { name: sourceName } });
+    const rows = await prisma.feedItem.findMany({ where: { feedId: source.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.guid).toBe(`https://push.example/${tag}/d-1`);
+    expect(rows[0]?.title).toBe(title);
+  });
+
+  it("ING-D-02: the same title under a different source still creates a row", async () => {
+    // Given: the ING-D-01 title already stored under sourceName
+    const title = `ING-D dupe ${tag}`;
+
+    // When: the same title is pushed from a different source name
+    const response = await push({
+      ...body(`https://push.example/${tag}/d-3`, title),
+      sourceName: otherName,
+    });
+
+    // Then: 201 and the other source owns exactly one row of its own
+    expect(response.statusCode).toBe(201);
+    const other = await prisma.feedSource.findFirstOrThrow({ where: { name: otherName } });
+    expect(await prisma.feedItem.count({ where: { feedId: other.id } })).toBe(1);
+  });
+
+  it("ING-D-03: title matching is trimmed and case-exact", async () => {
+    // Given: a stored item titled "ING-D edge <tag>" (unpadded)
+    const core = `ING-D edge ${tag}`;
+    const source = await prisma.feedSource.findFirstOrThrow({ where: { name: sourceName } });
+    const countRows = () => prisma.feedItem.count({ where: { feedId: source.id } });
+    const seeded = await push(body(`https://push.example/${tag}/d-4`, core));
+    expect(seeded.statusCode).toBe(201);
+    const afterSeed = await countRows();
+
+    // When: the same title arrives wrapped in whitespace under a fresh guid
+    const padded = await push(body(`https://push.example/${tag}/d-5`, `  ${core}  `));
+
+    // Then: trimmed match → skipped, row count unchanged
+    expect(padded.statusCode).toBe(201);
+    expect(await countRows()).toBe(afterSeed);
+
+    // When: a case-variant title arrives under another fresh guid
+    const cased = await push(body(`https://push.example/${tag}/d-6`, core.toUpperCase()));
+
+    // Then: case differs → distinct title → exactly one new row
+    expect(cased.statusCode).toBe(201);
+    expect(await countRows()).toBe(afterSeed + 1);
   });
 });

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { Pagination } from "../../components/Pagination";
 import {
   FINDING_TYPES,
   TICKET_ORIGINS,
@@ -31,6 +32,7 @@ export function TicketsListPage() {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   // Debounce the search box: only the value settled for SEARCH_DEBOUNCE_MS
   // reaches the API query.
@@ -48,12 +50,12 @@ export function TicketsListPage() {
     origin: origin === "" ? undefined : origin,
     findingType: findingType === "" ? undefined : findingType,
     page,
+    pageSize,
   });
 
   const tickets = ticketsQuery.data?.items ?? [];
   const total = ticketsQuery.data?.total ?? 0;
-  const pageSize = ticketsQuery.data?.pageSize ?? 20;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const effectivePageSize = ticketsQuery.data?.pageSize ?? pageSize;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
@@ -181,29 +183,18 @@ export function TicketsListPage() {
         </table>
       )}
 
-      <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-        <span>
-          Page {page} of {totalPages} — {total} tickets
-        </span>
-        <span className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page <= 1 || ticketsQuery.isPlaceholderData}
-            className="rounded-md border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            onClick={() => setPage((current) => current + 1)}
-            disabled={page >= totalPages || ticketsQuery.isPlaceholderData}
-            className="rounded-md border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Next
-          </button>
-        </span>
-      </div>
+      <Pagination
+        page={page}
+        pageSize={effectivePageSize}
+        total={total}
+        disabled={ticketsQuery.isPlaceholderData}
+        itemLabel="tickets"
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
+      />
     </section>
   );
 }

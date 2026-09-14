@@ -19,6 +19,7 @@ const unreviewedItem = {
   status: "UNREVIEWED",
   ticketId: null,
   fetchedAt: "2026-09-14T08:00:00.000Z",
+  sourceName: "CISA Advisories",
 };
 
 function envelope(items: unknown[]): Response {
@@ -129,5 +130,38 @@ describe("FE-ITEM-02: take action spawns a ticket link", () => {
       String(url).includes("q="),
     ).length;
     expect(qCount).toBe(1);
+  });
+
+  it("renders Source and Asia/Jakarta Published columns, then refetches at the chosen page size", async () => {
+    // Given: the triage list shows one item from a named source published at
+    // 10:00 UTC (17:00 WIB)
+    setToken("test-token");
+    const fetchMock = routeFetch([
+      {
+        match: (url, method) =>
+          method === "GET" && url.startsWith("/api/feed-items"),
+        respond: () => envelope([unreviewedItem]),
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+
+    // Then: the Source cell shows the feed name and Published is the WIB
+    // date+hour:min, with the raw ISO instant in the title attribute
+    expect(await screen.findByRole("cell", { name: "CISA Advisories" })).toBeTruthy();
+    const publishedCell = screen.getByRole("cell", { name: "2026-09-13 17:00" });
+    expect(publishedCell.getAttribute("title")).toBe("2026-09-13T10:00:00.000Z");
+
+    // When: the analyst picks 50 per page
+    fireEvent.change(await screen.findByLabelText("Items per page"), {
+      target: { value: "50" },
+    });
+
+    // Then: the list refetches with pageSize=50
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([url]) => String(url).includes("pageSize=50")),
+      ).toBe(true),
+    );
   });
 });

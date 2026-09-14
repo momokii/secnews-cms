@@ -57,6 +57,8 @@ export const FeedItemSchema = z.object({
   /** Set when TAKEN — back-reference to the spawned ticket. */
   ticketId: z.uuid().nullable(),
   fetchedAt: z.iso.datetime(),
+  /** Source display name; present on list rows (feed join) and on detail. */
+  sourceName: z.string().optional(),
 });
 export type FeedItem = z.infer<typeof FeedItemSchema>;
 

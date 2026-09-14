@@ -44,6 +44,7 @@ export function useTickets(filters: TicketsQuery) {
       filters.origin ?? null,
       filters.findingType ?? null,
       filters.page ?? 1,
+      filters.pageSize ?? 20,
     ],
     queryFn: () => listTickets(filters),
     placeholderData: keepPreviousData,

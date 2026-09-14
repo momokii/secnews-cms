@@ -58,7 +58,7 @@ export default async function ingestRoutes(app: FastifyInstance): Promise<void> 
       }
       const body = request.body;
       const source = await resolvePushSource(body.sourceName);
-      const item = await upsertFeedItem({
+      const { item } = await upsertFeedItem({
         feedId: source.id,
         guid: body.link,
         title: body.title,

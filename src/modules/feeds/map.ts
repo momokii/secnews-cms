@@ -16,6 +16,7 @@ export type FeedItemRow = {
   raw: unknown;
   createdAt: Date;
   ticket?: { id: string } | null;
+  feed?: { name: string } | null;
 };
 
 export function toFeedSourceWire(source: {
@@ -56,5 +57,8 @@ export function toFeedItemWire(item: FeedItemRow): FeedItem {
     status: item.status,
     ticketId: item.ticket?.id ?? null,
     fetchedAt: item.createdAt.toISOString(),
+    ...(item.feed === undefined || item.feed === null
+      ? {}
+      : { sourceName: item.feed.name }),
   };
 }

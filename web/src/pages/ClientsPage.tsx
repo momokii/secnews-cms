@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal } from "../components/Modal";
+import { Pagination } from "../components/Pagination";
 import type { Client } from "../lib/clientsApi";
 import {
   useClients,
@@ -15,19 +16,19 @@ interface FormDialogState {
 
 export function ClientsPage() {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [formOpen, setFormOpen] = useState<FormDialogState>({ open: false });
   const [newName, setNewName] = useState("");
   const [channelsTarget, setChannelsTarget] = useState<Client | null>(null);
 
-  const clientsQuery = useClients(page);
+  const clientsQuery = useClients(page, pageSize);
   const createClient = useCreateClient();
   const updateClient = useUpdateClient();
   const deleteClient = useDeleteClient();
 
   const clients = clientsQuery.data?.items ?? [];
   const total = clientsQuery.data?.total ?? 0;
-  const pageSize = clientsQuery.data?.pageSize ?? 20;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const effectivePageSize = clientsQuery.data?.pageSize ?? pageSize;
 
   const submitNewClient = (): void => {
     if (newName === "") return;
@@ -119,29 +120,17 @@ export function ClientsPage() {
         </table>
       )}
 
-      <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-        <span>
-          Page {page} of {totalPages} — {total} clients
-        </span>
-        <span className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page <= 1}
-            className="rounded-md border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            onClick={() => setPage((current) => current + 1)}
-            disabled={page >= totalPages}
-            className="rounded-md border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Next
-          </button>
-        </span>
-      </div>
+      <Pagination
+        page={page}
+        pageSize={effectivePageSize}
+        total={total}
+        itemLabel="clients"
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
+      />
 
       {formOpen.open ? (
         <Modal
