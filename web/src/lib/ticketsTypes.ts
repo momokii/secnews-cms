@@ -51,6 +51,25 @@ export type ChannelType = (typeof CHANNEL_TYPES)[number];
 export const DELIVERY_STATUSES = ["SENT", "FAILED"] as const;
 export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
 
+export const TICKET_ACTIVITY_ACTIONS = [
+  "CREATED",
+  "TAKEN",
+  "STATUS_CHANGED",
+  "FIELDS_UPDATED",
+  "IOC_ADDED",
+  "IOC_UPDATED",
+  "IOC_REMOVED",
+  "SOURCE_ADDED",
+  "SOURCE_REMOVED",
+  "AI_FILL",
+  "AI_ENRICH",
+  "SUGGESTION_ACCEPTED",
+  "SUGGESTION_REJECTED",
+  "SENT",
+  "OTX_PUSHED",
+] as const;
+export type TicketActivityAction = (typeof TICKET_ACTIVITY_ACTIONS)[number];
+
 export interface Ticket {
   id: string;
   title: string;
@@ -132,6 +151,16 @@ export interface DeliveryAudit {
   sentAt: string;
 }
 
+export interface TicketActivity {
+  id: string;
+  ticketId: string;
+  actorId: string | null;
+  actorName: string | null;
+  action: TicketActivityAction;
+  detail: string | null;
+  createdAt: string;
+}
+
 export interface SendResponse {
   ticket: Ticket;
   audit: DeliveryAudit[];
@@ -176,4 +205,3 @@ export interface UpdateIocBody {
   origin?: string;
   includeInBulletin?: boolean;
 }
-

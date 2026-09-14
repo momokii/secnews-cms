@@ -10,6 +10,7 @@ import {
   type SendResponse,
   type SuggestionStatus,
   type Ticket,
+  type TicketActivity,
   type TicketDetail,
   type TicketSource,
   type TicketStatus,
@@ -42,6 +43,7 @@ export type {
   SendResponse,
   SuggestionStatus,
   Ticket,
+  TicketActivity,
   TicketDetail,
   TicketOrigin,
   TicketSource,
@@ -224,6 +226,17 @@ export async function listDeliveryAudit(
     { method: "GET" },
   );
   return readJson<Paginated<DeliveryAudit>>(response);
+}
+
+export async function listTicketActivity(
+  id: string,
+  page = 1,
+): Promise<Paginated<TicketActivity>> {
+  const response = await apiFetch(
+    `/tickets/${id}/activity${buildQuery({ page, pageSize: DEFAULT_PAGE_SIZE })}`,
+    { method: "GET" },
+  );
+  return readJson<Paginated<TicketActivity>>(response);
 }
 
 // ---- OTX (#52) ----

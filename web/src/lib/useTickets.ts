@@ -15,6 +15,7 @@ import {
   getTicket,
   listDeliveryAudit,
   listSuggestions,
+  listTicketActivity,
   listTickets,
   patchTicketFields,
   pushOtx,
@@ -67,6 +68,7 @@ function useTicketMutation<TVariables, TData>(
     mutationFn,
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["ticket", ticketId(variables)] });
+      void queryClient.invalidateQueries({ queryKey: ["ticket-activity", ticketId(variables)] });
       void queryClient.invalidateQueries({ queryKey: ["tickets"] });
     },
   });
@@ -145,6 +147,7 @@ function useSuggestionAction(action: "accept" | "reject") {
       // Accept merges the value into final fields and changes pendingSuggestions.
       void queryClient.invalidateQueries({ queryKey: ["ticket", id] });
       void queryClient.invalidateQueries({ queryKey: ["suggestions", id] });
+      void queryClient.invalidateQueries({ queryKey: ["ticket-activity", id] });
     },
   });
 }
@@ -165,6 +168,7 @@ function useAiRun(path: "ai/fill" | "ai/enrich") {
     onSuccess: (_data, id) => {
       void queryClient.invalidateQueries({ queryKey: ["ticket", id] });
       void queryClient.invalidateQueries({ queryKey: ["suggestions", id] });
+      void queryClient.invalidateQueries({ queryKey: ["ticket-activity", id] });
     },
   });
 }
@@ -192,6 +196,7 @@ export function useSendTicket() {
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ["ticket", id] });
       void queryClient.invalidateQueries({ queryKey: ["delivery-audit", id] });
+      void queryClient.invalidateQueries({ queryKey: ["ticket-activity", id] });
       void queryClient.invalidateQueries({ queryKey: ["tickets"] });
     },
   });
@@ -205,12 +210,21 @@ export function useDeliveryAudit(id: string, page: number) {
   });
 }
 
+export function useTicketActivity(id: string, page: number) {
+  return useQuery({
+    queryKey: ["ticket-activity", id, page],
+    queryFn: () => listTicketActivity(id, page),
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function usePushOtx() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string): Promise<OtxPushResponse> => pushOtx(id),
     onSuccess: (_data, id) => {
       void queryClient.invalidateQueries({ queryKey: ["ticket", id] });
+      void queryClient.invalidateQueries({ queryKey: ["ticket-activity", id] });
     },
   });
 }
