@@ -94,9 +94,20 @@ export function currentValueOf(ticket: TicketWithRelations, field: SuggestibleFi
   return value;
 }
 
-/** Fields with no current value — the strict fill scope. */
+/** Fields fill may draft: the required finals plus typed working fields.
+ * recommendations/references are §10-optional — fill never invents them;
+ * empty stays empty until the analyst writes them. */
+const AUTO_FILL_FIELDS = [
+  "overview",
+  "description",
+  "cveIds",
+  "affectedVersions",
+  "mitigation",
+] as const satisfies readonly SuggestibleField[];
+
+/** Fields with no current value — the strict fill scope (never recs/refs). */
 export function missingFields(ticket: TicketWithRelations): SuggestibleField[] {
-  return SUGGESTIBLE_FIELDS.filter((field) => currentValueOf(ticket, field) === null);
+  return AUTO_FILL_FIELDS.filter((field) => currentValueOf(ticket, field) === null);
 }
 
 function ticketContext(ticket: TicketWithRelations): string {

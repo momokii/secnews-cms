@@ -73,7 +73,38 @@ describe("TASK-C4 AI fill/enrich (PENDING suggestions, final fields untouched)",
     await cleanupTicket(ticketId);
   });
 
-  it("AI-02: enrich proposes full rewrites including filled fields, carrying currentValue", async () => {
+  it("fill never invents the §10-optional recommendations/references", async () => {
+// Given: a ticket whose required fields are filled but recs/refs empty,
+// and a model that eagerly drafts all four
+const ticketId = await createTestTicket({
+  overview: "Existing overview",
+  description: "Existing description",
+});
+vi.stubGlobal("fetch", async () => new Response(JSON.stringify(openAiReply({
+  overview: "AI rewritten overview",
+  description: "AI rewritten description",
+  recommendations: "AI invented recommendations",
+  references: "https://invented.example/advisory",
+})), { status: 200 }));
+
+// When: the strict fill runs
+const res = await app.inject({
+  method: "POST",
+  url: `/tickets/${ticketId}/ai/fill`,
+  headers: { authorization: editor },
+  payload: {},
+});
+
+// Then: zero suggestions — empty optional fields stay empty
+expect(res.statusCode).toBe(200);
+const body = res.json() as { suggestions: unknown[] };
+expect(body.suggestions).toEqual([]);
+const stored = await prisma.aiSuggestion.findMany({ where: { ticketId } });
+expect(stored).toHaveLength(0);
+await cleanupTicket(ticketId);
+});
+
+it("AI-02: enrich proposes full rewrites including filled fields, carrying currentValue", async () => {
     // Given: the same half-filled ticket, enrich mode
     const ticketId = await createTestTicket({ overview: "Existing overview", description: null });
     vi.stubGlobal("fetch", async () => new Response(JSON.stringify(openAiReply({

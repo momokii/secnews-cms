@@ -118,7 +118,7 @@ describe("TASK-D2 bulletin template + preview", () => {
     }
   });
 
-  it("PREV-02: preview on a ticket with missing final fields is 422 VALIDATION with details.missing", async () => {
+  it("PREV-02: preview is 422 VALIDATION naming only the required fields (§10: recommendations/references optional)", async () => {
     // Given: a ticket with none of the required final fields
     const ticketId = await createTestTicket();
     try {
@@ -130,13 +130,38 @@ describe("TASK-D2 bulletin template + preview", () => {
         payload: {},
       });
 
-      // Then: 422 VALIDATION naming every missing field
+      // Then: 422 VALIDATION naming overview and description — never recs/refs
       expect(res.statusCode).toBe(422);
       const body = res.json() as { error: { code: string; details: { missing: string[] } } };
       expect(body.error.code).toBe("VALIDATION");
-      expect(body.error.details.missing).toEqual(
-        expect.arrayContaining(["overview", "description", "recommendations", "references"]),
-      );
+      expect(body.error.details.missing).toEqual(["overview", "description"]);
+    } finally {
+      await cleanupTicket(ticketId);
+    }
+  });
+
+  it("preview is 200 without recommendations/references — optional per §10", async () => {
+    // Given: a ticket with only the two required final fields filled
+    const ticketId = await createTestTicket({
+      overview: "Adversaries target the sector.",
+      description: "Detailed narrative of the campaign.",
+      recommendations: null,
+      references: [],
+    });
+    try {
+      // When: it is previewed
+      const res = await app.inject({
+        method: "POST",
+        url: `/tickets/${ticketId}/bulletin/preview`,
+        headers: { authorization: editor },
+        payload: {},
+      });
+
+      // Then: 200 — empty optional sections drop out of the render, no 422
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { rendered: string };
+      expect(body.rendered).not.toContain("{{");
+      expect(body.rendered).not.toContain("Recommendations:");
     } finally {
       await cleanupTicket(ticketId);
     }

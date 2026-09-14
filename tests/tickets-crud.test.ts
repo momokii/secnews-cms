@@ -88,9 +88,13 @@ describe("Ticket CRUD + final fields (TKT-01, TKT-02, FLD-01, FLD-02)", () => {
       expect(otherBody.findingType).toBe("OTHER");
     });
 
-    it("rejects a CVE ticket without cveIds with 400 VALIDATION", async () => {
-      // Given: a VULNERABILITY_CVE payload missing cveIds
-      const payload = { findingType: "VULNERABILITY_CVE", title: "no cves" };
+    it("creates a manual ticket from the dialog shape (title, findingType, summary only)", async () => {
+      // Given: the minimal Create-ticket dialog payload; origin is MANUAL server-side
+      const payload = {
+        findingType: "OTHER",
+        title: `${c3Tag()} dialog capture`,
+        summary: `${c3Tag()} working summary`,
+      };
 
       // When: the ticket is created
       const res = await app.inject({
@@ -100,9 +104,35 @@ describe("Ticket CRUD + final fields (TKT-01, TKT-02, FLD-01, FLD-02)", () => {
         payload,
       });
 
-      // Then: 400 VALIDATION
-      expect(res.statusCode).toBe(400);
-      expect((res.json() as { error: { code: string } }).error.code).toBe("VALIDATION");
+      // Then: 201 MANUAL/OPEN with the working summary persisted
+      expect(res.statusCode).toBe(201);
+      const body = TicketSchema.parse(res.json());
+      ticketIds.push(body.id);
+      expect(body.origin).toBe("MANUAL");
+      expect(body.status).toBe("OPEN");
+      const row = await prisma.ticket.findUniqueOrThrow({ where: { id: body.id } });
+      expect(row.summary).toBe(payload.summary);
+    });
+
+    it("creates a CVE ticket without structured fields — they stay optional at create", async () => {
+      // Given: a VULNERABILITY_CVE payload carrying only title (+ type)
+      const payload = { findingType: "VULNERABILITY_CVE", title: `${c3Tag()} bare cve` };
+
+      // When: the ticket is created
+      const res = await app.inject({
+        method: "POST",
+        url: "/tickets",
+        headers: { authorization: bearer(analyst, app) },
+        payload,
+      });
+
+      // Then: 201 with empty cveIds and null product — fillable later
+      expect(res.statusCode).toBe(201);
+      const body = TicketSchema.parse(res.json());
+      ticketIds.push(body.id);
+      expect(body.cveIds).toEqual([]);
+      expect(body.affectedProduct).toBeNull();
+      expect(body.affectedVersions).toBeNull();
     });
 
     it("rejects an unauthenticated create with 401", async () => {
@@ -243,6 +273,27 @@ describe("Ticket CRUD + final fields (TKT-01, TKT-02, FLD-01, FLD-02)", () => {
       const row = await prisma.ticket.findUnique({ where: { id: ticket.id } });
       expect(row?.tlp).toBe("RED");
       expect(row?.overview).toBe(payload.overview);
+    });
+
+    it("FLD-01: accepts empty recommendations and references — both optional (§10)", async () => {
+      // Given: a ticket and a patch clearing the optional output fields
+      const ticket = await c3Ticket();
+      ticketIds.push(ticket.id);
+      const payload = { recommendations: "", references: [] };
+
+      // When: the fields patch is applied
+      const res = await app.inject({
+        method: "PATCH",
+        url: `/tickets/${ticket.id}/fields`,
+        headers: { authorization: bearer(admin, app) },
+        payload,
+      });
+
+      // Then: 200 with the empties persisted, not a validation error
+      expect(res.statusCode).toBe(200);
+      const body = TicketSchema.parse(res.json());
+      expect(body.recommendations).toBe("");
+      expect(body.references).toEqual([]);
     });
 
     it("FLD-01: partial patch changes only the given field", async () => {

@@ -12,6 +12,7 @@ import {
 } from "../../lib/ticketsApi";
 import { useTickets } from "../../lib/useTickets";
 import { formatTimestamp, type DateRange } from "../../lib/datetime";
+import { CreateTicketDialog } from "./CreateTicketDialog";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -36,6 +37,7 @@ export function TicketsListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [dateRange, setDateRange] = useState<DateRange>({});
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Debounce the search box: only the value settled for SEARCH_DEBOUNCE_MS
   // reaches the API query.
@@ -65,15 +67,26 @@ export function TicketsListPage() {
     <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-lg font-semibold text-slate-900">Tickets</h1>
-        <input
-          aria-label="Search tickets"
-          type="search"
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          placeholder="Search title"
-          className="w-64 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            aria-label="Search tickets"
+            type="search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search title"
+            className="w-64 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="shrink-0 rounded-md bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-500"
+          >
+            Create ticket
+          </button>
+        </div>
       </div>
+
+      {createOpen ? <CreateTicketDialog onClose={() => setCreateOpen(false)} /> : null}
 
       <DateFilter
         value={dateRange}

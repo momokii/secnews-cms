@@ -169,6 +169,23 @@ describe("FE-TKT-01: tickets list", () => {
     );
   });
 
+  it("opens the manual create-ticket dialog from the header button", async () => {
+    // Given: the ticket list is rendered
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch(listRoutes()));
+    renderWithProviders(<TicketsListPage />);
+    await screen.findByRole("link", { name: "OpenSSL vulnerability" });
+
+    // When: Create ticket is clicked
+    fireEvent.click(screen.getByRole("button", { name: "Create ticket" }));
+
+    // Then: the manual create dialog appears with its fields
+    const dialog = await screen.findByRole("dialog", { name: "Create ticket" });
+    expect(within(dialog).getByLabelText("Title")).toBeTruthy();
+    expect(within(dialog).getByLabelText("Finding type")).toBeTruthy();
+    expect(within(dialog).getByLabelText("Summary")).toBeTruthy();
+  });
+
   it("renders the How tickets work explainer above the table", async () => {
     // Given: a signed-in user viewing the tickets list
     setToken("test-token");

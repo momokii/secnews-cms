@@ -99,24 +99,30 @@ export type TicketDetail = z.infer<typeof TicketDetailSchema>;
 
 // ---- Requests ----
 
-/** Type-specific structured fields are required exactly where they apply. */
+/** Quick-capture create: only title (+ findingType) is truly required.
+ * Type-specific structured fields and the working summary are optional at
+ * create — the dialog captures them minimally and they are filled later
+ * (working metadata, unlike the final output fields). */
 export const CreateTicketBodySchema = z.discriminatedUnion("findingType", [
   z.object({
     findingType: z.literal("VULNERABILITY_CVE"),
     title: z.string().min(1),
-    cveIds: z.array(cveId).min(1),
-    affectedProduct: z.string().min(1),
-    affectedVersions: z.string().min(1),
+    summary: z.string().optional(),
+    cveIds: z.array(cveId).optional(),
+    affectedProduct: z.string().min(1).optional(),
+    affectedVersions: z.string().min(1).optional(),
     mitigation: z.string().optional(),
   }),
   z.object({
     findingType: z.literal("THREAT_CAMPAIGN"),
     title: z.string().min(1),
-    threatName: z.string().min(1),
+    summary: z.string().optional(),
+    threatName: z.string().min(1).optional(),
   }),
   z.object({
     findingType: z.literal("OTHER"),
     title: z.string().min(1),
+    summary: z.string().optional(),
   }),
 ]);
 export type CreateTicketBody = z.infer<typeof CreateTicketBodySchema>;

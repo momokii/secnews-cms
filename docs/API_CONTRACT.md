@@ -135,7 +135,7 @@ Schemas: `src/modules/tickets/schema.ts`. State machine + role gates:
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
 | 21 | `GET /tickets` | ANY | `ListTicketsQuerySchema` `?q&status&origin&findingType&from&to&page&pageSize` | 200 `ListTicketsResponseSchema` (rows include `createdAt`, `updatedAt`, and `takenByName`; `takenByName` is null for manual tickets) | 400 `VALIDATION` for malformed dates or `from` after `to` |
-| 22 | `POST /tickets` | WORK | `CreateTicketBodySchema` (discriminated on findingType) | 201 `TicketSchema` (origin `MANUAL`, status `OPEN`) | |
+| 22 | `POST /tickets` | WORK | `CreateTicketBodySchema` (discriminated on findingType; only `title` required — `summary` and the type-specific structured fields are optional at create, quick-capture shape) | 201 `TicketSchema` (origin `MANUAL`, status `OPEN`; omitted structured fields default to `[]`/`null`) | |
 | 23 | `GET /tickets/:id` | ANY | — | 200 `TicketDetailSchema` (+`sources[]`, `iocs[]`, `pendingSuggestions`, `takenByName`) | |
 | 24 | `PATCH /tickets/:id` | WORK | `UpdateTicketBodySchema` | 200 `TicketSchema` | |
 | 25 | `POST /tickets/:id/transition` | gate | `TransitionBodySchema` `{to}` | 200 `TicketSchema` | 403 role gate fails; 422 `VALIDATION` illegal transition (TRN-02); 409 `PENDING_SUGGESTIONS` when `to=SENT` with PENDING suggestions |
@@ -158,7 +158,7 @@ integration config — never from the request.
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 32 | `POST /tickets/:id/ai/fill` | WORK | `{}` | 200 `AiFillResponseSchema` (strict: only missing final fields) | |
+| 32 | `POST /tickets/:id/ai/fill` | WORK | `{}` | 200 `AiFillResponseSchema` (strict: only missing final fields; never drafts the §10-optional `recommendations`/`references`) | |
 | 33 | `POST /tickets/:id/ai/enrich` | WORK | `{}` | 200 `AiFillResponseSchema` (full rewrite proposals) | |
 | 34 | `GET /tickets/:id/suggestions` | WORK | `ListSuggestionsQuerySchema` `?status&page&pageSize` | 200 `ListSuggestionsResponseSchema` | |
 | 35 | `POST /tickets/:id/suggestions/:suggestionId/accept` | WORK | — | 200 `SuggestionActionResponseSchema` (value merged into final fields) | |
@@ -222,10 +222,10 @@ TLP→OTX mapping: `docs/STATES.md` §4.
 |---|---|---|---|---|---|
 | 49 | `GET /bulletin/template` | ANY | — | 200 `BulletinTemplateSchema` | |
 | 50 | `PUT /bulletin/template` | ADMIN | `PutTemplateBodySchema` | 200 `BulletinTemplateSchema` | |
-| 51 | `POST /tickets/:id/bulletin/preview` | WORK | `{}` | 200 `PreviewResponseSchema` `{rendered}` | 422 `VALIDATION` missing required final fields (PREV-02) |
+| 51 | `POST /tickets/:id/bulletin/preview` | WORK | `{}` | 200 `PreviewResponseSchema` `{rendered}` | 422 `VALIDATION` missing required final fields — `overview`, `description` only (PREV-02); `recommendations`/`references` are optional (§10) and drop out of the render when empty |
 | 52 | `POST /tickets/:id/otx` | MGR | `{}` | 200 `PushOtxResponseSchema` `{pulseId, pulseUrl, isPublic, tlpMarking}` | 422 `VALIDATION` not `READY`; 409 `PENDING_SUGGESTIONS` (S2, OTX-02) |
-| 53 | `GET /otx/pulses` | MGR + ANALYST (read-only) | `?page&pageSize&source=subscribed\|mine\|search&q` (`source` defaults to `subscribed`; `pageSize` clamps into 1..50, default 20; `q` used only by `search`) | 200 `ListPulsesResponseSchema` | 400 `VALIDATION` for an unsupported source; upstream failure → 502-style error envelope |
-| 54 | `GET /otx/pulses/:id` | MGR + ANALYST (read-only) | — | 200 `OtxPulseDetailSchema` `{id, name, description, isPublic, tlp, tags, references, indicators[{value,type}], created, modified}` | upstream failure or pulse the key cannot access → 502-style error envelope (never leaks the key) |
+| 53 | `GET /otx/pulses` | MGR + ANALYST (read-only) | `?page&pageSize&source=subscribed\|mine\|search&q` (`source` defaults to `subscribed`; `pageSize` clamps into 1..50, default 20; `q` used only by `search`) | 200 `ListPulsesResponseSchema` `{items[{id, name, authorName, isPublic, tlp, tags, indicatorCount, created, modified}], total, page, pageSize}` | 400 `VALIDATION` for an unsupported source; upstream failure → 502-style error envelope |
+| 54 | `GET /otx/pulses/:id` | MGR + ANALYST (read-only) | — | 200 `OtxPulseDetailSchema` `{id, name, authorName, description, isPublic, tlp, tags, references, indicators[{value,type}], created, modified}` | upstream failure or pulse the key cannot access → 502-style error envelope (never leaks the key) |
 
 Push includes only IOCs with `includeInBulletin = true`; stores
 `otxPulseId`/`otxPulseUrl` on the ticket. `TLP CLEAR→WHITE`; `AMBER`/`RED`
@@ -238,9 +238,18 @@ source: `source=search` proxies OTX `GET /api/v1/search/pulses?q=&limit=<pageSiz
 `subscribed`/`my` do NOT accept `q` upstream (OTX documents only
 `limit`/`page`/`since` for them), so keyword search goes through the search
 source rather than being filtered client-side; a blank `q` omits the param
-upstream. Pulse detail (#54) proxies OTX `GET /api/v1/pulses/{id}`; private
-pulses load because the configured key can access them, everything else is a
-502 envelope. All datetimes normalize timezone-less upstream values to ISO.
+upstream. The web UI keeps ONE search box above the tabs: typing (debounced)
+switches the listing to `source=search` with `q`, clearing restores the
+previously selected tab — the server always does the searching.
+`indicatorCount` extraction is defensive because OTX list feeds differ:
+`subscribed`/`my` rows omit `indicator_count` and instead embed an
+`indicators` array, so the proxy prefers an explicit numeric
+`indicator_count`, derives the count from the embedded indicators when it is
+absent, and only then falls back to 0 (a known-good count is never blanked).
+`authorName` maps upstream `author_name` (empty string when absent). Pulse
+detail (#54) proxies OTX `GET /api/v1/pulses/{id}`; private pulses load
+because the configured key can access them, everything else is a 502
+envelope. All datetimes normalize timezone-less upstream values to ISO.
 
 ---
 

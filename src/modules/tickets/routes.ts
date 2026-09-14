@@ -110,20 +110,25 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
     },
     async (request, reply) => {
       const body = request.body;
-      // NOT NULL with no default: manual tickets start with an empty working summary.
-      const base = { title: body.title, origin: "MANUAL" as const, summary: "" };
+      // Quick capture: origin MANUAL; summary defaults to an empty working
+      // summary; type-specific fields default to their Prisma empties.
+      const base = {
+        title: body.title,
+        origin: "MANUAL" as const,
+        summary: body.summary ?? "",
+      };
       const data =
         body.findingType === "VULNERABILITY_CVE"
           ? {
               ...base,
               findingType: body.findingType,
-              cveIds: body.cveIds,
-              affectedProduct: body.affectedProduct,
-              affectedVersions: body.affectedVersions,
+              cveIds: body.cveIds ?? [],
+              affectedProduct: body.affectedProduct ?? null,
+              affectedVersions: body.affectedVersions ?? null,
               ...(body.mitigation !== undefined ? { mitigation: body.mitigation } : {}),
             }
           : body.findingType === "THREAT_CAMPAIGN"
-            ? { ...base, findingType: body.findingType, threatName: body.threatName }
+            ? { ...base, findingType: body.findingType, threatName: body.threatName ?? null }
             : { ...base, findingType: body.findingType };
       const actorId = request.user.sub;
       const { created } = await prisma.$transaction(async (tx) => {

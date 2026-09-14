@@ -10,6 +10,7 @@ import {
   addTicketSource,
   aiEnrich,
   aiFill,
+  createTicket,
   deleteIoc,
   deleteTicketSource,
   getTicket,
@@ -24,6 +25,7 @@ import {
   transitionTicket,
   updateIoc,
   type CreateIocBody,
+  type CreateTicketBody,
   type OtxPushResponse,
   type PatchTicketFieldsBody,
   type SendResponse,
@@ -71,6 +73,16 @@ function useTicketMutation<TVariables, TData>(
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["ticket", ticketId(variables)] });
       void queryClient.invalidateQueries({ queryKey: ["ticket-activity", ticketId(variables)] });
+      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+    },
+  });
+}
+
+export function useCreateTicket() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ body }: { body: CreateTicketBody }) => createTicket(body),
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["tickets"] });
     },
   });

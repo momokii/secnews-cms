@@ -30,8 +30,10 @@ export const DEFAULT_TEMPLATE = [
 /** The org-wide template row is pinned to name "default". */
 export const DEFAULT_TEMPLATE_NAME = "default";
 
-/** Final fields a client-facing bulletin cannot ship without (PREV-02). */
-export const REQUIRED_PREVIEW_FIELDS = ["overview", "description", "recommendations", "references"] as const;
+/** Final fields a client-facing bulletin cannot ship without (PREV-02).
+ * §10: recommendations/references are optional — empty ones drop out of the
+ * render instead of blocking preview. */
+export const REQUIRED_PREVIEW_FIELDS = ["overview", "description"] as const;
 export type RequiredPreviewField = (typeof REQUIRED_PREVIEW_FIELDS)[number];
 
 export type BulletinIoc = {
@@ -91,8 +93,6 @@ export function missingPreviewFields(data: BulletinData): RequiredPreviewField[]
   const empty: Record<RequiredPreviewField, string> = {
     overview: nonBlank(data.overview),
     description: nonBlank(data.description),
-    recommendations: nonBlank(data.recommendations),
-    references: data.references.length > 0 ? "present" : "",
   };
   return REQUIRED_PREVIEW_FIELDS.filter((field) => empty[field] === "");
 }

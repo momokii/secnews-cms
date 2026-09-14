@@ -2,6 +2,7 @@ import { apiFetch } from "./api";
 import {
   type AiSuggestion,
   type CreateIocBody,
+  type CreateTicketBody,
   type DeliveryAudit,
   type Ioc,
   type OtxPushResponse,
@@ -32,6 +33,7 @@ export type {
   AiSuggestion,
   ChannelType,
   CreateIocBody,
+  CreateTicketBody,
   DeliveryAudit,
   DeliveryStatus,
   FindingType,
@@ -105,6 +107,12 @@ export async function listTickets(query: TicketsQuery = {}): Promise<Paginated<T
 export async function getTicket(id: string): Promise<TicketDetail> {
   const response = await apiFetch(`/tickets/${id}`, { method: "GET" });
   return readJson<TicketDetail>(response);
+}
+
+/** POST /tickets — quick-capture manual create; origin is MANUAL server-side. */
+export async function createTicket(body: CreateTicketBody): Promise<Ticket> {
+  const response = await apiFetch("/tickets", jsonInit("POST", body));
+  return readJson<Ticket>(response);
 }
 
 /** POST /tickets/:id/transition { to } — legality + role gate per STATES.md. */

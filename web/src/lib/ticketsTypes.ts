@@ -185,6 +185,13 @@ export interface TicketsQuery {
   to?: string;
 }
 
+/** Quick-capture manual create (dialog shape); origin is MANUAL server-side. */
+export interface CreateTicketBody {
+  title: string;
+  findingType: FindingType;
+  summary?: string;
+}
+
 export interface PatchTicketFieldsBody {
   title?: string;
   overview?: string;

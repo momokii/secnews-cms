@@ -43,15 +43,15 @@ export function SourcesEditor({ ticketId, sources }: SourcesEditorProps) {
           {sources.map((source) => (
             <li
               key={source.id}
-              className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2 text-sm"
+              className="flex items-start justify-between gap-4 border-b border-slate-100 pb-2 text-sm"
             >
-              <span className="min-w-0">
+              <span className="flex min-w-0 flex-col gap-0.5">
                 {source.url !== null ? (
                   <a
                     href={source.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-indigo-600 hover:text-indigo-500"
+                    className="break-all text-indigo-600 hover:text-indigo-500"
                   >
                     {source.url}
                   </a>

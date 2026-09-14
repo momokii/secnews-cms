@@ -35,7 +35,40 @@ describe("Sources editor", () => {
     );
     const link = screen.getByRole("link", { name: "https://openssl.org/advisory" });
     expect(link.getAttribute("href")).toBe("https://openssl.org/advisory");
-    expect(screen.getByText("Vendor advisory")).toBeTruthy();
+    const note = screen.getByText("Vendor advisory");
+    expect(link.textContent).toBe("https://openssl.org/advisory");
+    expect(link.contains(note)).toBe(false);
+  });
+
+  it("stacks the url link and note as separate lines in one row column", () => {
+    // Given: a source row carrying both a url and a note
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch([]));
+    renderWithProviders(
+      <SourcesEditor
+        ticketId={TICKET_ID}
+        sources={[
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            ticketId: TICKET_ID,
+            url: "https://openssl.org/advisory",
+            note: "Vendor advisory",
+            createdById: null,
+            createdAt: "2026-09-14T08:00:00.000Z",
+          },
+        ]}
+      />,
+    );
+
+    // When: the row renders
+    const link = screen.getByRole("link", { name: "https://openssl.org/advisory" });
+    const note = screen.getByText("Vendor advisory");
+
+    // Then: link and note are stacked siblings in a single column container —
+    // never run together on one inline line
+    expect(link.parentElement).not.toBeNull();
+    expect(link.parentElement).toBe(note.parentElement);
+    expect(link.parentElement?.className).toContain("flex-col");
   });
 
   it("POSTs the new source when Add source is clicked", async () => {
