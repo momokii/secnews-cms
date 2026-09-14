@@ -118,6 +118,8 @@ describe("FE-ACCT-02: profile info", () => {
           email: "updated@example.com",
           name: "Updated Admin",
           role: "ADMIN",
+          createdAt: "2026-09-13T02:30:00.000Z",
+          updatedAt: "2026-09-14T01:00:00.000Z",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
