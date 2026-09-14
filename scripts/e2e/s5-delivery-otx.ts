@@ -163,16 +163,17 @@ async function main(): Promise<void> {
     name?: string;
     public?: boolean;
     TLP?: string;
-    indicators?: string[];
+    indicators?: Array<{ indicator?: string; type?: string }>;
   };
   ok(
-    otxBody.name === title && otxBody.public === false && otxBody.TLP === "AMBER",
-    "OTX create body maps TLP and forces private (STATES.md §4)",
+    otxBody.name === title && otxBody.public === false && otxBody.TLP === "amber",
+    "OTX create body maps TLP to the lowercase legacy value and forces private (STATES.md §4)",
     otxBody,
   );
   ok(
-    Array.isArray(otxBody.indicators) && otxBody.indicators.includes(IOC_VALUE),
-    "OTX indicators carry the included IOC verbatim",
+    Array.isArray(otxBody.indicators) &&
+      otxBody.indicators.some((entry) => entry.indicator === IOC_VALUE && entry.type === "domain"),
+    "OTX indicators carry the included IOC as a typed object",
     otxBody,
   );
 

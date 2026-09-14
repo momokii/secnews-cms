@@ -6,7 +6,9 @@ import type { Ioc as IocWire, Ticket as TicketWire, TicketSource as TicketSource
 
 type TicketWithTakenBy = Ticket & { takenBy?: { name: string } | null };
 
-export function toTicketDto(row: TicketWithTakenBy): TicketWire {
+/** `activityFallbackName` resolves legacy rows whose takenBy relation is
+ * empty but whose TAKEN/CREATED audit trail names an actor (see taken-by.ts). */
+export function toTicketDto(row: TicketWithTakenBy, activityFallbackName?: string | null): TicketWire {
   return {
     id: row.id,
     title: row.title,
@@ -28,7 +30,7 @@ export function toTicketDto(row: TicketWithTakenBy): TicketWire {
     otxPulseUrl: row.otxPulseUrl,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    takenByName: row.takenBy?.name ?? null,
+    takenByName: row.takenBy?.name ?? activityFallbackName ?? null,
   };
 }
 

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import type { IocType } from "../src/generated/prisma/enums.js";
 import { buildApp } from "../src/app.js";
 import { prisma } from "../src/lib/db.js";
 import { bearerFor, cleanupTicket, cleanupUsers, createTestTicket, createTestSuggestion } from "./helpers.js";
@@ -112,11 +113,11 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
         TLP: string;
         tags: string[];
         references: string[];
-        indicators: string[];
+        indicators: Array<{ indicator: string; type: string }>;
       };
-      expect(sent.TLP).toBe("AMBER");
+      expect(sent.TLP).toBe("amber");
       expect(sent.public).toBe(false);
-      expect(sent.indicators).toEqual(["evil.com"]);
+      expect(sent.indicators).toEqual([{ indicator: "evil.com", type: "domain" }]);
       expect(sent.references).toEqual(["https://example.com/advisory"]);
       expect(sent.name).toContain("C4 fixture");
 
@@ -150,8 +151,8 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
       const body = res.json() as { isPublic: boolean; tlpMarking: string };
       expect(body.isPublic).toBe(true);
       expect(body.tlpMarking).toBe("WHITE");
-      const sent = JSON.parse(String(calls[0]?.init.body)) as { TLP: string; public: boolean };
-      expect(sent.TLP).toBe("WHITE");
+      const sent = JSON.parse(String(calls[0]?.init.body)) as { TLP: string; public: boolean; indicators: Array<{ indicator: string; type: string }> };
+      expect(sent.TLP).toBe("white");
       expect(sent.public).toBe(true);
     } finally {
       await cleanupTicket(ticketId);
@@ -779,5 +780,225 @@ describe("TASK-OTXFIX real upstream shapes", () => {
     // Then: authorName is part of the wire response
     expect(res.statusCode).toBe(200);
     expect((res.json() as { authorName: string }).authorName).toBe("SampleUser");
+  });
+});
+
+describe("TASK-PUSHFIX push correctness", () => {
+  const PATCH_URL = "https://otx.alienvault.com/api/v1/pulses/pulse-123";
+
+  let app: FastifyInstance;
+  let admin = "";
+
+  beforeAll(async () => {
+    app = await buildApp();
+    admin = await bearerFor(app, "ADMIN");
+    await prisma.integrationConfig.deleteMany({ where: { kind: "OTX" } });
+    const put = await app.inject({
+      method: "PUT",
+      url: "/integrations/OTX",
+      headers: { authorization: admin },
+      payload: { apiKey: OTX_KEY },
+    });
+    expect(put.statusCode).toBe(200);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterAll(async () => {
+    await prisma.integrationConfig.deleteMany({ where: { kind: "OTX" } });
+    await cleanupUsers();
+    await prisma.$disconnect();
+    await app.close();
+  });
+
+  /** READY ticket with one IOC per included type; returns the ticket id. */
+  async function readyTicketWithIocs(
+    tlp: "CLEAR" | "GREEN" | "AMBER" | "RED",
+    iocs: Array<{ type: IocType; value: string }>,
+  ): Promise<string> {
+    const ticketId = await createTestTicket({
+      overview: "Adversaries target the sector.",
+      description: "Detailed narrative.",
+      recommendations: "Rotate credentials.",
+      references: ["https://example.com/advisory"],
+    });
+    await prisma.ticket.update({ where: { id: ticketId }, data: { status: "READY", tlp } });
+    for (const ioc of iocs) {
+      await prisma.ioc.create({ data: { ticketId, type: ioc.type, value: ioc.value } });
+    }
+    return ticketId;
+  }
+
+  function sentBodies(calls: FetchCall[]): Array<Record<string, unknown>> {
+    return calls
+      .filter((call) => call.url === CREATE_URL || call.url.startsWith("https://otx.alienvault.com/api/v1/pulses/"))
+      .map((call) => JSON.parse(String(call.init.body)) as Record<string, unknown>);
+  }
+
+  it("PUSHFIX-01: every mapped IocType reaches OTX as a typed {indicator,type} object; OTHER is skipped", async () => {
+    // Given: a READY ticket carrying one IOC of every type incl. OTHER
+    const ticketId = await readyTicketWithIocs("GREEN", [
+      { type: "DOMAIN", value: "kelanach.xyz" },
+      { type: "IPV4", value: "10.10.10.10" },
+      { type: "IPV6", value: "2001:db8::1" },
+      { type: "URL", value: "https://kelanach.xyz/payload" },
+      { type: "EMAIL", value: "phish@kelanach.xyz" },
+      { type: "MD5", value: "0123456789abcdef0123456789abcdef" },
+      { type: "SHA1", value: "0123456789abcdef0123456789abcdef01234567" },
+      { type: "SHA256", value: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" },
+      { type: "FILEPATH", value: "C:\\Windows\\Temp\\evil.exe" },
+      { type: "MUTEX", value: "Global\\evil" },
+      { type: "CIDR", value: "10.10.10.0/24" },
+      { type: "OTHER", value: "unmappable-artifact" },
+    ]);
+    const { calls } = stubFetch(200, { id: "pulse-123" });
+    try {
+      // When: the ticket is pushed
+      const res = await app.inject({
+        method: "POST",
+        url: `/tickets/${ticketId}/otx`,
+        headers: { authorization: admin },
+        payload: {},
+      });
+
+      // Then: indicators are typed objects using the exact OTX type names
+      // (OTX-Python-SDK IndicatorTypes.py) and OTHER has no OTX equivalent
+      // so it is excluded
+      expect(res.statusCode).toBe(200);
+      const body = sentBodies(calls)[0] as { indicators: Array<{ indicator: string; type: string }> };
+      const indicators = [...body.indicators].sort((a, b) => a.indicator.localeCompare(b.indicator));
+      expect(indicators).toEqual([
+        { indicator: "0123456789abcdef0123456789abcdef", type: "FileHash-MD5" },
+        { indicator: "0123456789abcdef0123456789abcdef01234567", type: "FileHash-SHA1" },
+        {
+          indicator: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          type: "FileHash-SHA256",
+        },
+        { indicator: "10.10.10.0/24", type: "CIDR" },
+        { indicator: "10.10.10.10", type: "IPv4" },
+        { indicator: "2001:db8::1", type: "IPv6" },
+        { indicator: "C:\\Windows\\Temp\\evil.exe", type: "FilePath" },
+        { indicator: "Global\\evil", type: "Mutex" },
+        { indicator: "https://kelanach.xyz/payload", type: "URL" },
+        { indicator: "kelanach.xyz", type: "domain" },
+        { indicator: "phish@kelanach.xyz", type: "email" },
+      ]);
+    } finally {
+      await cleanupTicket(ticketId);
+    }
+  });
+
+  it("PUSHFIX-02: a RED ticket pushes the exact documented create body (lowercase TLP value)", async () => {
+    // Given: a READY TLP:RED ticket with the ground-truth IOCs included
+    const ticketId = await readyTicketWithIocs("RED", [
+      { type: "DOMAIN", value: "kelanach.xyz" },
+      { type: "IPV4", value: "10.10.10.10" },
+    ]);
+    const { calls } = stubFetch(200, { id: "pulse-123" });
+    try {
+      // When: the ticket is pushed
+      const res = await app.inject({
+        method: "POST",
+        url: `/tickets/${ticketId}/otx`,
+        headers: { authorization: admin },
+        payload: {},
+      });
+
+      // Then: the body OTX receives is exactly the documented shape —
+      // `TLP` carries the lowercase legacy value (official external API
+      // schema enum: white|green|amber|red), indicators are typed objects
+      expect(res.statusCode).toBe(200);
+      const body = sentBodies(calls)[0] as {
+        name: string;
+        description: string;
+        public: boolean;
+        TLP: string;
+        tags: string[];
+        references: string[];
+        indicators: Array<{ indicator: string; type: string }>;
+      };
+      expect(body.TLP).toBe("red");
+      expect(body.public).toBe(false);
+      expect(body.name).toContain("C4 fixture");
+      expect(body.description).toBe("Adversaries target the sector.\n\nDetailed narrative.");
+      expect(body.tags).toEqual(["secnews", "TLP:RED"]);
+      expect(body.references).toEqual(["https://example.com/advisory"]);
+      const indicators = [...body.indicators].sort((a, b) => a.indicator.localeCompare(b.indicator));
+      expect(indicators).toEqual([
+        { indicator: "10.10.10.10", type: "IPv4" },
+        { indicator: "kelanach.xyz", type: "domain" },
+      ]);
+    } finally {
+      await cleanupTicket(ticketId);
+    }
+  });
+
+  it("PUSHFIX-03: re-pushing an already-pushed ticket PATCHes the existing pulse instead of creating a second one", async () => {
+    // Given: a READY ticket that has already been pushed once
+    const ticketId = await readyTicketWithIocs("AMBER", [{ type: "DOMAIN", value: "kelanach.xyz" }]);
+    stubFetch(200, { id: "pulse-123" });
+    const first = await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/otx`,
+      headers: { authorization: admin },
+      payload: {},
+    });
+    expect(first.statusCode).toBe(200);
+    const { calls } = stubFetch(200, { id: "pulse-123" });
+    try {
+      // When: the same ticket is pushed again
+      const res = await app.inject({
+        method: "POST",
+        url: `/tickets/${ticketId}/otx`,
+        headers: { authorization: admin },
+        payload: {},
+      });
+
+      // Then: exactly one documented PATCH update reaches the existing
+      // pulse and no second create happens
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        pulseId: "pulse-123",
+        pulseUrl: "https://otx.alienvault.com/pulse/pulse-123",
+        isPublic: false,
+        tlpMarking: "AMBER",
+      });
+      const posts = calls.filter((call) => call.init.method === "POST");
+      const patches = calls.filter((call) => call.init.method === "PATCH");
+      expect(posts).toHaveLength(0);
+      expect(patches).toHaveLength(1);
+      expect(patches[0]?.url).toBe(PATCH_URL);
+      const patchHeaders = patches[0]?.init.headers as Record<string, string>;
+      expect(patchHeaders["X-OTX-API-KEY"]).toBe(OTX_KEY);
+      const patchBody = JSON.parse(String(patches[0]?.init.body)) as {
+        name: string;
+        public: boolean;
+        TLP: string;
+        tags: string[];
+        indicators: Array<{ indicator: string; type: string }>;
+      };
+      expect(patchBody.TLP).toBe("amber");
+      expect(patchBody.indicators).toEqual([{ indicator: "kelanach.xyz", type: "domain" }]);
+
+      // And: the ticket still points at the SAME pulse and the activity
+      // trail says the pulse was updated
+      const row = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+        select: { otxPulseId: true, otxPulseUrl: true },
+      });
+      expect(row?.otxPulseId).toBe("pulse-123");
+      expect(row?.otxPulseUrl).toBe("https://otx.alienvault.com/pulse/pulse-123");
+      const pushes = await prisma.ticketActivity.findMany({
+        where: { ticketId, action: "OTX_PUSHED" },
+        select: { detail: true },
+      });
+      expect(pushes).toHaveLength(2);
+      expect(pushes.some((p) => p.detail === "pulse-123")).toBe(true);
+      expect(pushes.some((p) => p.detail === "pulse-123 (updated)")).toBe(true);
+    } finally {
+      await cleanupTicket(ticketId);
+    }
   });
 });

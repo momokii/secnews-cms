@@ -116,4 +116,89 @@ describe("ticket updated and taken-by fields", () => {
     expect(response.statusCode).toBe(200);
     expect(body.takenByName).toBeNull();
   });
+
+  it("resolves taken-by from the most recent taken activity when the relation is missing", async () => {
+    // Given: a legacy ticket with no takenBy relation but two TAKEN
+    // activities by different actors at distinct times
+    const ticket = await c3Ticket({ origin: "MANUAL" });
+    ticketIds.push(ticket.id);
+    const editor = await c3User("EDITOR");
+    emails.push(editor.email);
+    await prisma.ticketActivity.create({
+      data: { ticketId: ticket.id, actorId: editor.id, action: "TAKEN", detail: "legacy take", createdAt: new Date(0) },
+    });
+    await prisma.ticketActivity.create({
+      data: {
+        ticketId: ticket.id,
+        actorId: admin.id,
+        action: "TAKEN",
+        detail: "legacy take",
+        createdAt: new Date(1000),
+      },
+    });
+
+    // When: the list and detail are requested
+    const list = await app.inject({
+      method: "GET",
+      url: `/tickets?q=${encodeURIComponent(ticket.title)}`,
+      headers: { authorization: bearer(admin, app) },
+    });
+    const detail = await app.inject({
+      method: "GET",
+      url: `/tickets/${ticket.id}`,
+      headers: { authorization: bearer(admin, app) },
+    });
+
+    // Then: the MOST RECENT activity actor resolves as taken-by in both
+    const listRow = (list.json() as { items: Array<{ id: string; takenByName: string | null }> })
+      .items.find((item) => item.id === ticket.id);
+    expect(listRow?.takenByName).toBe("C3 ADMIN");
+    expect((detail.json() as { takenByName: string | null }).takenByName).toBe("C3 ADMIN");
+  });
+
+  it("falls back to the created activity when no take activity exists", async () => {
+    // Given: a ticket with no takenBy relation and only a CREATED activity
+    const ticket = await c3Ticket({ origin: "MANUAL" });
+    ticketIds.push(ticket.id);
+    await prisma.ticketActivity.create({
+      data: { ticketId: ticket.id, actorId: admin.id, action: "CREATED", createdAt: new Date(0) },
+    });
+
+    // When: the detail is requested
+    const detail = await app.inject({
+      method: "GET",
+      url: `/tickets/${ticket.id}`,
+      headers: { authorization: bearer(admin, app) },
+    });
+
+    // Then: the creator resolves as taken-by
+    expect((detail.json() as { takenByName: string | null }).takenByName).toBe("C3 ADMIN");
+  });
+
+  it("prefers the takenBy relation over activity history", async () => {
+    // Given: a ticket owned by the admin while a TAKEN activity names the editor
+    const ticket = await c3Ticket({ origin: "MANUAL" });
+    ticketIds.push(ticket.id);
+    const owned = await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { takenById: admin.id },
+      select: { id: true },
+    });
+    expect(owned.id).toBe(ticket.id);
+    const editor = await c3User("EDITOR");
+    emails.push(editor.email);
+    await prisma.ticketActivity.create({
+      data: { ticketId: ticket.id, actorId: editor.id, action: "TAKEN", detail: "legacy take", createdAt: new Date(0) },
+    });
+
+    // When: the detail is requested
+    const detail = await app.inject({
+      method: "GET",
+      url: `/tickets/${ticket.id}`,
+      headers: { authorization: bearer(admin, app) },
+    });
+
+    // Then: the relation owner wins over the historical activity actor
+    expect((detail.json() as { takenByName: string | null }).takenByName).toBe("C3 ADMIN");
+  });
 });

@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { AppError } from "../../common/errors.js";
 import { decryptSecret } from "../../lib/crypto.js";
 import { assertNoPendingSuggestions } from "../../lib/guards/pending.js";
-import { createPulse, publicAllowed, toOtxMarking } from "../../lib/otx/client.js";
+import { createPulse, publicAllowed, toOtxMarking, updatePulse } from "../../lib/otx/client.js";
 import { prisma } from "../../lib/db.js";
 import { PushOtxResponseSchema } from "./schema.js";
 import { recordActivity } from "../tickets/activity.js";
@@ -13,8 +13,12 @@ import { recordActivity } from "../tickets/activity.js";
  * Route 52 — lives in otx/ but serves the contract's POST /tickets/:id/otx
  * (MGR). Guards mirror send: ticket READY (422 VALIDATION) and zero PENDING
  * suggestions (409 PENDING_SUGGESTIONS, S2). Indicators are the included IOCs
- * verbatim (STATES.md §3); the client maps TLP and forces public=false for
- * AMBER/RED. Result: otxPulseId/otxPulseUrl stored on the ticket (S5).
+ * pushed as typed {indicator,type} objects (client maps IocType → OTX type
+ * names); the client maps TLP to the lowercase legacy value and forces
+ * public=false for AMBER/RED. Idempotent: a ticket that already carries an
+ * otxPulseId is PATCHed upstream instead of creating a second pulse, and the
+ * activity trail marks the entry "(updated)". Result: otxPulseId/otxPulseUrl
+ * stored on the ticket (S5).
  */
 export const prefixOverride = "/tickets";
 
@@ -56,15 +60,20 @@ export default async function otxPushRoutes(app: FastifyInstance): Promise<void>
       const description = [ticket.overview, ticket.description]
         .filter((field) => field !== null && field.trim() !== "")
         .join("\n\n");
-      const pulse = await createPulse({
+      const pulseInput = {
         apiKey,
         name: ticket.title,
         description: description === "" ? ticket.title : description,
         tlp: ticket.tlp,
         tags: ["secnews", `TLP:${ticket.tlp}`],
         references: ticket.references,
-        indicators: ticket.iocs.map((ioc) => ioc.value),
-      });
+        indicators: ticket.iocs.map((ioc) => ({ type: ioc.type, value: ioc.value })),
+      };
+      const existingPulseId = ticket.otxPulseId;
+      const pulse =
+        existingPulseId !== null
+          ? await updatePulse(existingPulseId, pulseInput)
+          : await createPulse(pulseInput);
 
       await prisma.$transaction(async (tx) => {
         await tx.ticket.update({
@@ -75,7 +84,7 @@ export default async function otxPushRoutes(app: FastifyInstance): Promise<void>
           ticketId: id,
           actorId: request.user.sub,
           action: "OTX_PUSHED",
-          detail: pulse.id,
+          detail: existingPulseId !== null ? `${pulse.id} (updated)` : pulse.id,
         });
       });
       return {

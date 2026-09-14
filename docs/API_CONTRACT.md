@@ -134,9 +134,9 @@ Schemas: `src/modules/tickets/schema.ts`. State machine + role gates:
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 21 | `GET /tickets` | ANY | `ListTicketsQuerySchema` `?q&status&origin&findingType&from&to&page&pageSize` | 200 `ListTicketsResponseSchema` (rows include `createdAt`, `updatedAt`, and `takenByName`; `takenByName` is the creating/taking user for API-created tickets, null for rows without an owner) | 400 `VALIDATION` for malformed dates or `from` after `to` |
+| 21 | `GET /tickets` | ANY | `ListTicketsQuerySchema` `?q&status&origin&findingType&from&to&page&pageSize` | 200 `ListTicketsResponseSchema` (rows include `createdAt`, `updatedAt`, and `takenByName`; `takenByName` is the creating/taking user for API-created tickets, else the actor of the most recent `TAKEN`/`CREATED` ticket activity for legacy rows without an owner, else null) | 400 `VALIDATION` for malformed dates or `from` after `to` |
 | 22 | `POST /tickets` | WORK | `CreateTicketBodySchema` (discriminated on findingType; only `title` required — `summary` and the type-specific structured fields are optional at create, quick-capture shape) | 201 `TicketSchema` (origin `MANUAL`, status `OPEN`, `takenByName` = creating user; omitted structured fields default to `[]`/`null`) | |
-| 23 | `GET /tickets/:id` | ANY | — | 200 `TicketDetailSchema` (+`sources[]`, `iocs[]`, `pendingSuggestions`, `takenByName`) | |
+| 23 | `GET /tickets/:id` | ANY | — | 200 `TicketDetailSchema` (+`sources[]`, `iocs[]`, `pendingSuggestions`, `takenByName`; `takenByName` falls back to the most recent `TAKEN`/`CREATED` activity actor for legacy ownerless rows) | |
 | 24 | `PATCH /tickets/:id` | WORK | `UpdateTicketBodySchema` | 200 `TicketSchema` | |
 | 25 | `POST /tickets/:id/transition` | gate | `TransitionBodySchema` `{to}` | 200 `TicketSchema` | 403 role gate fails; 422 `VALIDATION` illegal transition (TRN-02); 409 `PENDING_SUGGESTIONS` when `to=SENT` with PENDING suggestions |
 | 26 | `PATCH /tickets/:id/fields` | WORK | `PatchTicketFieldsBodySchema` | 200 `TicketSchema` | |
@@ -227,9 +227,20 @@ TLP→OTX mapping: `docs/STATES.md` §4.
 | 53 | `GET /otx/pulses` | MGR + ANALYST (read-only) | `?page&pageSize&source=subscribed\|mine\|search&q` (`source` defaults to `subscribed`; `pageSize` clamps into 1..50, default 20; `q` used only by `search`) | 200 `ListPulsesResponseSchema` `{items[{id, name, authorName, isPublic, tlp, tags, indicatorCount, created, modified}], total, page, pageSize}` | 400 `VALIDATION` for an unsupported source; upstream failure → 502-style error envelope |
 | 54 | `GET /otx/pulses/:id` | MGR + ANALYST (read-only) | — | 200 `OtxPulseDetailSchema` `{id, name, authorName, description, isPublic, tlp, tags, references, indicators[{value,type}], created, modified}` | upstream failure or pulse the key cannot access → 502-style error envelope (never leaks the key) |
 
-Push includes only IOCs with `includeInBulletin = true`; stores
-`otxPulseId`/`otxPulseUrl` on the ticket. `TLP CLEAR→WHITE`; `AMBER`/`RED`
-force `public=false`.
+Push includes only IOCs with `includeInBulletin = true` and sends them as
+typed `{indicator, type}` objects — our IocType maps to the exact OTX type
+names (`domain`, `IPv4`, `IPv6`, `URL`, `email`, `FileHash-MD5`,
+`FileHash-SHA1`, `FileHash-SHA256`, `FilePath`, `Mutex`, `CIDR`;
+`OTHER` has no OTX equivalent and is excluded). The pulse body's `TLP`
+field carries the LOWERCASE legacy value (official external API schema
+enum: `white|green|amber|red`); internal CLEAR maps to legacy WHITE.
+`AMBER`/`RED` force `public=false`. Stores
+`otxPulseId`/`otxPulseUrl` on the ticket. Push is idempotent per ticket:
+a ticket that already has `otxPulseId` is updated upstream via the
+documented `PATCH /api/v1/pulses/{id}` ("any fields that can be used to
+create a pulse can also be used to edit") with the same create-shaped body
+— no second pulse is created; the ticket keeps pointing at the same pulse
+and the new `OTX_PUSHED` activity entry is marked `(updated)`.
 
 The `subscribed` source proxies OTX `GET /api/v1/pulses/subscribed?limit=<pageSize>&page=<page>`.
 The `mine` source proxies OTX `GET /api/v1/pulses/my?limit=<pageSize>&page=<page>`;

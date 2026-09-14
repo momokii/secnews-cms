@@ -6,6 +6,7 @@ import { prisma } from "../../lib/db.js";
 import { getAuthUser } from "../../plugins/auth.js";
 import { toIocDto, toTicketDto, toTicketSourceDto } from "./mappers.js";
 import { recordActivity, registerActivityRoute } from "./activity.js";
+import { recentActivityTakenBy } from "./taken-by.js";
 import { registerFieldsRoute } from "./fields.js";
 import {
   CreateTicketBodySchema,
@@ -66,7 +67,11 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
         }),
         prisma.ticket.count({ where }),
       ]);
-      return { items: rows.map(toTicketDto), total, page, pageSize };
+      const fallbackNames = await recentActivityTakenBy(
+        prisma,
+        rows.map((row) => row.id),
+      );
+      return { items: rows.map((row) => toTicketDto(row, fallbackNames.get(row.id) ?? null)), total, page, pageSize };
     },
   );
 
@@ -90,8 +95,9 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
       if (ticket === null) {
         throw new AppError("NOT_FOUND", `Ticket ${id} not found`);
       }
+      const fallbackNames = ticket.takenBy === null ? await recentActivityTakenBy(prisma, [id]) : undefined;
       return {
-        ...toTicketDto(ticket),
+        ...toTicketDto(ticket, fallbackNames?.get(id) ?? null),
         sources: ticket.sources.map(toTicketSourceDto),
         iocs: ticket.iocs.map(toIocDto),
         pendingSuggestions: ticket._count.suggestions,
