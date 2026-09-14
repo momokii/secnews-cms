@@ -14,6 +14,16 @@ import { OtxPulsesPage } from "./pages/otx/OtxPulsesPage";
 import { TicketDetailPage } from "./pages/tickets/TicketDetailPage";
 import { TicketsListPage } from "./pages/tickets/TicketsListPage";
 import { UsersPage } from "./pages/UsersPage";
+import { useSession } from "./lib/tokenStore";
+
+/** Role-aware landing: analysts start at triage, everyone else at feed sources. */
+function IndexLanding() {
+  const { token, user } = useSession();
+  if (token === null) {
+    return <Navigate to="/login" replace />;
+  }
+  return <Navigate to={user?.role === "ANALYST" ? "/tickets" : "/feeds"} replace />;
+}
 
 export function App() {
   return (
@@ -49,7 +59,7 @@ export function App() {
           <Route
             path="/otx"
             element={
-              <RoleGate roles={["admin", "editor"]}>
+              <RoleGate roles={["admin", "editor", "analyst"]}>
                 <OtxPulsesPage />
               </RoleGate>
             }
@@ -63,7 +73,7 @@ export function App() {
             }
           />
         </Route>
-        <Route index element={<Navigate to="/feeds" replace />} />
+        <Route index element={<IndexLanding />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

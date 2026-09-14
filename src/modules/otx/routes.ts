@@ -6,9 +6,10 @@ import { decryptSecret } from "../../lib/crypto.js";
 import { ListPulsesQuerySchema, ListPulsesResponseSchema } from "./schema.js";
 
 /**
- * Route 53 — GET /otx/pulses (MGR). Proxies the OTX subscribed feed page by
- * page; the OTX key comes from central integration config, never the wire.
- * Upstream failure → 502 with the canonical error envelope (contract §9).
+ * Route 53 — GET /otx/pulses (MGR + ANALYST read-only). Proxies the OTX
+ * subscribed feed page by page; the OTX key comes from central integration
+ * config, never the wire. Upstream failure → 502 with the canonical error
+ * envelope (contract §9). Push (POST /tickets/:id/otx) stays MGR-only.
  */
 
 const PROXY_PAGE_SIZE = 20;
@@ -19,7 +20,7 @@ export default async function otxRoutes(app: FastifyInstance): Promise<void> {
   f.get(
     "/pulses",
     {
-      onRequest: [app.requireRole("ADMIN", "EDITOR")],
+      onRequest: [app.requireRole("ADMIN", "EDITOR", "ANALYST")],
       schema: {
         querystring: ListPulsesQuerySchema,
         response: { 200: ListPulsesResponseSchema },

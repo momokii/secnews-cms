@@ -73,3 +73,59 @@ describe("ROUTE-01: unauthenticated redirect", () => {
     expect(screen.queryByRole("link", { name: "Integrations" })).toBeNull();
   });
 });
+
+describe("ROUTE-02: analyst role access", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), {
+          status: 200,
+        }),
+      ),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearToken();
+  });
+
+  it("renders OTX pulses for an analyst instead of redirecting", () => {
+    // Given: an authenticated analyst session
+    setToken("analyst-token");
+    setUser({ id: "6d0b8a2c-4e1f-47d3-95c7-8b9a0d1e2f3a", email: "analyst@example.com", name: "Analyst", role: "ANALYST" });
+
+    // When: the app is rendered at /otx
+    renderApp("/otx");
+
+    // Then: the OTX pulses page is shown, not the gated feeds fallback
+    expect(screen.getByRole("heading", { name: "OTX pulses" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Feeds" })).toBeNull();
+  });
+
+  it("lands RoleGate denial on /tickets instead of /feeds", () => {
+    // Given: an authenticated analyst session hitting a manager-only route
+    setToken("analyst-token");
+    setUser({ id: "6d0b8a2c-4e1f-47d3-95c7-8b9a0d1e2f3a", email: "analyst@example.com", name: "Analyst", role: "ANALYST" });
+
+    // When: the app is rendered at /feeds (sources, admin/editor only)
+    renderApp("/feeds");
+
+    // Then: the analyst is redirected to the tickets list
+    expect(screen.getByRole("heading", { name: "Tickets" })).toBeTruthy();
+  });
+
+  it("lands / on /tickets for an analyst", () => {
+    // Given: an authenticated analyst session
+    setToken("analyst-token");
+    setUser({ id: "6d0b8a2c-4e1f-47d3-95c7-8b9a0d1e2f3a", email: "analyst@example.com", name: "Analyst", role: "ANALYST" });
+
+    // When: the app is rendered at the index route
+    renderApp("/");
+
+    // Then: the analyst lands on the tickets list
+    expect(screen.getByRole("heading", { name: "Tickets" })).toBeTruthy();
+  });
+});

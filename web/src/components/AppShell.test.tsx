@@ -73,7 +73,7 @@ describe("SHELL-01: role-aware navigation", () => {
     expect(screen.getByRole("button", { name: "Logout" })).toBeTruthy();
   });
 
-  it("hides the Users and Integrations links for an analyst", () => {
+  it("hides Feeds-sources, Users and Integrations links for an analyst but keeps triage entries", () => {
     // Given: an authenticated analyst session
     setToken("analyst-token");
     setUser({ id: "6d0b8a2c-4e1f-47d3-95c7-8b9a0d1e2f3a", email: "analyst@example.com", name: "Analyst", role: "ANALYST" });
@@ -81,9 +81,13 @@ describe("SHELL-01: role-aware navigation", () => {
     // When: the app renders at a member route
     renderApp("/feeds/items");
 
-    // Then: admin-only destinations are absent
+    // Then: source-config and admin-only destinations are absent, triage ones remain
+    expect(screen.queryByRole("link", { name: "Feeds" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Integrations" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Feed items" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Tickets" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "OTX pulses" })).toBeTruthy();
   });
 });
 

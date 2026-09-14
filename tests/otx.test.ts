@@ -292,7 +292,7 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
     expect((res.json() as { error: { code: string } }).error.code).toBe("INTERNAL");
   });
 
-  it("RBAC: push and pulses are MGR-only (ANALYST → 403); anonymous → 401", async () => {
+  it("RBAC: analyst reads pulses read-only (200) but push stays 403; anonymous → 401", async () => {
     const ticketId = await readyTicket("GREEN");
     try {
       const pushByAnalyst = await app.inject({
@@ -301,6 +301,7 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
         headers: { authorization: analyst },
         payload: {},
       });
+      stubFetch(200, { count: 0, results: [] });
       const pulsesByAnalyst = await app.inject({
         method: "GET",
         url: "/otx/pulses",
@@ -313,7 +314,13 @@ describe("TASK-D2 OTX push + pulses proxy", () => {
       });
 
       expect(pushByAnalyst.statusCode).toBe(403);
-      expect(pulsesByAnalyst.statusCode).toBe(403);
+      expect(pulsesByAnalyst.statusCode).toBe(200);
+      expect(pulsesByAnalyst.json()).toEqual({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+      });
       expect(anonPush.statusCode).toBe(401);
     } finally {
       await cleanupTicket(ticketId);

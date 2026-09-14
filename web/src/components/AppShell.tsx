@@ -6,8 +6,12 @@ const GUEST_ITEMS = [
   { to: "/bootstrap", label: "Bootstrap" },
 ] as const;
 
-const MEMBER_ITEMS = [
+/** Feed-source configuration is manager-only; triage entries suit every role. */
+const MGR_ITEMS = [
   { to: "/feeds", label: "Feeds" },
+] as const;
+
+const MEMBER_ITEMS = [
   { to: "/feeds/items", label: "Feed items" },
   { to: "/tickets", label: "Tickets" },
   { to: "/clients", label: "Clients" },
@@ -31,10 +35,12 @@ const navLinkClass = ({ isActive }: { isActive: boolean }): string =>
 export function AppShell() {
   const { token, user } = useSession();
   const navigate = useNavigate();
+  const isMgr = user?.role === "ADMIN" || user?.role === "EDITOR";
   const items =
     token === null
       ? GUEST_ITEMS
       : [
+          ...(isMgr ? MGR_ITEMS : []),
           ...MEMBER_ITEMS,
           ...(user?.role === "ADMIN" ? ADMIN_ITEMS : []),
           ACCOUNT_ITEM,

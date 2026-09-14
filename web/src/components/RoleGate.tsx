@@ -10,12 +10,13 @@ interface RoleGateProps {
 
 /**
  * Renders children only when the live session role is allowed; otherwise
- * redirects to /feeds. A session without a parseable user (token only) passes.
+ * redirects to /tickets, which every role can open. A session without a
+ * parseable user (token only) passes.
  */
 export function RoleGate({ roles, children }: RoleGateProps) {
   const { token, user } = useSession();
   const allowed = user === null
     ? token !== null
     : roles.map((role) => role.toUpperCase()).includes(user.role);
-  return allowed ? <>{children}</> : <Navigate to="/feeds" replace />;
+  return allowed ? <>{children}</> : <Navigate to="/tickets" replace />;
 }
