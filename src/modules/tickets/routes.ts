@@ -5,6 +5,7 @@ import { AppError } from "../../common/errors.js";
 import { prisma } from "../../lib/db.js";
 import { getAuthUser } from "../../plugins/auth.js";
 import { toIocDto, toTicketDto, toTicketSourceDto } from "./mappers.js";
+import { recordActivity, registerActivityRoute } from "./activity.js";
 import { registerFieldsRoute } from "./fields.js";
 import {
   CreateTicketBodySchema,
@@ -23,6 +24,7 @@ import { allowedRoles } from "./state-machine.js";
 export default async function ticketRoutes(app: FastifyInstance): Promise<void> {
   const routeApp = app.withTypeProvider<ZodTypeProvider>();
   await registerFieldsRoute(app);
+  await registerActivityRoute(app);
 
   routeApp.get(
     "/",
@@ -102,20 +104,28 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
       const body = request.body;
       // NOT NULL with no default: manual tickets start with an empty working summary.
       const base = { title: body.title, origin: "MANUAL" as const, summary: "" };
-      const created = await prisma.ticket.create({
-        data:
-          body.findingType === "VULNERABILITY_CVE"
-            ? {
-                ...base,
-                findingType: body.findingType,
-                cveIds: body.cveIds,
-                affectedProduct: body.affectedProduct,
-                affectedVersions: body.affectedVersions,
-                ...(body.mitigation !== undefined ? { mitigation: body.mitigation } : {}),
-              }
-            : body.findingType === "THREAT_CAMPAIGN"
-              ? { ...base, findingType: body.findingType, threatName: body.threatName }
-              : { ...base, findingType: body.findingType },
+      const data =
+        body.findingType === "VULNERABILITY_CVE"
+          ? {
+              ...base,
+              findingType: body.findingType,
+              cveIds: body.cveIds,
+              affectedProduct: body.affectedProduct,
+              affectedVersions: body.affectedVersions,
+              ...(body.mitigation !== undefined ? { mitigation: body.mitigation } : {}),
+            }
+          : body.findingType === "THREAT_CAMPAIGN"
+            ? { ...base, findingType: body.findingType, threatName: body.threatName }
+            : { ...base, findingType: body.findingType };
+      const actorId = request.user.sub;
+      const { created } = await prisma.$transaction(async (tx) => {
+        const created = await tx.ticket.create({ data });
+        await recordActivity(tx, {
+          ticketId: created.id,
+          actorId,
+          action: "CREATED",
+        });
+        return { created };
       });
       return reply.code(201).send(toTicketDto(created));
     },
@@ -141,7 +151,17 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
       if (request.body.title !== undefined) {
         data.title = request.body.title;
       }
-      const updated = await prisma.ticket.update({ where: { id }, data });
+      const actorId = request.user.sub;
+      const updated = await prisma.$transaction(async (tx) => {
+        const updated = await tx.ticket.update({ where: { id }, data });
+        await recordActivity(tx, {
+          ticketId: id,
+          actorId,
+          action: "FIELDS_UPDATED",
+          detail: "title",
+        });
+        return updated;
+      });
       return toTicketDto(updated);
     },
   );
@@ -196,7 +216,17 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
         }
       }
 
-      const updated = await prisma.ticket.update({ where: { id }, data: { status: to } });
+      const actorId = getAuthUser(request).id;
+      const updated = await prisma.$transaction(async (tx) => {
+        const updated = await tx.ticket.update({ where: { id }, data: { status: to } });
+        await recordActivity(tx, {
+          ticketId: id,
+          actorId,
+          action: "STATUS_CHANGED",
+          detail: `status ${ticket.status}→${to}`,
+        });
+        return updated;
+      });
       return toTicketDto(updated);
     },
   );

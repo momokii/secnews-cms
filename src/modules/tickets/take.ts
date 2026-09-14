@@ -1,6 +1,7 @@
 import type { Ticket } from "../../generated/prisma/client.js";
 import { AppError } from "../../common/errors.js";
 import { prisma } from "../../lib/db.js";
+import { recordActivity } from "./activity.js";
 
 /**
  * Feed-item take (route 19): atomically claims an UNREVIEWED/VIEWED item as
@@ -20,7 +21,10 @@ function deriveSummary(raw: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function takeFeedItem(feedItemId: string): Promise<Ticket> {
+export async function takeFeedItem(
+  feedItemId: string,
+  actorId: string | null,
+): Promise<Ticket> {
   return prisma.$transaction(async (tx) => {
     const item = await tx.feedItem.findUnique({ where: { id: feedItemId } });
     if (item === null) {
@@ -35,7 +39,7 @@ export async function takeFeedItem(feedItemId: string): Promise<Ticket> {
       throw new AppError("CONFLICT", "Feed item has already been taken");
     }
 
-    return tx.ticket.create({
+    const ticket = await tx.ticket.create({
       data: {
         title: item.title,
         summary: deriveSummary(item.raw, item.title),
@@ -45,5 +49,12 @@ export async function takeFeedItem(feedItemId: string): Promise<Ticket> {
         feedItemId: item.id,
       },
     });
+    await recordActivity(tx, {
+      ticketId: ticket.id,
+      actorId,
+      action: "TAKEN",
+      detail: "taken from feed",
+    });
+    return ticket;
   });
 }

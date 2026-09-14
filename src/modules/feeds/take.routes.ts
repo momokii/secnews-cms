@@ -19,7 +19,7 @@ export default async function feedItemTakeRoutes(app: FastifyInstance): Promise<
       onRequest: [app.requireRole("ADMIN", "EDITOR", "ANALYST")],
     },
     async (request, reply) => {
-      const ticket = await takeFeedItem(request.params.id);
+      const ticket = await takeFeedItem(request.params.id, request.user.sub);
       return reply.code(201).send(toTicketDto(ticket));
     },
   );
