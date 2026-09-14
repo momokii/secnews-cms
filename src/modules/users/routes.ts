@@ -50,7 +50,16 @@ export default async function userRoutes(app: FastifyInstance): Promise<void> {
       body: UpdateUserBodySchema,
       response: { 200: UserPublicSchema },
     },
-  }, async (request) => service.updateUser(request.params.id, request.body));
+  }, async (request) => {
+    const caller = getAuthUser(request);
+    if (request.params.id === caller.id && request.body.role !== undefined) {
+      const currentRole = await service.getUserRole(request.params.id);
+      if (currentRole !== null && currentRole !== request.body.role) {
+        throw new AppError("FORBIDDEN", "cannot change your own role");
+      }
+    }
+    return service.updateUser(request.params.id, request.body);
+  });
 
   f.post("/:id/reset-password", {
     onRequest: [app.requireRole("ADMIN")],

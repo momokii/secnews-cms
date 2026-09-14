@@ -84,7 +84,7 @@ Schemas: `src/modules/auth/schema.ts`, `src/modules/bootstrap/schema.ts`, `src/m
 | 6 | `POST /bootstrap` | PUB | `BootstrapBodySchema` | 201 `BootstrapResponseSchema` `{user, token}` | 409 `CONFLICT` if any user exists (S4, BST-01) |
 | 7 | `GET /users` | ADMIN | `ListUsersQuerySchema` `?q&role&page&pageSize` | 200 `ListUsersResponseSchema` | |
 | 8 | `POST /users` | ADMIN; ANALYST (§4, role forced) | `CreateUserBodySchema` (`role` optional) | 201 `UserPublicSchema` | 403 ANALYST attempting any non-ANALYST role (S4, USR-01/05); 409 `CONFLICT` duplicate email |
-| 9 | `PATCH /users/:id` | ADMIN | `UpdateUserBodySchema` | 200 `UserPublicSchema` | 409 `CONFLICT` email taken |
+| 9 | `PATCH /users/:id` | ADMIN | `UpdateUserBodySchema` | 200 `UserPublicSchema` | 403 self-role change (USR-06); 409 `CONFLICT` email taken |
 | 10 | `POST /users/:id/reset-password` | ADMIN | `ResetPasswordBodySchema` | 204 | |
 | 11 | `DELETE /users/:id` | ADMIN | — | 204 | |
 
@@ -94,6 +94,11 @@ attempting any explicit non-ANALYST role (the USR-01 escalation to ADMIN, or
 EDITOR) gets `403 FORBIDDEN` with no row created. ADMIN keeps unrestricted
 role choice (any role, omitted role → ANALYST). `PATCH /users/:id`,
 `POST /users/:id/reset-password` and `DELETE /users/:id` remain ADMIN-only.
+Self-demotion lockout (USR-06): a caller PATCHing their own id with a `role`
+that differs from their current role gets `403 FORBIDDEN`
+("cannot change your own role") and the role is left untouched — name, email
+and `active` edits on self stay allowed, and another user's role remains
+editable (USR-07).
 
 ## 3. Surface 2 — Feeds, Feed items, External ingest
 

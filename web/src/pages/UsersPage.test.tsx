@@ -3,7 +3,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UsersPage } from "./UsersPage";
-import { setToken } from "../lib/tokenStore";
+import { setToken, setUser } from "../lib/tokenStore";
+
+const ADMIN_ID = "c528cea2-f3e7-4673-8def-37ac36981adf";
 
 function renderPage(): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -49,5 +51,41 @@ describe("FE-USR-01: users administration", () => {
     // Then: the documented create endpoint receives the role and credentials
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/users", expect.objectContaining({ method: "POST" })));
     expect(screen.getByText("Users")).toBeTruthy();
+  });
+
+  it("disables the role select with a note when editing your own row", async () => {
+    // Given: a signed-in admin whose session id matches the listed admin row
+    setToken("admin-token");
+    setUser({ id: ADMIN_ID, email: "admin@example.com", name: "Admin", role: "ADMIN" });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ items: [{ id: ADMIN_ID, email: "admin@example.com", name: "Admin", role: "ADMIN" }], total: 1, page: 1, pageSize: 20 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+
+    // When: the admin opens the edit dialog for their own row
+    expect(await screen.findByText("admin@example.com")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    // Then: the role select is disabled with the self-lockout note, name stays editable
+    const roleSelect = await screen.findByLabelText("Role");
+    expect(roleSelect).toHaveProperty("disabled", true);
+    expect(screen.getByText("You cannot change your own role")).toBeTruthy();
+    expect(screen.getByLabelText("Name")).toHaveProperty("disabled", false);
+  });
+
+  it("renders a role-access legend covering ADMIN, EDITOR and ANALYST", async () => {
+    // Given: a signed-in admin viewing the users list
+    setToken("admin-token");
+    setUser({ id: ADMIN_ID, email: "admin@example.com", name: "Admin", role: "ADMIN" });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ items: [{ id: ADMIN_ID, email: "admin@example.com", name: "Admin", role: "ADMIN" }], total: 1, page: 1, pageSize: 20 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+
+    // When: the page renders
+    await screen.findByText("admin@example.com");
+
+    // Then: the legend documents each role's access per STATES.md §5
+    expect(screen.getByText(/users, integrations, everything/)).toBeTruthy();
+    expect(screen.getByText(/feeds, clients\/channels, tickets incl\. send\/close/)).toBeTruthy();
+    expect(screen.getByText(/view \+ work tickets \(take, research, IOCs, AI fill\)/)).toBeTruthy();
   });
 });

@@ -74,6 +74,13 @@ export async function listUsers(query: ListUsersQuery): Promise<Paginated<UserPu
   };
 }
 
+/** Null when the id does not exist — the PATCH self-role lockout treats a
+ * missing target as NOT_FOUND territory (updateUser), not FORBIDDEN. */
+export async function getUserRole(id: string): Promise<Role | null> {
+  const user = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+  return user?.role ?? null;
+}
+
 export async function updateUser(id: string, input: UpdateUserBody): Promise<UserPublic> {
   const data: { name?: string; email?: string; role?: Role; isActive?: boolean } = {};
   if (input.name !== undefined) {
