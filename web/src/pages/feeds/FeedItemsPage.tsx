@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Pagination } from "../../components/Pagination";
+import { DateFilter } from "../../components/DateFilter";
 import { formatTimestamp } from "../../lib/datetime";
+import type { DateRange } from "../../lib/datetime";
 import type { FeedItemStatus, TicketSummary } from "../../lib/feedsApi";
 import {
   useFeedItems,
@@ -19,6 +21,7 @@ export function FeedItemsPage() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [dateRange, setDateRange] = useState<DateRange>({});
   const [takenTickets, setTakenTickets] = useState<Record<string, TicketSummary>>(
     {},
   );
@@ -38,6 +41,7 @@ export function FeedItemsPage() {
     q: query === "" ? undefined : query,
     page,
     pageSize,
+    ...dateRange,
   });
   const viewItem = useViewFeedItem();
   const takeItem = useTakeFeedItem();
@@ -67,6 +71,14 @@ export function FeedItemsPage() {
           className="w-64 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
         />
       </div>
+
+      <DateFilter
+        value={dateRange}
+        onChange={(range) => {
+          setDateRange(range);
+          setPage(1);
+        }}
+      />
 
       <div role="tablist" aria-label="Triage status" className="mt-4 flex gap-1 border-b border-slate-200">
         {STATUS_TABS.map((tab) => (

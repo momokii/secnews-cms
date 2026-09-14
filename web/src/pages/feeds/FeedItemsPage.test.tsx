@@ -164,4 +164,44 @@ describe("FE-ITEM-02: take action spawns a ticket link", () => {
       ).toBe(true),
     );
   });
+
+  it("sends preset, custom, and cleared date filters", async () => {
+    // Given: the feed item list is available and the clock is fixed in WIB
+    setToken("test-token");
+    vi.setSystemTime(new Date("2026-09-14T03:00:00.000Z"));
+    const fetchMock = routeFetch([
+      {
+        match: (url, method) => method === "GET" && url.startsWith("/api/feed-items"),
+        respond: () => envelope([]),
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+
+    // When: Today is selected, then a custom range, then Clear
+    fireEvent.click(await screen.findByRole("button", { name: "Today" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) =>
+        String(url).includes("from=2026-09-13T17%3A00%3A00.000Z") &&
+        String(url).includes("to=2026-09-14T16%3A59%3A59.999Z"),
+      )).toBe(true),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-09-01" } });
+    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-09-03" } });
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) =>
+        String(url).includes("from=2026-08-31T17%3A00%3A00.000Z") &&
+        String(url).includes("to=2026-09-03T16%3A59%3A59.999Z"),
+      )).toBe(true),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    // Then: clearing removes both bounds from the request
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) =>
+        !String(url).includes("from=") && !String(url).includes("to="),
+      )).toBe(true),
+    );
+  });
 });
