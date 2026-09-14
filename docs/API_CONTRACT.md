@@ -223,11 +223,15 @@ TLP→OTX mapping: `docs/STATES.md` §4.
 | 50 | `PUT /bulletin/template` | ADMIN | `PutTemplateBodySchema` | 200 `BulletinTemplateSchema` | |
 | 51 | `POST /tickets/:id/bulletin/preview` | WORK | `{}` | 200 `PreviewResponseSchema` `{rendered}` | 422 `VALIDATION` missing required final fields (PREV-02) |
 | 52 | `POST /tickets/:id/otx` | MGR | `{}` | 200 `PushOtxResponseSchema` `{pulseId, pulseUrl, isPublic, tlpMarking}` | 422 `VALIDATION` not `READY`; 409 `PENDING_SUGGESTIONS` (S2, OTX-02) |
-| 53 | `GET /otx/pulses` | MGR + ANALYST (read-only) | `?page` | 200 `ListPulsesResponseSchema` | upstream failure → 502-style error envelope |
+| 53 | `GET /otx/pulses` | MGR + ANALYST (read-only) | `?page&source=subscribed\|mine` (`source` defaults to `subscribed`) | 200 `ListPulsesResponseSchema` | 400 `VALIDATION` for an unsupported source; upstream failure → 502-style error envelope |
 
 Push includes only IOCs with `includeInBulletin = true`; stores
 `otxPulseId`/`otxPulseUrl` on the ticket. `TLP CLEAR→WHITE`; `AMBER`/`RED`
 force `public=false`.
+
+The `subscribed` source proxies OTX `GET /api/v1/pulses/subscribed?page=<page>`.
+The `mine` source proxies OTX `GET /api/v1/pulses/my?limit=<pageSize>&page=<page>`;
+both use the configured `X-OTX-API-KEY` header. The OTX `q` parameter is not sent.
 
 ---
 
