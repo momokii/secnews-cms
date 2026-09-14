@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Pagination } from "../../components/Pagination";
 import { formatTimestamp } from "../../lib/datetime";
 import { useTicketActivity } from "../../lib/useTickets";
 
@@ -6,14 +7,17 @@ interface ActivityTimelineProps {
   ticketId: string;
 }
 
-/** Immutable ticket activity timeline, newest first, with server pagination. */
+const ACTIVITY_PAGE_SIZES = [5, 10, 20] as const;
+const DEFAULT_PAGE_SIZE = 5;
+
+/** Immutable ticket activity timeline, newest first, with server pagination
+ * (default 5 per page; 5/10/20 selectable via the shared Pagination footer). */
 export function ActivityTimeline({ ticketId }: ActivityTimelineProps) {
   const [page, setPage] = useState(1);
-  const activityQuery = useTicketActivity(ticketId, page);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const activityQuery = useTicketActivity(ticketId, page, pageSize);
   const entries = activityQuery.data?.items ?? [];
   const total = activityQuery.data?.total ?? 0;
-  const pageSize = activityQuery.data?.pageSize ?? 20;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
@@ -46,29 +50,19 @@ export function ActivityTimeline({ ticketId }: ActivityTimelineProps) {
           ))}
         </ol>
       )}
-      <div className="mt-3 flex items-center justify-between text-sm text-slate-500">
-        <span>Page {page} of {totalPages} — {total} entries</span>
-        <span className="flex gap-2">
-          <button
-            type="button"
-            aria-label="Previous activity page"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page <= 1 || activityQuery.isPlaceholderData}
-            className="rounded-md border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            aria-label="Next activity page"
-            onClick={() => setPage((current) => current + 1)}
-            disabled={page >= totalPages || activityQuery.isPlaceholderData}
-            className="rounded-md border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Next
-          </button>
-        </span>
-      </div>
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        disabled={activityQuery.isPlaceholderData}
+        itemLabel="entries"
+        options={ACTIVITY_PAGE_SIZES}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
+      />
     </section>
   );
 }

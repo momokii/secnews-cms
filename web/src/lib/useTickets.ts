@@ -224,10 +224,10 @@ export function useDeliveryAudit(id: string, page: number) {
   });
 }
 
-export function useTicketActivity(id: string, page: number) {
+export function useTicketActivity(id: string, page: number, pageSize: number) {
   return useQuery({
-    queryKey: ["ticket-activity", id, page],
-    queryFn: () => listTicketActivity(id, page),
+    queryKey: ["ticket-activity", id, page, pageSize],
+    queryFn: () => listTicketActivity(id, page, pageSize),
     placeholderData: keepPreviousData,
   });
 }

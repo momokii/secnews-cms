@@ -1,13 +1,17 @@
 import { clearToken, getToken } from "./tokenStore";
 
-/** Error thrown for non-2xx API responses; `status` carries the HTTP status code. */
+/** Error thrown for non-2xx API responses; `status` carries the HTTP status
+ * code and `code` the machine error code (e.g. INACTIVE_TARGET) when the body
+ * carries the standard { error: { code, message } } envelope. */
 export class ApiError extends Error {
   readonly status: number;
+  readonly code?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -24,6 +28,22 @@ let unauthorizedNavigator = defaultUnauthorizedNavigator;
 /** Overrides the 401 redirect (used by tests and future router integration). */
 export function setUnauthorizedNavigator(navigator: (path: string) => void): void {
   unauthorizedNavigator = navigator;
+}
+
+interface ErrorBody {
+  message?: string;
+  code?: string;
+}
+
+/** Narrows the standard { error: { code, message } } envelope once. */
+function readErrorBody(body: unknown): ErrorBody {
+  if (typeof body !== "object" || body === null || !("error" in body)) return {};
+  const error: unknown = body.error;
+  if (typeof error !== "object" || error === null || !("message" in error)) return {};
+  if (typeof error.message !== "string") return {};
+  const code =
+    "code" in error && typeof error.code === "string" ? error.code : undefined;
+  return { message: error.message, code };
 }
 
 /**
@@ -54,31 +74,26 @@ export async function apiFetch(
       clearToken();
       unauthorizedNavigator(LOGIN_PATH);
     }
-    let message = "Session expired. Please sign in again.";
+    const fallbackMessage = "Session expired. Please sign in again.";
+    let body: ErrorBody = { message: fallbackMessage };
     try {
-      const body: unknown = await response.clone().json();
-      if (typeof body === "object" && body !== null && "error" in body) {
-        const error = body.error;
-        if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") message = error.message;
-      }
+      body = { ...body, ...readErrorBody(await response.clone().json()) };
     } catch (error) {
       if (!(error instanceof SyntaxError)) throw error;
     }
-    throw new ApiError(401, message);
+    throw new ApiError(401, body.message ?? fallbackMessage, body.code);
   }
 
   if (!response.ok) {
-    let message = `API request failed with status ${response.status}`;
+    let body: ErrorBody = {
+      message: `API request failed with status ${response.status}`,
+    };
     try {
-      const body: unknown = await response.clone().json();
-      if (typeof body === "object" && body !== null && "error" in body) {
-        const error = body.error;
-        if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") message = error.message;
-      }
+      body = { ...body, ...readErrorBody(await response.clone().json()) };
     } catch (error) {
       if (!(error instanceof SyntaxError)) throw error;
     }
-    throw new ApiError(response.status, message);
+    throw new ApiError(response.status, body.message ?? "API request failed", body.code);
   }
 
   return response;

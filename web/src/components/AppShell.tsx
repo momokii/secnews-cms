@@ -27,8 +27,6 @@ const ADMIN_ITEMS = [
   { to: "/users", label: "Users" },
 ] as const;
 
-const ACCOUNT_ITEM = { to: "/account", label: "Account" } as const;
-
 /** Inline SVG icon paths (24×24 stroke) keyed by route — DESIGN.md: inline
  * SVG only, no icon-font deps. */
 const NAV_ICONS: Readonly<Record<string, string>> = {
@@ -98,7 +96,6 @@ export function AppShell() {
           ...(isMgr ? MGR_ITEMS : []),
           ...MEMBER_ITEMS,
           ...(user?.role === "ADMIN" ? ADMIN_ITEMS : []),
-          ACCOUNT_ITEM,
         ];
   const logout = (): void => {
     clearToken();
@@ -160,6 +157,14 @@ export function AppShell() {
                 </span>
               </div>
             )}
+            <NavLink
+              to="/account"
+              className={navLinkClass(collapsed)}
+              title="Account"
+            >
+              <NavIcon d={NAV_ICONS["/account"]} />
+              <span className={collapsed ? "hidden" : undefined}>Account</span>
+            </NavLink>
             <button
               type="button"
               onClick={logout}

@@ -241,9 +241,10 @@ export async function listDeliveryAudit(
 export async function listTicketActivity(
   id: string,
   page = 1,
+  pageSize = 5,
 ): Promise<Paginated<TicketActivity>> {
   const response = await apiFetch(
-    `/tickets/${id}/activity${buildQuery({ page, pageSize: DEFAULT_PAGE_SIZE })}`,
+    `/tickets/${id}/activity${buildQuery({ page, pageSize })}`,
     { method: "GET" },
   );
   return readJson<Paginated<TicketActivity>>(response);

@@ -4,6 +4,26 @@ import type { TicketStatus } from "../../lib/ticketsApi";
 import { usePushOtx } from "../../lib/useTickets";
 import { SendDialog } from "./SendDialog";
 
+/** Inline SVG spinner (DESIGN.md: inline SVG only) shown while a push runs. */
+function Spinner() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4 shrink-0 animate-spin"
+    >
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+      <path
+        d="M22 12a10 10 0 0 1-10 10"
+        stroke="currentColor"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 interface DeliveryActionsProps {
   ticketId: string;
   status: TicketStatus;
@@ -54,7 +74,14 @@ export function DeliveryActions({
         title={ready ? undefined : "Only READY tickets can be pushed to OTX"}
         className="rounded-md border border-indigo-600 px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
       >
-        Push to OTX
+        {pushOtx.isPending ? (
+          <>
+            <Spinner />
+            Pushing…
+          </>
+        ) : (
+          "Push to OTX"
+        )}
       </button>
 
       {sendOpen ? (

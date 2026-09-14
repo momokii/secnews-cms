@@ -243,3 +243,61 @@ describe("TASK-UXB: collapsible sidebar", () => {
     expect(label?.className).toContain("hidden");
   });
 });
+
+describe("TASK-UIC: sidebar footer divider", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), {
+          status: 200,
+        }),
+      ),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearToken();
+  });
+
+  function signInAsAdmin(): void {
+    setToken("admin-token");
+    setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" });
+  }
+
+  it("sits Account under a divider with Logout below the nav, not inside it", () => {
+    // Given: an authenticated admin session with the rail expanded
+    signInAsAdmin();
+    renderApp("/feeds/items");
+
+    // When: the footer block is located via the Account link
+    const account = screen.getByRole("link", { name: "Account" });
+
+    // Then: Account is not part of the primary nav; its footer container
+    // carries the border-t divider and also holds the Logout button
+    expect(account.closest("nav")).toBeNull();
+    const footer = account.parentElement;
+    expect(footer?.className).toContain("border-t");
+    expect(footer?.querySelector('button[title="Logout"], button')).not.toBeNull();
+    const logout = footer?.querySelector("button");
+    expect(logout?.textContent).toContain("Logout");
+  });
+
+  it("keeps the divider block with Account and Logout while the rail is collapsed", () => {
+    // Given: an authenticated session
+    signInAsAdmin();
+    renderApp("/feeds/items");
+
+    // When: the rail is collapsed
+    fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
+
+    // Then: Account remains under the divider with Logout
+    const account = screen.getByRole("link", { name: "Account" });
+    expect(account.closest("nav")).toBeNull();
+    const footer = account.parentElement;
+    expect(footer?.className).toContain("border-t");
+    expect(screen.getByRole("button", { name: "Logout" }).closest("div")).toBe(footer);
+  });
+});
