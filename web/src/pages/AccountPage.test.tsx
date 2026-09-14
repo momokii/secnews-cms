@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setUnauthorizedNavigator, defaultUnauthorizedNavigator } from "../lib/api";
-import { clearToken, getToken, setToken, setUser } from "../lib/tokenStore";
+import { clearToken, getToken, getUser, setToken, setUser } from "../lib/tokenStore";
 import { AccountPage } from "./AccountPage";
 
 describe("FE-ACCT-01: change password", () => {
@@ -100,5 +100,60 @@ describe("FE-ACCT-02: profile info", () => {
     expect(screen.getByText("c528cea2-f3e7-4673-8def-37ac36981adf")).toBeTruthy();
     expect(screen.getByLabelText("Current password")).toBeTruthy();
     expect(screen.getByLabelText("New password")).toBeTruthy();
+  });
+
+  it("edits name and email with a self PATCH and refreshes the session user", async () => {
+    // Given: a signed-in session and the updated profile response
+    setToken("session-token");
+    setUser({
+      id: "c528cea2-f3e7-4673-8def-37ac36981adf",
+      email: "admin@example.com",
+      name: "Admin",
+      role: "ADMIN",
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "c528cea2-f3e7-4673-8def-37ac36981adf",
+          email: "updated@example.com",
+          name: "Updated Admin",
+          role: "ADMIN",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    // When: the operator edits and saves their profile
+    render(<AccountPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Updated Admin" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "updated@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    // Then: only name and email are sent to the current user's endpoint
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Profile updated"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/users/c528cea2-f3e7-4673-8def-37ac36981adf");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ name: "Updated Admin", email: "updated@example.com" });
+    expect(getUser()).toEqual({
+      id: "c528cea2-f3e7-4673-8def-37ac36981adf",
+      email: "updated@example.com",
+      name: "Updated Admin",
+      role: "ADMIN",
+    });
+  });
+
+  it("gives the password form its own section heading", () => {
+    // Given: a signed-in session
+    setToken("session-token");
+
+    // When: the account page renders
+    render(<AccountPage />);
+
+    // Then: password management has a semantic heading
+    expect(screen.getByRole("heading", { name: "Change password", level: 2 })).toBeTruthy();
   });
 });
