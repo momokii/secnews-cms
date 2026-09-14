@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FeedItemsPage } from "./FeedItemsPage";
@@ -20,6 +20,13 @@ const unreviewedItem = {
   ticketId: null,
   fetchedAt: "2026-09-14T08:00:00.000Z",
   sourceName: "CISA Advisories",
+};
+
+const reviewedItem = {
+  ...unreviewedItem,
+  id: "8b1c2d3e-4f50-6a7b-8c9d-0e1f2a3b4c5d",
+  guid: "g6",
+  status: "VIEWED",
 };
 
 function envelope(items: unknown[]): Response {
@@ -202,6 +209,128 @@ describe("FE-ITEM-02: take action spawns a ticket link", () => {
       expect(fetchMock.mock.calls.some(([url]) =>
         !String(url).includes("from=") && !String(url).includes("to="),
       )).toBe(true),
+    );
+  });
+});
+
+describe("FE-ITEM-03: Added column and details modal", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  it("renders an Added column with the WIB ingest time and raw ISO title", async () => {
+    // Given: the list shows an item ingested at 08:00 UTC (15:00 WIB)
+    setToken("test-token");
+    const fetchMock = routeFetch([
+      {
+        match: (url, method) =>
+          method === "GET" && url.startsWith("/api/feed-items"),
+        respond: () => envelope([unreviewedItem]),
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    // When: the page renders
+    renderPage();
+
+    // Then: an Added cell shows the WIB date+hour:min with the raw ISO
+    // instant in the title attribute, after the Published column
+    const addedCell = await screen.findByRole("cell", { name: "2026-09-14 15:00" });
+    expect(addedCell.getAttribute("title")).toBe("2026-09-14T08:00:00.000Z");
+    const headers = screen.getAllByRole("columnheader");
+    const labels = headers.map((header) => header.textContent);
+    expect(labels.indexOf("Added")).toBe(labels.indexOf("Published") + 1);
+  });
+
+  it("Details opens a modal with normalized fields and the raw JSON, and marks UNREVIEWED as viewed", async () => {
+    // Given: an UNREVIEWED item whose detail endpoint answers with raw
+    setToken("test-token");
+    const detailPayload = {
+      ...unreviewedItem,
+      summary: "CVE-2026-1234 affects OpenSSL 3.x; patch released.",
+      raw: { title: "OpenSSL patch", creator: "CISA" },
+    };
+    const fetchMock = routeFetch([
+      {
+        match: (url, method) =>
+          method === "GET" && url === `/api/feed-items/${ITEM_ID}`,
+        respond: () => new Response(JSON.stringify(detailPayload), { status: 200 }),
+      },
+      {
+        match: (url, method) =>
+          method === "GET" && url.startsWith("/api/feed-items"),
+        respond: () => envelope([unreviewedItem]),
+      },
+      {
+        match: (url, method) =>
+          method === "POST" && url === `/api/feed-items/${ITEM_ID}/view`,
+        respond: () =>
+          new Response(JSON.stringify({ ...unreviewedItem, status: "VIEWED" }), {
+            status: 200,
+          }),
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+
+    // When: the analyst opens Details on the UNREVIEWED row
+    fireEvent.click(await screen.findByRole("button", { name: "Details" }));
+
+    // Then: the modal shows the normalized fields including Added WIB and
+    // the verbatim raw JSON, and the view mutation fires for the UNREVIEWED row
+    const dialog = await screen.findByRole("dialog", { name: "Item details" });
+    expect(within(dialog).getByText("OpenSSL patch")).toBeTruthy();
+    expect(within(dialog).getByText("CISA Advisories")).toBeTruthy();
+    const urlLink = within(dialog).getByRole("link", { name: "https://example.com/a" });
+    expect(urlLink.getAttribute("href")).toBe("https://example.com/a");
+    expect(within(dialog).getByText("2026-09-13 17:00 WIB")).toBeTruthy();
+    expect(within(dialog).getByText("2026-09-14 15:00 WIB")).toBeTruthy();
+    expect(within(dialog).getByText("UNREVIEWED")).toBeTruthy();
+    expect(await within(dialog).findByText(/CVE-2026-1234/)).toBeTruthy();
+    expect(within(dialog).getByText("Raw JSON")).toBeTruthy();
+    const rawPre = within(dialog).getByText(/"creator": "CISA"/);
+    expect(rawPre.textContent).toBe(JSON.stringify(detailPayload.raw, null, 2));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/feed-items/${ITEM_ID}/view`,
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+  });
+
+  it("Details on a VIEWED row does not fire the view mutation again", async () => {
+    // Given: the list shows a VIEWED item with a detail endpoint
+    setToken("test-token");
+    const detailPayload = { ...reviewedItem, raw: { title: "OpenSSL patch" } };
+    const fetchMock = routeFetch([
+      {
+        match: (url, method) =>
+          method === "GET" && url === `/api/feed-items/${reviewedItem.id}`,
+        respond: () => new Response(JSON.stringify(detailPayload), { status: 200 }),
+      },
+      {
+        match: (url, method) =>
+          method === "GET" && url.startsWith("/api/feed-items"),
+        respond: () => envelope([reviewedItem]),
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+
+    // When: the analyst opens Details on the VIEWED row
+    fireEvent.click(await screen.findByRole("button", { name: "Details" }));
+    await screen.findByRole("dialog", { name: "Item details" });
+
+    // Then: no POST /view is ever sent
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) =>
+            String(url).endsWith("/view") && (init?.method ?? "GET") === "POST",
+        ),
+      ).toBe(false),
     );
   });
 });

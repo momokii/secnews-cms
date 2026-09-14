@@ -42,6 +42,35 @@ export function FeedSourcesPage() {
         </button>
       </div>
 
+      <section
+        aria-label="How feed ingestion works"
+        className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4"
+      >
+        <h2 className="text-sm font-semibold text-slate-900">
+          How feed ingestion works
+        </h2>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+          <li>
+            Every active feed is polled on a schedule — every 15 minutes via the
+            FEED_POLL_CRON env var.
+          </li>
+          <li>
+            Each item keeps its title, link/URL and published date; the full raw
+            payload is stored per item for debugging, so summary/description,
+            author and categories surface from it when the feed provides them.
+          </li>
+          <li>
+            Duplicates are dropped: the same link (or guid), or the same title
+            from the same source, is stored once. Re-ingest refreshes the stored
+            fields but never changes triage state.
+          </li>
+          <li>
+            New items enter triage as Unreviewed, then move to Viewed, then
+            Taken — taking spawns a ticket.
+          </li>
+        </ul>
+      </section>
+
       {sourcesQuery.isPending ? (
         <p className="mt-4 text-sm text-slate-500">Loading feed sources…</p>
       ) : sourcesQuery.isError ? (

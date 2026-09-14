@@ -46,6 +46,11 @@ export interface FeedItem {
   sourceName?: string;
 }
 
+/** GET /feed-items/:id — the normalized item plus the verbatim raw payload. */
+export interface FeedItemDetail extends FeedItem {
+  raw: unknown;
+}
+
 export interface FeedItemsQuery {
   status?: FeedItemStatus;
   feedSourceId?: string;
@@ -144,6 +149,12 @@ export async function viewFeedItem(id: string): Promise<FeedItem> {
     method: "POST",
   });
   return readJson<FeedItem>(response);
+}
+
+/** GET /feed-items/:id — detail with the verbatim raw payload. */
+export async function getFeedItem(id: string): Promise<FeedItemDetail> {
+  const response = await apiFetch(`/feed-items/${id}`, { method: "GET" });
+  return readJson<FeedItemDetail>(response);
 }
 
 /** POST /feed-items/:id/take — item -> TAKEN, returns the spawned ticket. */

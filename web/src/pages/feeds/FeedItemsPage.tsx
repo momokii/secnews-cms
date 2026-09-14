@@ -4,12 +4,13 @@ import { Pagination } from "../../components/Pagination";
 import { DateFilter } from "../../components/DateFilter";
 import { formatTimestamp } from "../../lib/datetime";
 import type { DateRange } from "../../lib/datetime";
-import type { FeedItemStatus, TicketSummary } from "../../lib/feedsApi";
+import type { FeedItem, FeedItemStatus, TicketSummary } from "../../lib/feedsApi";
 import {
   useFeedItems,
   useTakeFeedItem,
   useViewFeedItem,
 } from "../../lib/useFeeds";
+import { FeedItemDetailModal } from "./FeedItemDetailModal";
 
 const STATUS_TABS = ["UNREVIEWED", "VIEWED", "TAKEN"] as const satisfies readonly FeedItemStatus[];
 
@@ -25,6 +26,7 @@ export function FeedItemsPage() {
   const [takenTickets, setTakenTickets] = useState<Record<string, TicketSummary>>(
     {},
   );
+  const [detailItem, setDetailItem] = useState<FeedItem | null>(null);
 
   // Debounce the search box: only the value settled for SEARCH_DEBOUNCE_MS
   // reaches the API query.
@@ -56,6 +58,13 @@ export function FeedItemsPage() {
         setTakenTickets((current) => ({ ...current, [id]: ticket }));
       },
     });
+  };
+
+  const openDetails = (item: FeedItem): void => {
+    if (item.status === "UNREVIEWED") {
+      viewItem.mutate(item.id);
+    }
+    setDetailItem(item);
   };
 
   return (
@@ -119,6 +128,7 @@ export function FeedItemsPage() {
               <th scope="col" className="py-2 pr-4 font-medium">Title</th>
               <th scope="col" className="py-2 pr-4 font-medium">Source</th>
               <th scope="col" className="py-2 pr-4 font-medium">Published</th>
+              <th scope="col" className="py-2 pr-4 font-medium">Added</th>
               <th scope="col" className="py-2 pr-4 font-medium">Status</th>
               <th scope="col" className="py-2 font-medium">Actions</th>
             </tr>
@@ -146,6 +156,9 @@ export function FeedItemsPage() {
                   <td className="py-2 pr-4 text-slate-500" title={item.publishedAt ?? undefined}>
                     {item.publishedAt === null ? "—" : formatTimestamp(item.publishedAt)}
                   </td>
+                  <td className="py-2 pr-4 text-slate-500" title={item.fetchedAt}>
+                    {formatTimestamp(item.fetchedAt)}
+                  </td>
                   <td className="py-2 pr-4">
                     <span
                       className={`rounded-md px-2 py-0.5 text-xs font-medium ${
@@ -160,33 +173,42 @@ export function FeedItemsPage() {
                     </span>
                   </td>
                   <td className="py-2">
-                    {ticket !== null ? (
-                      <Link
-                        to={`/tickets/${ticket.id}`}
-                        className="text-indigo-600 hover:text-indigo-500"
+                    <span className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openDetails(item)}
+                        className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
                       >
-                        Ticket #{ticket.id}
-                      </Link>
-                    ) : (
-                      <span className="flex gap-2">
-                        {item.status === "UNREVIEWED" ? (
+                        Details
+                      </button>
+                      {ticket !== null ? (
+                        <Link
+                          to={`/tickets/${ticket.id}`}
+                          className="text-indigo-600 hover:text-indigo-500"
+                        >
+                          Ticket #{ticket.id}
+                        </Link>
+                      ) : (
+                        <>
+                          {item.status === "UNREVIEWED" ? (
+                            <button
+                              type="button"
+                              onClick={() => viewItem.mutate(item.id)}
+                              className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                            >
+                              Mark viewed
+                            </button>
+                          ) : null}
                           <button
                             type="button"
-                            onClick={() => viewItem.mutate(item.id)}
-                            className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                            onClick={() => handleTake(item.id)}
+                            className="rounded-md bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-500"
                           >
-                            Mark viewed
+                            Take
                           </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => handleTake(item.id)}
-                          className="rounded-md bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-500"
-                        >
-                          Take
-                        </button>
-                      </span>
-                    )}
+                        </>
+                      )}
+                    </span>
                   </td>
                 </tr>
               );
@@ -207,6 +229,10 @@ export function FeedItemsPage() {
           setPage(1);
         }}
       />
+
+      {detailItem !== null ? (
+        <FeedItemDetailModal item={detailItem} onClose={() => setDetailItem(null)} />
+      ) : null}
     </section>
   );
 }

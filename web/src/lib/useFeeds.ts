@@ -7,6 +7,7 @@ import {
 import {
   createFeed,
   deleteFeed,
+  getFeedItem,
   listFeedItems,
   listFeeds,
   takeFeedItem,
@@ -45,6 +46,13 @@ export function useFeedItems(filters: FeedItemsQuery) {
     queryKey: feedItemsQueryKey(filters),
     queryFn: () => listFeedItems(filters),
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useFeedItem(id: string) {
+  return useQuery({
+    queryKey: ["feed-item", id],
+    queryFn: () => getFeedItem(id),
   });
 }
 

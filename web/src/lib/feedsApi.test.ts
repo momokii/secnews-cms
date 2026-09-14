@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFeed, deleteFeed, listFeeds, updateFeed } from "./feedsApi";
+import { createFeed, deleteFeed, getFeedItem, listFeeds, updateFeed } from "./feedsApi";
 import { clearToken, setToken } from "./tokenStore";
 
 const FEED_ID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 const CREATED_FEED_ID = "9f8b7a6c-5d4e-4f3a-8b2c-1d0e9f8a7b6c";
+const ITEM_ID = "5e9f8a7b-6c5d-4e3f-8a2b-1c0d9e8f7a6b";
 
 const feedSource = {
   id: FEED_ID,
@@ -114,5 +115,37 @@ describe("FE-FEED-01: feed source CRUD request shapes", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`/api/feeds/${FEED_ID}`);
     expect(init.method).toBe("DELETE");
+  });
+
+  it("getFeedItem issues GET /feed-items/:id and parses normalized fields plus verbatim raw", async () => {
+    // Given: the detail endpoint answers with the wire shape (raw included)
+    const detail = {
+      id: ITEM_ID,
+      feedSourceId: FEED_ID,
+      guid: "g5",
+      title: "OpenSSL patch",
+      url: "https://example.com/a",
+      publishedAt: "2026-09-13T10:00:00.000Z",
+      summary: null,
+      status: "UNREVIEWED",
+      ticketId: null,
+      fetchedAt: "2026-09-14T08:00:00.000Z",
+      sourceName: "CISA Advisories",
+      raw: { title: "OpenSSL patch" },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(detail), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    // When: getFeedItem fetches the detail
+    const result = await getFeedItem(ITEM_ID);
+
+    // Then: the request is GET /api/feed-items/:id and the raw blob survives
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/feed-items/${ITEM_ID}`);
+    expect(init.method).toBe("GET");
+    expect(result).toEqual(detail);
   });
 });
