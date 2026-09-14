@@ -7,11 +7,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTicket, useTransitionTicket } from "../../lib/useTickets";
 import { AiPanel } from "./AiPanel";
 import { AuditTimeline } from "./AuditTimeline";
+import { ActivityTimeline } from "./ActivityTimeline";
 import { DeliveryActions } from "./DeliveryActions";
 import { FinalFieldsForm } from "./FinalFieldsForm";
 import { IocTable } from "./IocTable";
 import { SourcesEditor } from "./SourcesEditor";
 import { TransitionActionBar } from "./TransitionActionBar";
+import { formatTimestamp } from "../../lib/datetime";
 
 const STATUS_BADGE_CLASSES: Readonly<Record<TicketStatus, string>> = {
   OPEN: "bg-slate-100 text-slate-700",
@@ -82,7 +84,9 @@ export function TicketDetailPage() {
               <span>·</span>
               <span>{ticket.findingType}</span>
               <span>·</span>
-              <span>TLP {ticket.tlp}</span>
+               <span>TLP {ticket.tlp}</span>
+               <span>·</span>
+               <span>Created {formatTimestamp(ticket.createdAt)} WIB</span>
               {ticket.cveIds.length > 0 ? (
                 <>
                   <span>·</span>
@@ -126,6 +130,7 @@ export function TicketDetailPage() {
 
       <SourcesEditor ticketId={ticket.id} sources={ticket.sources} />
       <IocTable ticketId={ticket.id} iocs={ticket.iocs} />
+      <ActivityTimeline ticketId={ticket.id} />
       <AuditTimeline ticketId={ticket.id} />
     </div>
   );

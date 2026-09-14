@@ -8,6 +8,7 @@ import type {
   DeliveryAudit,
   Ioc,
   TicketDetail,
+  TicketActivity,
 } from "../../lib/ticketsApi";
 
 /** Shared fixtures + fetch routing for the tickets workspace tests. */
@@ -101,6 +102,21 @@ export function auditFixture(
     errorDetail: null,
     sentById: "6d7e8f90-a1b2-4455-8657-58595a5b5c5d",
     sentAt: "2026-09-14T09:00:00.000Z",
+    ...overrides,
+  };
+}
+
+export function activityFixture(
+  overrides: Partial<TicketActivity> = {},
+): TicketActivity {
+  return {
+    id: "8a9b0c1d-2e3f-4456-8677-8899aabbccdd",
+    ticketId: TICKET_ID,
+    actorId: "7e1a9c3b-5d2f-48e4-b6a8-9c0d2e4f6a8b",
+    actorName: "Editor",
+    action: "STATUS_CHANGED",
+    detail: "status OPEN→RESEARCH",
+    createdAt: "2026-09-14T09:00:00.000Z",
     ...overrides,
   };
 }

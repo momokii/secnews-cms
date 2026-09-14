@@ -7,6 +7,7 @@ import { setToken, setUser } from "../../lib/tokenStore";
 import {
   TICKET_ID,
   auditFixture,
+  activityFixture,
   iocFixture,
   jsonResponse,
   paginated,
@@ -53,6 +54,11 @@ function detailRoutes(detail = ticketDetailFixture()) {
         method === "GET" && url.includes("/delivery-audit"),
       respond: () => jsonResponse(paginated([auditFixture()])),
     },
+    {
+      match: (url: string, method: string) =>
+        method === "GET" && url.includes("/activity"),
+      respond: () => jsonResponse(paginated([activityFixture()])),
+    },
   ];
 }
 
@@ -95,6 +101,9 @@ describe("TicketDetailPage: workspace composition", () => {
     expect(screen.getByRole("cell", { name: "evil.example" })).toBeTruthy();
     // Audit timeline.
     expect(screen.getByText(/Acme SOC/)).toBeTruthy();
+    expect(screen.getByText("Activity")).toBeTruthy();
+    expect(screen.getByText("status OPEN→RESEARCH")).toBeTruthy();
+    expect(screen.getByText(/Editor/)).toBeTruthy();
   });
 
   it("shows the hard-block banner and disables Send/OTX while suggestions are pending", async () => {
