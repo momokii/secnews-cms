@@ -111,11 +111,15 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
     async (request, reply) => {
       const body = request.body;
       // Quick capture: origin MANUAL; summary defaults to an empty working
-      // summary; type-specific fields default to their Prisma empties.
+      // summary; type-specific fields default to their Prisma empties. The
+      // creator is recorded as takenBy (route 19 take semantics), so lists
+      // and the web UI show an owner for manually spawned tickets too.
+      const actorId = request.user.sub;
       const base = {
         title: body.title,
         origin: "MANUAL" as const,
         summary: body.summary ?? "",
+        takenById: actorId,
       };
       const data =
         body.findingType === "VULNERABILITY_CVE"
@@ -130,9 +134,11 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
           : body.findingType === "THREAT_CAMPAIGN"
             ? { ...base, findingType: body.findingType, threatName: body.threatName ?? null }
             : { ...base, findingType: body.findingType };
-      const actorId = request.user.sub;
       const { created } = await prisma.$transaction(async (tx) => {
-        const created = await tx.ticket.create({ data });
+        const created = await tx.ticket.create({
+          data,
+          include: { takenBy: { select: { name: true } } },
+        });
         await recordActivity(tx, {
           ticketId: created.id,
           actorId,

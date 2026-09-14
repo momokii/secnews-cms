@@ -133,6 +133,31 @@ it("AI-02: enrich proposes full rewrites including filled fields, carrying curre
     await cleanupTicket(ticketId);
   });
 
+  it("network-unreachable provider is a 502 INTERNAL naming the provider", async () => {
+    // Given: OPENAI configured but the server cannot reach the provider
+    const ticketId = await createTestTicket();
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("fetch failed");
+    });
+
+    // When: fill runs
+    const res = await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/ai/fill`,
+      headers: { authorization: editor },
+      payload: {},
+    });
+
+    // Then: 502 with an actionable message naming the provider
+    expect(res.statusCode).toBe(502);
+    const body = res.json() as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("INTERNAL");
+    expect(body.error.message).toContain("OPENAI");
+    expect(body.error.message).toContain("unreachable");
+    expect(body.error.message).toContain("check server egress");
+    await cleanupTicket(ticketId);
+  });
+
   it("fill without any configured AI provider is a 422 VALIDATION", async () => {
     // Given: no provider kind holds a key
     await prisma.integrationConfig.deleteMany({ where: { kind: { in: ["OPENAI", "ANTHROPIC", "GEMINI"] } } });

@@ -43,6 +43,40 @@ describe("ticket updated and taken-by fields", () => {
     expect(body.takenByName).toBe("C3 ADMIN");
   });
 
+  it("records the creating user as taken-by for a manually created ticket", async () => {
+    // Given: an authenticated actor posting a quick-capture manual ticket
+    const title = `manual taken-by ${Date.now()}`;
+    const response = await app.inject({
+      method: "POST",
+      url: "/tickets",
+      headers: { authorization: bearer(admin, app) },
+      payload: { title, findingType: "OTHER" },
+    });
+    const body = response.json() as { id: string; takenByName: string | null };
+    ticketIds.push(body.id);
+
+    // Then: the create response already identifies the creator
+    expect(response.statusCode).toBe(201);
+    expect(body.takenByName).toBe("C3 ADMIN");
+
+    // And: the stored ticket resolves the creator in list and detail
+    const list = await app.inject({
+      method: "GET",
+      url: `/tickets?q=${encodeURIComponent(title)}`,
+      headers: { authorization: bearer(admin, app) },
+    });
+    const listRow = (list.json() as { items: Array<{ id: string; takenByName: string | null }> })
+      .items.find((item) => item.id === body.id);
+    expect(listRow?.takenByName).toBe("C3 ADMIN");
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/tickets/${body.id}`,
+      headers: { authorization: bearer(admin, app) },
+    });
+    expect((detail.json() as { takenByName: string | null }).takenByName).toBe("C3 ADMIN");
+  });
+
   it("returns null taken-by and updatedAt for a manual ticket in the list", async () => {
     // Given: a manually-created ticket
     const ticket = await c3Ticket({ origin: "MANUAL" });

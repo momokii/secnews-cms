@@ -134,8 +134,8 @@ Schemas: `src/modules/tickets/schema.ts`. State machine + role gates:
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 21 | `GET /tickets` | ANY | `ListTicketsQuerySchema` `?q&status&origin&findingType&from&to&page&pageSize` | 200 `ListTicketsResponseSchema` (rows include `createdAt`, `updatedAt`, and `takenByName`; `takenByName` is null for manual tickets) | 400 `VALIDATION` for malformed dates or `from` after `to` |
-| 22 | `POST /tickets` | WORK | `CreateTicketBodySchema` (discriminated on findingType; only `title` required — `summary` and the type-specific structured fields are optional at create, quick-capture shape) | 201 `TicketSchema` (origin `MANUAL`, status `OPEN`; omitted structured fields default to `[]`/`null`) | |
+| 21 | `GET /tickets` | ANY | `ListTicketsQuerySchema` `?q&status&origin&findingType&from&to&page&pageSize` | 200 `ListTicketsResponseSchema` (rows include `createdAt`, `updatedAt`, and `takenByName`; `takenByName` is the creating/taking user for API-created tickets, null for rows without an owner) | 400 `VALIDATION` for malformed dates or `from` after `to` |
+| 22 | `POST /tickets` | WORK | `CreateTicketBodySchema` (discriminated on findingType; only `title` required — `summary` and the type-specific structured fields are optional at create, quick-capture shape) | 201 `TicketSchema` (origin `MANUAL`, status `OPEN`, `takenByName` = creating user; omitted structured fields default to `[]`/`null`) | |
 | 23 | `GET /tickets/:id` | ANY | — | 200 `TicketDetailSchema` (+`sources[]`, `iocs[]`, `pendingSuggestions`, `takenByName`) | |
 | 24 | `PATCH /tickets/:id` | WORK | `UpdateTicketBodySchema` | 200 `TicketSchema` | |
 | 25 | `POST /tickets/:id/transition` | gate | `TransitionBodySchema` `{to}` | 200 `TicketSchema` | 403 role gate fails; 422 `VALIDATION` illegal transition (TRN-02); 409 `PENDING_SUGGESTIONS` when `to=SENT` with PENDING suggestions |
@@ -158,8 +158,8 @@ integration config — never from the request.
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 32 | `POST /tickets/:id/ai/fill` | WORK | `{}` | 200 `AiFillResponseSchema` (strict: only missing final fields; never drafts the §10-optional `recommendations`/`references`) | |
-| 33 | `POST /tickets/:id/ai/enrich` | WORK | `{}` | 200 `AiFillResponseSchema` (full rewrite proposals) | |
+| 32 | `POST /tickets/:id/ai/fill` | WORK | `{}` | 200 `AiFillResponseSchema` (strict: only missing final fields; never drafts the §10-optional `recommendations`/`references`) | 502 `INTERNAL` envelope when the configured provider is unreachable from the server (network/DNS timeout) — message names the provider and suggests checking server egress or switching providers |
+| 33 | `POST /tickets/:id/ai/enrich` | WORK | `{}` | 200 `AiFillResponseSchema` (full rewrite proposals) | 502 `INTERNAL` envelope as #32 for an unreachable provider |
 | 34 | `GET /tickets/:id/suggestions` | WORK | `ListSuggestionsQuerySchema` `?status&page&pageSize` | 200 `ListSuggestionsResponseSchema` | |
 | 35 | `POST /tickets/:id/suggestions/:suggestionId/accept` | WORK | — | 200 `SuggestionActionResponseSchema` (value merged into final fields) | |
 | 36 | `POST /tickets/:id/suggestions/:suggestionId/reject` | WORK | — | 200 `SuggestionActionResponseSchema` | |

@@ -1,6 +1,7 @@
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { IntegrationKind, SuggestionStatus } from "../../generated/prisma/enums.js";
+import { AppError } from "../../common/errors.js";
 import { decryptSecret } from "../../lib/crypto.js";
 import { callAnthropic } from "./providers/anthropic.js";
 import { callGemini } from "./providers/gemini.js";
@@ -57,6 +58,23 @@ export type TicketWithRelations = Prisma.TicketGetPayload<{ include: { iocs: tru
 
 function unreadable(): SemanticError {
   return new SemanticError("AI provider returned an unreadable response");
+}
+
+/** Fetch-level failure: undici rejects with TypeError("fetch failed"), the
+ * real cause (ENOTFOUND/ECONNREFUSED/UND_ERR_CONNECT_TIMEOUT/…) chained. */
+function isNetworkFailure(error: unknown): boolean {
+  let current: unknown = error;
+  while (current instanceof Error) {
+    if (current instanceof TypeError) {
+      return true;
+    }
+    const code = (current as NodeJS.ErrnoException).code;
+    if (typeof code === "string" && (code.startsWith("E") || code.startsWith("UND_ERR_"))) {
+      return true;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 /** First AI provider kind (OPENAI → ANTHROPIC → GEMINI) that holds a key. */
@@ -191,7 +209,20 @@ export async function generateSuggestions(
 ): Promise<Array<{ model: string } & SuggestionDraft>> {
   const provider = await resolveProvider(db);
   const call = PROVIDERS[provider.kind];
-  const raw = await call({ ...provider.options, system: SYSTEM_PROMPT, prompt: buildPrompt(ticket, mode) });
+  let raw: string;
+  try {
+    raw = await call({ ...provider.options, system: SYSTEM_PROMPT, prompt: buildPrompt(ticket, mode) });
+  } catch (error) {
+    if (isNetworkFailure(error)) {
+      throw new AppError(
+        "INTERNAL",
+        `${provider.kind} unreachable from server (network/DNS timeout) — check server egress or use another provider`,
+        undefined,
+        502,
+      );
+    }
+    throw error;
+  }
   const fields = parseModelFields(raw);
 
   const scope = mode === "fill" ? missingFields(ticket) : [...SUGGESTIBLE_FIELDS];
