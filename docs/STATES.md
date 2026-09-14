@@ -91,7 +91,7 @@ Internal `TlpLevel` values: `CLEAR, GREEN, AMBER, RED` (ticket default `AMBER`).
 |---|---|
 | `ADMIN` | users, integrations, everything |
 | `EDITOR` | feeds, clients/channels, tickets incl. send/close |
-| `ANALYST` | view + work tickets (take, research, IOC/suggestions, AI fill); cannot send, cannot create users, cannot manage integrations |
+| `ANALYST` | view + work tickets (take, research, IOC/suggestions, AI fill); can only create ANALYST users (any other role → 403); cannot send, cannot manage integrations |
 
 Bootstrap: creates the first `ADMIN` only when user count = 0; any later
 call → HTTP 409 `CONFLICT`.
