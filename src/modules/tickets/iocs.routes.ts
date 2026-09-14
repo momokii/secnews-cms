@@ -3,6 +3,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { AppError } from "../../common/errors.js";
 import { prisma } from "../../lib/db.js";
+import { recordActivity } from "./activity.js";
 import { toIocDto } from "./mappers.js";
 import {
   CreateIocBodySchema,
@@ -46,9 +47,21 @@ export default async function ticketIocRoutes(app: FastifyInstance): Promise<voi
       if (request.body.origin !== undefined) {
         data.origin = request.body.origin;
       }
-      const created = await prisma.ioc.create({ data }).catch((err: unknown) => {
-        throw duplicateAsConflict(err, id);
-      });
+      const actorId = request.user.sub;
+      const created = await prisma
+        .$transaction(async (tx) => {
+          const created = await tx.ioc.create({ data });
+          await recordActivity(tx, {
+            ticketId: id,
+            actorId,
+            action: "IOC_ADDED",
+            detail: `${created.type} ${created.value}`,
+          });
+          return created;
+        })
+        .catch((err: unknown) => {
+          throw duplicateAsConflict(err, id);
+        });
       return reply.code(201).send(toIocDto(created));
     },
   );
@@ -85,8 +98,18 @@ export default async function ticketIocRoutes(app: FastifyInstance): Promise<voi
       if (request.body.includeInBulletin !== undefined) {
         data.includeInBulletin = request.body.includeInBulletin;
       }
-      const updated = await prisma.ioc
-        .update({ where: { id: iocId }, data })
+      const actorId = request.user.sub;
+      const updated = await prisma
+        .$transaction(async (tx) => {
+          const updated = await tx.ioc.update({ where: { id: iocId }, data });
+          await recordActivity(tx, {
+            ticketId: id,
+            actorId,
+            action: "IOC_UPDATED",
+            detail: `${updated.type} ${updated.value}`,
+          });
+          return updated;
+        })
         .catch((err: unknown) => {
           throw duplicateAsConflict(err, id);
         });
@@ -102,7 +125,23 @@ export default async function ticketIocRoutes(app: FastifyInstance): Promise<voi
     },
     async (request, reply) => {
       const { id, iocId } = request.params;
-      const removed = await prisma.ioc.deleteMany({ where: { id: iocId, ticketId: id } });
+      const existing = await prisma.ioc.findFirst({
+        where: { id: iocId, ticketId: id },
+        select: { type: true, value: true },
+      });
+      if (existing === null) {
+        throw new AppError("NOT_FOUND", `IOC ${iocId} not found on ticket ${id}`);
+      }
+      const removed = await prisma.$transaction(async (tx) => {
+        const removed = await tx.ioc.deleteMany({ where: { id: iocId, ticketId: id } });
+        await recordActivity(tx, {
+          ticketId: id,
+          actorId: request.user.sub,
+          action: "IOC_REMOVED",
+          detail: `${existing.type} ${existing.value}`,
+        });
+        return removed;
+      });
       if (removed.count === 0) {
         throw new AppError("NOT_FOUND", `IOC ${iocId} not found on ticket ${id}`);
       }
