@@ -318,12 +318,19 @@ describe("TASK-C1 auth/bootstrap/users", () => {
     expect(body1.total).toBe(dbTotal);
 
     expect(page2.statusCode).toBe(200);
-    const body2 = page2.json() as { items: Array<{ email: string }>; total: number };
+    const body2 = page2.json() as { items: Array<{ email: string; createdAt: string; updatedAt: string }>; total: number };
     expect(body2.items).toHaveLength(dbTotal - 2);
     const emails1 = (body1.items as Array<{ email: string }>).map((u) => u.email);
     expect(emails1).not.toContain(body2.items.map((u) => u.email)[0]);
     expect(page1.body).not.toContain(ADMIN.password);
     expect(page2.body).not.toContain(EDITOR.password);
+
+    // And: every listed row carries ISO createdAt and updatedAt timestamps
+    type ListedUser = { createdAt: string; updatedAt: string };
+    for (const item of [...(body1.items as ListedUser[]), ...(body2.items as ListedUser[])]) {
+      expect(new Date(item.createdAt).toISOString()).toBe(item.createdAt);
+      expect(new Date(item.updatedAt).toISOString()).toBe(item.updatedAt);
+    }
   });
 
   // USR-04 (§4) — ANALYST may create ANALYST users; omitted role → ANALYST.

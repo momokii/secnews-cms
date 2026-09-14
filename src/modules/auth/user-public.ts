@@ -3,7 +3,7 @@ import type { UserPublic } from "./schema.js";
 
 export type UserRowProjection = Pick<
   User,
-  "id" | "name" | "email" | "role" | "isActive" | "createdAt"
+  "id" | "name" | "email" | "role" | "isActive" | "createdAt" | "updatedAt"
 >;
 
 /** DB row (or authenticated projection) → API public shape. Password material
@@ -17,6 +17,7 @@ export function toPublicUser(user: UserRowProjection): UserPublic {
     role: user.role,
     active: user.isActive,
     createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
     lastLoginAt: null,
   };
 }

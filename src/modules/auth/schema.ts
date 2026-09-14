@@ -21,6 +21,7 @@ export const UserPublicSchema = z.object({
   role: RoleEnum,
   active: z.boolean(),
   createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
   lastLoginAt: z.iso.datetime().nullable(),
 });
 export type UserPublic = z.infer<typeof UserPublicSchema>;

@@ -13,6 +13,7 @@ export type AuthenticatedUser = {
   role: Role;
   isActive: boolean;
   createdAt: Date;
+  updatedAt: Date;
 };
 
 declare module "@fastify/jwt" {
@@ -42,7 +43,7 @@ async function authenticate(request: FastifyRequest): Promise<void> {
   const { sub } = request.user;
   const user = await request.server.prisma.user.findUnique({
     where: { id: sub },
-    select: { id: true, email: true, name: true, role: true, isActive: true, createdAt: true },
+    select: { id: true, email: true, name: true, role: true, isActive: true, createdAt: true, updatedAt: true },
   });
   if (user === null || !user.isActive) {
     throw new AppError("UNAUTHORIZED", "Missing or invalid token");
