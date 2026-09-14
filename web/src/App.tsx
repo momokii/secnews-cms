@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router";
+import { AccountPage } from "./pages/AccountPage";
 import { AppShell } from "./components/AppShell";
 import { RequireAuth } from "./components/RequireAuth";
 import { RoleGate } from "./components/RoleGate";
@@ -21,6 +22,7 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/bootstrap" element={<BootstrapPage />} />
         <Route element={<RequireAuth />}>
+          <Route path="/account" element={<AccountPage />} />
           <Route
             path="/feeds"
             element={

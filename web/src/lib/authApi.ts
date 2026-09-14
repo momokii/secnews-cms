@@ -39,6 +39,16 @@ export async function bootstrap(email: string, name: string, password: string): 
   return { token: data.token, user: user(data.user) };
 }
 
+/** Self-service password rotation; 204 on success. A wrong current password
+ * answers 401 without being a session expiry, so the session is kept. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiFetch(
+    "/auth/change-password",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword, newPassword }) },
+    { keepSessionOn401: true },
+  );
+}
+
 export function apiErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }

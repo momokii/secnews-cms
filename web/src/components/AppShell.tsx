@@ -4,6 +4,7 @@ import { getUser } from "../lib/tokenStore";
 const NAV_ITEMS = [
   { to: "/login", label: "Login" },
   { to: "/bootstrap", label: "Bootstrap" },
+  { to: "/account", label: "Account" },
   { to: "/feeds", label: "Feeds" },
   { to: "/feeds/items", label: "Feed items" },
   { to: "/tickets", label: "Tickets" },

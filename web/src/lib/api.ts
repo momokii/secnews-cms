@@ -32,9 +32,15 @@ export function setUnauthorizedNavigator(navigator: (path: string) => void): voi
  * - Prefixes the given path with /api (dev proxy forwards to the backend).
  * - Attaches `Authorization: Bearer <token>` from tokenStore when a token exists.
  * - On 401: clears the stored token, redirects to /login, and throws ApiError(401).
+ *   Pass `keepSessionOn401` for endpoints whose 401 is not a session expiry
+ *   (e.g. self-service change-password with a wrong current password).
  * - On other non-2xx: throws ApiError with the response status.
  */
-export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+export async function apiFetch(
+  path: string,
+  init: RequestInit = {},
+  options: { readonly keepSessionOn401?: boolean } = {},
+): Promise<Response> {
   const headers = new Headers(init.headers);
   const token = getToken();
   if (token !== null) {
@@ -44,8 +50,10 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const response = await fetch(`${API_PREFIX}${path}`, { ...init, headers });
 
   if (response.status === 401) {
-    clearToken();
-    unauthorizedNavigator(LOGIN_PATH);
+    if (options.keepSessionOn401 !== true) {
+      clearToken();
+      unauthorizedNavigator(LOGIN_PATH);
+    }
     let message = "Session expired. Please sign in again.";
     try {
       const body: unknown = await response.clone().json();
