@@ -29,6 +29,16 @@ describe("DateFilter danger styling", () => {
 });
 
 describe("DateFilter custom inputs", () => {
+  it("carries the same calendar icon on the Custom toggle button", () => {
+    // Given: the filter is rendered with no range
+    render(<DateFilter value={{}} onChange={vi.fn()} />);
+
+    // Then: the Custom button embeds an aria-hidden calendar SVG like the inputs
+    const custom = screen.getByRole("button", { name: "Custom" });
+    const icon = custom.querySelector("svg[aria-hidden='true']");
+    expect(icon).not.toBeNull();
+  });
+
   it("adorns the From and To date inputs with a calendar icon", () => {
     // Given: the custom range row is open
     render(<DateFilter value={{}} onChange={vi.fn()} />);

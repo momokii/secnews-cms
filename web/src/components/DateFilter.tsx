@@ -83,8 +83,9 @@ export function DateFilter({ value, onChange }: DateFilterProps) {
         type="button"
         aria-pressed={customOpen}
         onClick={() => setCustomOpen((open) => !open)}
-        className={`rounded-md border px-3 py-2 text-sm ${customOpen ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-200 text-slate-700 hover:bg-slate-100"}`}
+        className={`flex items-center gap-1 rounded-md border px-3 py-2 text-sm ${customOpen ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-200 text-slate-700 hover:bg-slate-100"}`}
       >
+        <CalendarIcon />
         Custom
       </button>
       {value.from !== undefined || value.to !== undefined ? (
