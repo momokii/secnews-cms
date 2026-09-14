@@ -139,6 +139,7 @@ Schemas: `src/modules/tickets/schema.ts`. State machine + role gates:
 | 29 | `POST /tickets/:id/iocs` | WORK | `CreateIocBodySchema` | 201 `IocSchema` | |
 | 30 | `PATCH /tickets/:id/iocs/:iocId` | WORK | `UpdateIocBodySchema` | 200 `IocSchema` | |
 | 31 | `DELETE /tickets/:id/iocs/:iocId` | WORK | — | 204 | |
+| 31a | `GET /tickets/:id/activity` | ANY | `?page&pageSize` | 200 `paginated(TicketActivitySchema)` (newest first, actor name joined) | |
 
 Transition role gate (`to` → roles): `RESEARCH`,`READY` → WORK;
 `SENT`,`CLOSED` → MGR. `to=CLOSED` is legal from `OPEN|RESEARCH|READY`
