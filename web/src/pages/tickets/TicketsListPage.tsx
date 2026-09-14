@@ -10,6 +10,7 @@ import {
   type TicketStatus,
 } from "../../lib/ticketsApi";
 import { useTickets } from "../../lib/useTickets";
+import { formatTimestamp } from "../../lib/datetime";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -175,7 +176,7 @@ export function TicketsListPage() {
                 <td className="py-2 pr-4 text-slate-500">{ticket.findingType}</td>
                 <td className="py-2 pr-4 text-slate-500">{ticket.tlp}</td>
                 <td className="py-2 text-slate-500">
-                  {new Date(ticket.createdAt).toLocaleDateString()}
+                  {formatTimestamp(ticket.createdAt)}
                 </td>
               </tr>
             ))}
