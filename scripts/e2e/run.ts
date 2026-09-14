@@ -10,7 +10,10 @@ import { clearState } from "./lib.js";
  * E2E runner (npm run test:e2e): guards to the dev stack, truncates every
  * table (fresh DB per run), spawns the transport-stubbed server, then runs
  * s1..s5 sequentially — each as its own process whose exit code must be 0.
- * Run is fail-fast; the server log is surfaced when anything fails.
+ * Run is fail-fast; the server log is surfaced when anything fails. The DB is
+ * truncated again on every exit path so suite residue (e.g. S5's active
+ * channels, which the unit suite resolves globally via {all:true}) never
+ * leaks into a later `npm test`.
  */
 
 const SCRIPTS = ["s1-happy.ts", "s2-block.ts", "s3-inactive.ts", "s4-rbac.ts", "s5-delivery-otx.ts"];
@@ -142,6 +145,8 @@ async function main(): Promise<number> {
   } finally {
     await stopServer(server);
     clearState();
+    console.log("[run] cleaning dev database …");
+    await truncateAll();
     await prisma.$disconnect();
   }
 
