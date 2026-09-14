@@ -45,12 +45,14 @@ describe("FE-ITEM-01: feed item filters drive the queryKey and refetch", () => {
       "feed-items",
       "UNREVIEWED",
       null,
+      null,
+      null,
       1,
       20,
     ]);
     expect(
       feedItemsQueryKey({ status: "VIEWED", q: "openssl", page: 2, pageSize: 50 }),
-    ).toEqual(["feed-items", "VIEWED", "openssl", 2, 50]);
+    ).toEqual(["feed-items", "VIEWED", "openssl", null, null, 2, 50]);
   });
 
   it("refetches with a new query string when status, q, or page change", async () => {
