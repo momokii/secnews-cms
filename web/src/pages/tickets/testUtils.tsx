@@ -89,17 +89,17 @@ export function auditFixture(
   overrides: Partial<DeliveryAudit> = {},
 ): DeliveryAudit {
   return {
-    id: 1,
-    ticketId: 10,
-    channelId: 3,
+    id: "4a5b6c7d-8e9f-4011-8213-141516171819",
+    ticketId: TICKET_ID,
+    channelId: "3c4d5e6f-7081-4233-8435-363738394041",
     channelType: "TELEGRAM",
-    clientId: 2,
+    clientId: "5c6d7e8f-90a1-4344-8546-4748494a4b4c",
     clientName: "Acme SOC",
     target: "chat:-100200",
     payload: "Bulletin body for CVE-2026-1234",
     status: "SENT",
     errorDetail: null,
-    sentById: 1,
+    sentById: "6d7e8f90-a1b2-4455-8657-58595a5b5c5d",
     sentAt: "2026-09-14T09:00:00.000Z",
     ...overrides,
   };

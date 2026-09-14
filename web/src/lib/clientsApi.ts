@@ -13,7 +13,7 @@ export interface Paginated<T> {
 }
 
 export interface Client {
-  id: number;
+  id: string;
   name: string;
   active: boolean;
   createdAt: string;
@@ -29,8 +29,8 @@ export type ChannelType = "WHATSAPP" | "TELEGRAM" | "EMAIL";
 export type Channel =
   | {
       type: "WHATSAPP";
-      id: number;
-      clientId: number;
+      id: string;
+      clientId: string;
       chatId: string;
       active: boolean;
       createdAt: string;
@@ -38,8 +38,8 @@ export type Channel =
     }
   | {
       type: "TELEGRAM";
-      id: number;
-      clientId: number;
+      id: string;
+      clientId: string;
       chatId: string;
       /** Never the raw token — masked form like "123456:AA…x9Z". */
       tokenMasked: string;
@@ -50,8 +50,8 @@ export type Channel =
     }
   | {
       type: "EMAIL";
-      id: number;
-      clientId: number;
+      id: string;
+      clientId: string;
       bcc: string[];
       active: boolean;
       createdAt: string;
@@ -95,7 +95,7 @@ export async function createClient(body: ClientInput): Promise<Client> {
 }
 
 export async function updateClient(
-  id: number,
+  id: string,
   patch: ClientPatch,
 ): Promise<Client> {
   const response = await apiFetch(`/clients/${id}`, {
@@ -106,12 +106,12 @@ export async function updateClient(
   return (await response.json()) as Client;
 }
 
-export async function deleteClient(id: number): Promise<void> {
+export async function deleteClient(id: string): Promise<void> {
   await apiFetch(`/clients/${id}`, { method: "DELETE" });
 }
 
 export async function createChannel(
-  clientId: number,
+  clientId: string,
   body: CreateChannelBody,
 ): Promise<Channel> {
   const response = await apiFetch(`/clients/${clientId}/channels`, {
@@ -123,7 +123,7 @@ export async function createChannel(
 }
 
 export async function updateChannel(
-  id: number,
+  id: string,
   patch: ChannelPatch,
 ): Promise<Channel> {
   const response = await apiFetch(`/channels/${id}`, {
@@ -134,6 +134,6 @@ export async function updateChannel(
   return (await response.json()) as Channel;
 }
 
-export async function deleteChannel(id: number): Promise<void> {
+export async function deleteChannel(id: string): Promise<void> {
   await apiFetch(`/channels/${id}`, { method: "DELETE" });
 }

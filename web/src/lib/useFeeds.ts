@@ -58,7 +58,7 @@ export function useCreateFeed() {
 export function useUpdateFeed() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, patch }: { id: number; patch: FeedSourcePatch }) =>
+    mutationFn: ({ id, patch }: { id: string; patch: FeedSourcePatch }) =>
       updateFeed(id, patch),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["feeds"] });
@@ -69,7 +69,7 @@ export function useUpdateFeed() {
 export function useDeleteFeed() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => deleteFeed(id),
+    mutationFn: (id: string) => deleteFeed(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["feeds"] });
     },
@@ -79,7 +79,7 @@ export function useDeleteFeed() {
 export function useViewFeedItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => viewFeedItem(id),
+    mutationFn: (id: string) => viewFeedItem(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["feed-items"] });
     },
@@ -89,7 +89,7 @@ export function useViewFeedItem() {
 export function useTakeFeedItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => takeFeedItem(id),
+    mutationFn: (id: string) => takeFeedItem(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["feed-items"] });
     },

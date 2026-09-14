@@ -7,20 +7,24 @@ import { setToken } from "../lib/tokenStore";
 import type { Channel, Client } from "../lib/clientsApi";
 
 const acme: Client = {
-  id: 3,
+  id: "b3c9d1e0-77aa-4c01-9d02-3a5b7c9d0001",
   name: "Acme Corp",
   active: true,
   createdAt: "2026-09-01T09:00:00.000Z",
   updatedAt: "2026-09-01T09:00:00.000Z",
 };
 
+const TELEGRAM_CHANNEL_ID = "a9b8c7d6-5e4f-4321-8765-ba0987654321";
+const WHATSAPP_CHANNEL_ID = "1a2b3c4d-5e6f-4789-9abc-def012345678";
+const EMAIL_CHANNEL_ID = "0f1e2d3c-4b5a-4678-9abc-def012345679";
+
 function telegramChannel(
   overrides: Partial<Extract<Channel, { type: "TELEGRAM" }>> = {},
 ): Channel {
   return {
     type: "TELEGRAM",
-    id: 9,
-    clientId: 3,
+    id: TELEGRAM_CHANNEL_ID,
+    clientId: acme.id,
     chatId: "@secops",
     tokenMasked: "111222:AA…x9Z",
     hasToken: true,
@@ -34,8 +38,8 @@ function telegramChannel(
 function whatsappChannel(chatId: string): Channel {
   return {
     type: "WHATSAPP",
-    id: 11,
-    clientId: 3,
+    id: WHATSAPP_CHANNEL_ID,
+    clientId: acme.id,
     chatId,
     active: true,
     createdAt: "2026-09-14T08:00:00.000Z",
@@ -46,8 +50,8 @@ function whatsappChannel(chatId: string): Channel {
 function emailChannel(bcc: string[]): Channel {
   return {
     type: "EMAIL",
-    id: 12,
-    clientId: 3,
+    id: EMAIL_CHANNEL_ID,
+    clientId: acme.id,
     bcc,
     active: true,
     createdAt: "2026-09-14T08:00:00.000Z",
@@ -142,7 +146,7 @@ describe("FE-CHN-01: channel create sends the per-type discriminated body", () =
           clientsRoute(),
           {
             match: (url, method) =>
-              method === "POST" && url === "/api/clients/3/channels",
+              method === "POST" && url === `/api/clients/${acme.id}/channels`,
             respond: (init) => {
               const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
               const channel =
@@ -195,7 +199,7 @@ describe("FE-CHN-01: channel create sends the per-type discriminated body", () =
 
     // Then: each create body is exactly the discriminated contract shape (#44)
     const posts = calls.filter((c) => c.method === "POST");
-    expect(posts[0].url).toBe("/api/clients/3/channels");
+    expect(posts[0].url).toBe(`/api/clients/${acme.id}/channels`);
     expect(posts[0].body).toEqual({ type: "WHATSAPP", chatId: "12025550123" });
     expect(posts[1].body).toEqual({
       type: "TELEGRAM",
@@ -220,7 +224,7 @@ describe("FE-CHN-02: channel active toggle PATCHes only {active}", () => {
   });
 
   it("flips a channel to inactive via PATCH /channels/:id and renders the new state", async () => {
-    // Given: Acme's panel holds one active Telegram channel (id 9)
+    // Given: Acme's panel holds one active Telegram channel
     setToken("test-token");
     const calls: RecordedCall[] = [];
     vi.stubGlobal(
@@ -230,12 +234,12 @@ describe("FE-CHN-02: channel active toggle PATCHes only {active}", () => {
           clientsRoute(),
           {
             match: (url, method) =>
-              method === "POST" && url === "/api/clients/3/channels",
+              method === "POST" && url === `/api/clients/${acme.id}/channels`,
             respond: () =>
               new Response(JSON.stringify(telegramChannel()), { status: 201 }),
           },
           {
-            match: (url, method) => method === "PATCH" && url === "/api/channels/9",
+            match: (url, method) => method === "PATCH" && url === `/api/channels/${TELEGRAM_CHANNEL_ID}`,
             respond: () =>
               new Response(JSON.stringify(telegramChannel({ active: false })), {
                 status: 200,
@@ -267,11 +271,11 @@ describe("FE-CHN-02: channel active toggle PATCHes only {active}", () => {
     expect(checkbox).not.toBeNull();
     fireEvent.click(checkbox as Element);
 
-    // Then: PATCH /channels/9 carries exactly {active:false} — no token echo
+    // Then: the channel PATCH carries exactly {active:false} — no token echo
     await waitFor(() => {
       const patches = calls.filter((c) => c.method === "PATCH");
       expect(patches).toHaveLength(1);
-      expect(patches[0].url).toBe("/api/channels/9");
+      expect(patches[0].url).toBe(`/api/channels/${TELEGRAM_CHANNEL_ID}`);
     });
     const patch = calls.find((c) => c.method === "PATCH");
     expect(patch?.body).toEqual({ active: false });

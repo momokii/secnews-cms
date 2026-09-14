@@ -59,7 +59,7 @@ function detailRoutes(detail = ticketDetailFixture()) {
 describe("TicketDetailPage: workspace composition", () => {
   it("renders every workspace panel against the live detail shape", async () => {
     setToken("test-token");
-    setUser({ id: 1, email: "e@example.com", name: "Editor", role: "EDITOR" });
+    setUser({ id: "7e1a9c3b-5d2f-48e4-b6a8-9c0d2e4f6a8b", email: "e@example.com", name: "Editor", role: "EDITOR" });
     vi.stubGlobal(
       "fetch",
       routeFetch(
@@ -99,7 +99,7 @@ describe("TicketDetailPage: workspace composition", () => {
 
   it("shows the hard-block banner and disables Send/OTX while suggestions are pending", async () => {
     setToken("test-token");
-    setUser({ id: 1, email: "e@example.com", name: "Editor", role: "EDITOR" });
+    setUser({ id: "7e1a9c3b-5d2f-48e4-b6a8-9c0d2e4f6a8b", email: "e@example.com", name: "Editor", role: "EDITOR" });
     vi.stubGlobal(
       "fetch",
       routeFetch(detailRoutes(ticketDetailFixture({ pendingSuggestions: 1 }))),
@@ -118,7 +118,7 @@ describe("TicketDetailPage: workspace composition", () => {
 
   it("raises the banner and disables Send when OTX push returns 409", async () => {
     setToken("test-token");
-    setUser({ id: 1, email: "e@example.com", name: "Editor", role: "EDITOR" });
+    setUser({ id: "7e1a9c3b-5d2f-48e4-b6a8-9c0d2e4f6a8b", email: "e@example.com", name: "Editor", role: "EDITOR" });
     const fetchMock = routeFetch([
       ...detailRoutes(),
       {
@@ -145,7 +145,7 @@ describe("TicketDetailPage: workspace composition", () => {
 
   it("POSTs the transition when an action-bar button is clicked", async () => {
     setToken("test-token");
-    setUser({ id: 1, email: "e@example.com", name: "Editor", role: "EDITOR" });
+    setUser({ id: "7e1a9c3b-5d2f-48e4-b6a8-9c0d2e4f6a8b", email: "e@example.com", name: "Editor", role: "EDITOR" });
     const fetchMock = routeFetch([
       ...detailRoutes(),
       {

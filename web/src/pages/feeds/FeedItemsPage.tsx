@@ -15,7 +15,7 @@ export function FeedItemsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [takenTickets, setTakenTickets] = useState<Record<number, TicketSummary>>(
+  const [takenTickets, setTakenTickets] = useState<Record<string, TicketSummary>>(
     {},
   );
 
@@ -38,7 +38,7 @@ export function FeedItemsPage() {
   const pageSize = itemsQuery.data?.pageSize ?? 20;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  const handleTake = (id: number): void => {
+  const handleTake = (id: string): void => {
     takeItem.mutate(id, {
       onSuccess: (ticket) => {
         setTakenTickets((current) => ({ ...current, [id]: ticket }));

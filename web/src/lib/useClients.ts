@@ -37,7 +37,7 @@ export function useCreateClient() {
 export function useUpdateClient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, patch }: { id: number; patch: ClientPatch }) =>
+    mutationFn: ({ id, patch }: { id: string; patch: ClientPatch }) =>
       updateClient(id, patch),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
@@ -48,7 +48,7 @@ export function useUpdateClient() {
 export function useDeleteClient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => deleteClient(id),
+    mutationFn: (id: string) => deleteClient(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
     },
@@ -57,7 +57,7 @@ export function useDeleteClient() {
 
 /** Channel mutations return the wire Channel; the panel folds it into its
  * local list via onSuccess handlers passed at mutate() call sites. */
-export function useCreateChannel(clientId: number) {
+export function useCreateChannel(clientId: string) {
   return useMutation({
     mutationFn: (body: CreateChannelBody) => createChannel(clientId, body),
   });
@@ -65,13 +65,13 @@ export function useCreateChannel(clientId: number) {
 
 export function useUpdateChannel() {
   return useMutation({
-    mutationFn: ({ id, patch }: { id: number; patch: ChannelPatch }) =>
+    mutationFn: ({ id, patch }: { id: string; patch: ChannelPatch }) =>
       updateChannel(id, patch),
   });
 }
 
 export function useDeleteChannel() {
   return useMutation({
-    mutationFn: (id: number) => deleteChannel(id),
+    mutationFn: (id: string) => deleteChannel(id),
   });
 }

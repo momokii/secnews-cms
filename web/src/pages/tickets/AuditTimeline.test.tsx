@@ -30,7 +30,7 @@ describe("FE-AUD-01: delivery audit timeline", () => {
               paginated([
                 auditFixture(),
                 auditFixture({
-                  id: 2,
+                  id: "2b3c4d5e-6f70-4122-8324-252627282930",
                   channelType: "EMAIL",
                   clientName: "Globex",
                   target: "bcc:soc@globex.example",

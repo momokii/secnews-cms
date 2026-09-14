@@ -4,7 +4,7 @@ const USER_KEY = "secnews_user";
 export const USER_ROLES = ["ADMIN", "EDITOR", "ANALYST"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 export type SessionUser = {
-  readonly id: number;
+  readonly id: string;
   readonly email: string;
   readonly name: string;
   readonly role: UserRole;
@@ -38,7 +38,7 @@ export function getUser(): SessionUser | null {
     if (typeof parsed !== "object" || parsed === null) return null;
     const record = parsed as Record<string, unknown>;
     if (
-      typeof record.id !== "number" ||
+      typeof record.id !== "string" ||
       typeof record.email !== "string" ||
       typeof record.name !== "string" ||
       typeof record.role !== "string" ||

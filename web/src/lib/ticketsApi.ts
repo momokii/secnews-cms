@@ -209,7 +209,7 @@ export async function rejectSuggestion(
 /** Send — `all` resolves to currently-ACTIVE channels only (S3). */
 export async function sendTicket(
   id: string,
-  body: { channelIds?: number[]; all?: boolean },
+  body: { channelIds?: string[]; all?: boolean },
 ): Promise<SendResponse> {
   const response = await apiFetch(`/tickets/${id}/send`, jsonInit("POST", body));
   return readJson<SendResponse>(response);

@@ -27,10 +27,10 @@ describe("FE-USR-01: users administration", () => {
     setToken("admin-token");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).startsWith("/api/users?") && (init?.method ?? "GET") === "GET") {
-        return new Response(JSON.stringify({ items: [{ id: 1, email: "admin@example.com", name: "Admin", role: "ADMIN" }], total: 1, page: 1, pageSize: 20 }), { status: 200 });
+        return new Response(JSON.stringify({ items: [{ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" }], total: 1, page: 1, pageSize: 20 }), { status: 200 });
       }
       if (String(input) === "/api/users" && init?.method === "POST") {
-        return new Response(JSON.stringify({ id: 2, email: "analyst@example.com", name: "Analyst", role: "ANALYST" }), { status: 201 });
+        return new Response(JSON.stringify({ id: "8d2f4b6a-1e3c-49f7-a5d9-2b4c6e8f0a1d", email: "analyst@example.com", name: "Analyst", role: "ANALYST" }), { status: 201 });
       }
       throw new Error(`Unexpected request ${String(input)}`);
     });

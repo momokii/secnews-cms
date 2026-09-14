@@ -1,7 +1,7 @@
 /**
  * Wire types for the ticket workflow (contract #21-36, #47-48, #52).
- * Shapes mirror src/modules/{tickets,ai,delivery,otx}/schema.ts — ticket ids are
- * uuid strings; client/channel/delivery ids are numeric.
+ * Shapes mirror src/modules/{tickets,ai,delivery,otx}/schema.ts — every entity
+ * id is a uuid string (schema.prisma: String @id @default(uuid()) on all models).
  * Fetch functions live in ticketsApi.ts; this file is the pure contract mirror.
  */
 
@@ -117,18 +117,18 @@ export interface AiSuggestion {
 }
 
 export interface DeliveryAudit {
-  id: number;
-  ticketId: number;
-  channelId: number;
+  id: string;
+  ticketId: string;
+  channelId: string;
   channelType: ChannelType;
-  clientId: number;
+  clientId: string;
   clientName: string;
   target: string;
   /** Exact message body sent — compliance requirement. */
   payload: string;
   status: DeliveryStatus;
   errorDetail: string | null;
-  sentById: number;
+  sentById: string;
   sentAt: string;
 }
 

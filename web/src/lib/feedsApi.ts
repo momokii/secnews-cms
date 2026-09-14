@@ -10,7 +10,7 @@ export interface Paginated<T> {
 }
 
 export interface FeedSource {
-  id: number;
+  id: string;
   name: string;
   url: string;
   active: boolean;
@@ -30,8 +30,8 @@ export type FeedSourcePatch = Partial<FeedSourceInput>;
 export type FeedItemStatus = "UNREVIEWED" | "VIEWED" | "TAKEN";
 
 export interface FeedItem {
-  id: number;
-  feedSourceId: number;
+  id: string;
+  feedSourceId: string;
   guid: string;
   title: string;
   url: string;
@@ -39,13 +39,13 @@ export interface FeedItem {
   summary: string | null;
   status: FeedItemStatus;
   /** Set when TAKEN — back-reference to the spawned ticket. */
-  ticketId: number | null;
+  ticketId: string | null;
   fetchedAt: string;
 }
 
 export interface FeedItemsQuery {
   status?: FeedItemStatus;
-  feedSourceId?: number;
+  feedSourceId?: string;
   q?: string;
   page?: number;
   pageSize?: number;
@@ -53,7 +53,7 @@ export interface FeedItemsQuery {
 
 /** Fields the triage UI consumes from the 201 ticket returned by take. */
 export interface TicketSummary {
-  id: number;
+  id: string;
   title: string;
 }
 
@@ -100,7 +100,7 @@ export async function createFeed(body: FeedSourceInput): Promise<FeedSource> {
 }
 
 export async function updateFeed(
-  id: number,
+  id: string,
   patch: FeedSourcePatch,
 ): Promise<FeedSource> {
   const response = await apiFetch(`/feeds/${id}`, {
@@ -111,7 +111,7 @@ export async function updateFeed(
   return readJson<FeedSource>(response);
 }
 
-export async function deleteFeed(id: number): Promise<void> {
+export async function deleteFeed(id: string): Promise<void> {
   await apiFetch(`/feeds/${id}`, { method: "DELETE" });
 }
 
@@ -132,7 +132,7 @@ export async function listFeedItems(
 }
 
 /** POST /feed-items/:id/view — UNREVIEWED -> VIEWED (409 when already TAKEN). */
-export async function viewFeedItem(id: number): Promise<FeedItem> {
+export async function viewFeedItem(id: string): Promise<FeedItem> {
   const response = await apiFetch(`/feed-items/${id}/view`, {
     method: "POST",
   });
@@ -140,7 +140,7 @@ export async function viewFeedItem(id: number): Promise<FeedItem> {
 }
 
 /** POST /feed-items/:id/take — item -> TAKEN, returns the spawned ticket. */
-export async function takeFeedItem(id: number): Promise<TicketSummary> {
+export async function takeFeedItem(id: string): Promise<TicketSummary> {
   const response = await apiFetch(`/feed-items/${id}/take`, {
     method: "POST",
   });

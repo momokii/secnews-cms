@@ -45,7 +45,7 @@ export async function putBulletinTemplate(
 /** POST /tickets/:id/bulletin/preview — renders the exact defanged body
  * (422 VALIDATION when the ticket misses required final fields). */
 export async function previewBulletin(
-  ticketId: number,
+  ticketId: string,
 ): Promise<BulletinPreview> {
   const response = await apiFetch(`/tickets/${ticketId}/bulletin/preview`, {
     method: "POST",

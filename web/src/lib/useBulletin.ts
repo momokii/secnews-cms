@@ -33,7 +33,7 @@ export function useSaveBulletinTemplate() {
 
 export function useBulletinPreview() {
   return useMutation({
-    mutationFn: (ticketId: number) => previewBulletin(ticketId),
+    mutationFn: (ticketId: string) => previewBulletin(ticketId),
   });
 }
 

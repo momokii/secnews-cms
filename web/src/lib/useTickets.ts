@@ -186,7 +186,7 @@ export function useSendTicket() {
       body,
     }: {
       id: string;
-      body: { channelIds?: number[]; all?: boolean };
+      body: { channelIds?: string[]; all?: boolean };
     }): Promise<SendResponse> => sendTicket(id, body),
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ["ticket", id] });

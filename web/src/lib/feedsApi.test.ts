@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFeed, deleteFeed, listFeeds, updateFeed } from "./feedsApi";
 import { clearToken, setToken } from "./tokenStore";
 
+const FEED_ID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+const CREATED_FEED_ID = "9f8b7a6c-5d4e-4f3a-8b2c-1d0e9f8a7b6c";
+
 const feedSource = {
-  id: 1,
+  id: FEED_ID,
   name: "Krebs on Security",
   url: "https://krebsonsecurity.com/feed/",
   active: true,
@@ -56,7 +59,7 @@ describe("FE-FEED-01: feed source CRUD request shapes", () => {
       active: true,
     };
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ...feedSource, ...body, id: 9 }), {
+      new Response(JSON.stringify({ ...feedSource, ...body, id: CREATED_FEED_ID }), {
         status: 201,
       }),
     );
@@ -71,7 +74,7 @@ describe("FE-FEED-01: feed source CRUD request shapes", () => {
     expect(url).toBe("/api/feeds");
     expect(init.method).toBe("POST");
     expect(init.body).toBe(JSON.stringify(body));
-    expect(result).toEqual({ ...feedSource, ...body, id: 9 });
+    expect(result).toEqual({ ...feedSource, ...body, id: CREATED_FEED_ID });
   });
 
   it("updateFeed PATCHes only the provided fields to /feeds/:id", async () => {
@@ -84,13 +87,13 @@ describe("FE-FEED-01: feed source CRUD request shapes", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    // When: updateFeed toggles active on feed 1
-    const result = await updateFeed(1, patch);
+    // When: updateFeed toggles active on the feed
+    const result = await updateFeed(FEED_ID, patch);
 
-    // Then: the request is PATCH /api/feeds/1 carrying exactly the patch
+    // Then: the request is PATCH /api/feeds/:id carrying exactly the patch
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/feeds/1");
+    expect(url).toBe(`/api/feeds/${FEED_ID}`);
     expect(init.method).toBe("PATCH");
     expect(init.body).toBe(JSON.stringify(patch));
     expect(result).toEqual({ ...feedSource, active: false });
@@ -103,13 +106,13 @@ describe("FE-FEED-01: feed source CRUD request shapes", () => {
       .mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    // When: deleteFeed removes feed 1
-    await expect(deleteFeed(1)).resolves.toBeUndefined();
+    // When: deleteFeed removes the feed
+    await expect(deleteFeed(FEED_ID)).resolves.toBeUndefined();
 
-    // Then: the request is DELETE /api/feeds/1
+    // Then: the request is DELETE /api/feeds/:id
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/feeds/1");
+    expect(url).toBe(`/api/feeds/${FEED_ID}`);
     expect(init.method).toBe("DELETE");
   });
 });

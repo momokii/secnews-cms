@@ -15,7 +15,7 @@ function record(value: unknown): Record<string, unknown> {
 
 function user(value: unknown): SessionUser {
   const data = record(value);
-  if (typeof data.id !== "number" || typeof data.email !== "string" || typeof data.name !== "string" || typeof data.role !== "string") throw new Error("Invalid user response");
+  if (typeof data.id !== "string" || typeof data.email !== "string" || typeof data.name !== "string" || typeof data.role !== "string") throw new Error("Invalid user response");
   return { id: data.id, email: data.email, name: data.name, role: data.role as SessionUser["role"] };
 }
 

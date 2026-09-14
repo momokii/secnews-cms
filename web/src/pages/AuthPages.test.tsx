@@ -28,7 +28,7 @@ describe("FE-AUTH-01: login", () => {
         new Response(
           JSON.stringify({
             token: "jwt-token",
-            user: { id: 1, email: "admin@example.com", name: "Admin", role: "ADMIN" },
+            user: { id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" },
           }),
           { status: 200 },
         ),

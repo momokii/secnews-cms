@@ -196,8 +196,12 @@ describe("ticketsApi: delivery", () => {
 
   it("POSTs explicit channelIds to /tickets/:id/send", async () => {
     const fetchMock = stubFetch();
-    await sendTicket(TICKET_ID, { channelIds: [1, 2] });
-    expect(lastCall(fetchMock).init.body).toBe(JSON.stringify({ channelIds: [1, 2] }));
+    const channelIds = [
+      "11aa22bb-33cc-44dd-85ee-66ff77008899",
+      "99aa88bb-77cc-46dd-a5ee-44ff33221100",
+    ];
+    await sendTicket(TICKET_ID, { channelIds });
+    expect(lastCall(fetchMock).init.body).toBe(JSON.stringify({ channelIds }));
   });
 
   it("GETs /tickets/:id/delivery-audit", async () => {

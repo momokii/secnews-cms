@@ -25,8 +25,8 @@ export function BulletinPage() {
   const serverTemplate = templateQuery.data?.template ?? "";
   const editorValue = draft ?? serverTemplate;
 
-  const ticketId = Number.parseInt(ticketIdInput, 10);
-  const ticketIdIsValid = Number.isInteger(ticketId) && ticketId > 0;
+  const ticketId = ticketIdInput.trim();
+  const ticketIdIsValid = ticketId !== "";
 
   const rendered = preview.data?.rendered ?? "";
 
@@ -95,12 +95,11 @@ export function BulletinPage() {
         <div className="mt-2 flex items-start gap-2">
           <input
             aria-label="Ticket ID"
-            type="number"
-            min={1}
+            type="text"
             value={ticketIdInput}
             onChange={(event) => setTicketIdInput(event.target.value)}
-            placeholder="Ticket ID"
-            className="w-32 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
+            placeholder="Ticket ID (uuid)"
+            className="w-64 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
           />
           <button
             type="button"

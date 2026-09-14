@@ -12,6 +12,8 @@ const defaultTemplate = {
 const defangedRendered =
   "# VPN 0day\n\nhxxp://203[.]0[.]113[.]7 and admin[.]evil[.]example";
 
+const PREVIEW_TICKET_ID = "c528cea2-f3e7-4673-8def-37ac36981adf";
+
 function renderPage(): void {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -63,23 +65,24 @@ describe("FE-BUL-01: preview renders the defanged bulletin body", () => {
       },
       {
         match: (url, method) =>
-          method === "POST" && url === "/api/tickets/12/bulletin/preview",
+          method === "POST" &&
+          url === `/api/tickets/${PREVIEW_TICKET_ID}/bulletin/preview`,
         respond: () => jsonResponse({ rendered: defangedRendered }),
       },
     ]);
     vi.stubGlobal("fetch", fetchMock);
 
-    // When: the admin previews ticket 12
+    // When: the admin previews the ticket by its uuid
     renderPage();
     fireEvent.change(await screen.findByLabelText("Ticket ID"), {
-      target: { value: "12" },
+      target: { value: PREVIEW_TICKET_ID },
     });
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
 
     // Then: the preview endpoint is hit and the defanged body renders
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/tickets/12/bulletin/preview",
+        `/api/tickets/${PREVIEW_TICKET_ID}/bulletin/preview`,
         expect.objectContaining({ method: "POST" }),
       ),
     );
@@ -97,7 +100,7 @@ describe("FE-BUL-02: save persists the template and refetches", () => {
   it("PUTs the edited template then refetches GET /bulletin/template", async () => {
     // Given: an ADMIN session and the server holding template v1
     setToken("test-token");
-    setUser({ id: 1, email: "a@b.c", name: "Admin", role: "ADMIN" });
+    setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "a@b.c", name: "Admin", role: "ADMIN" });
     let getTemplateCalls = 0;
     const fetchMock = routeFetch([
       {

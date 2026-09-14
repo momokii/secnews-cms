@@ -5,9 +5,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FeedItemsPage } from "./FeedItemsPage";
 import { setToken } from "../../lib/tokenStore";
 
+const ITEM_ID = "5e9f8a7b-6c5d-4e3f-8a2b-1c0d9e8f7a6b";
+const TAKEN_TICKET_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+
 const unreviewedItem = {
-  id: 5,
-  feedSourceId: 1,
+  id: ITEM_ID,
+  feedSourceId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
   guid: "g5",
   title: "OpenSSL patch",
   url: "https://example.com/a",
@@ -62,7 +65,7 @@ describe("FE-ITEM-02: take action spawns a ticket link", () => {
   });
 
   it("POSTs /feed-items/:id/take on Take and renders a link to the spawned ticket", async () => {
-    // Given: the triage list shows an UNREVIEWED item and take returns ticket 7
+    // Given: the triage list shows an UNREVIEWED item and take returns the spawned ticket
     setToken("test-token");
     const fetchMock = routeFetch([
       {
@@ -72,9 +75,9 @@ describe("FE-ITEM-02: take action spawns a ticket link", () => {
       },
       {
         match: (url, method) =>
-          method === "POST" && url === "/api/feed-items/5/take",
+          method === "POST" && url === `/api/feed-items/${ITEM_ID}/take`,
         respond: () =>
-          new Response(JSON.stringify({ id: 7, title: "OpenSSL patch" }), {
+          new Response(JSON.stringify({ id: TAKEN_TICKET_ID, title: "OpenSSL patch" }), {
             status: 201,
           }),
       },
@@ -85,15 +88,15 @@ describe("FE-ITEM-02: take action spawns a ticket link", () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Take" }));
 
-    // Then: the take mutation fires and the row links to /tickets/7
+    // Then: the take mutation fires and the row links to the spawned ticket
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/feed-items/5/take",
+        `/api/feed-items/${ITEM_ID}/take`,
         expect.objectContaining({ method: "POST" }),
       ),
     );
-    const ticketLink = await screen.findByRole("link", { name: "Ticket #7" });
-    expect(ticketLink.getAttribute("href")).toBe("/tickets/7");
+    const ticketLink = await screen.findByRole("link", { name: `Ticket #${TAKEN_TICKET_ID}` });
+    expect(ticketLink.getAttribute("href")).toBe(`/tickets/${TAKEN_TICKET_ID}`);
   });
 
   it("coalesces rapid keystrokes into one debounced q request", async () => {

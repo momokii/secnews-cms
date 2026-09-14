@@ -17,9 +17,11 @@ function createWrapper(): (props: { children: ReactNode }) => ReactNode {
   };
 }
 
+const ITEM_ID = "5e9f8a7b-6c5d-4e3f-8a2b-1c0d9e8f7a6b";
+
 const itemA = {
-  id: 5,
-  feedSourceId: 1,
+  id: ITEM_ID,
+  feedSourceId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
   guid: "g5",
   title: "OpenSSL patch",
   url: "https://example.com/a",
@@ -119,7 +121,7 @@ describe("FE-ITEM-01: feed item filters drive the queryKey and refetch", () => {
     await waitFor(() => expect(result.current.isPlaceholderData).toBe(true));
 
     // Then: page 1 rows stay on screen while page 2 fetches
-    expect(result.current.data?.items.map((item) => item.id)).toEqual([5]);
+    expect(result.current.data?.items.map((item) => item.id)).toEqual([ITEM_ID]);
 
     resolveSecond?.(
       new Response(

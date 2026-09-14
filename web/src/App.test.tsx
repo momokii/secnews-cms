@@ -63,7 +63,7 @@ describe("ROUTE-01: unauthenticated redirect", () => {
   it("hides admin navigation for an analyst session", () => {
     // Given: an authenticated analyst session
     setToken("analyst-token");
-    setUser({ id: 2, email: "analyst@example.com", name: "Analyst", role: "ANALYST" });
+    setUser({ id: "6d0b8a2c-4e1f-47d3-95c7-8b9a0d1e2f3a", email: "analyst@example.com", name: "Analyst", role: "ANALYST" });
 
     // When: the app is rendered at the feed route
     renderApp("/feeds/items");
