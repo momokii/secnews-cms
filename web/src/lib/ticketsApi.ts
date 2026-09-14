@@ -94,6 +94,8 @@ export async function listTickets(query: TicketsQuery = {}): Promise<Paginated<T
       findingType: query.findingType,
       page: query.page ?? 1,
       pageSize: query.pageSize ?? DEFAULT_PAGE_SIZE,
+      from: query.from,
+      to: query.to,
     })}`,
     { method: "GET" },
   );

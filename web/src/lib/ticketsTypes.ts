@@ -181,6 +181,8 @@ export interface TicketsQuery {
   findingType?: FindingType;
   page?: number;
   pageSize?: number;
+  from?: string;
+  to?: string;
 }
 
 export interface PatchTicketFieldsBody {

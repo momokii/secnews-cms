@@ -52,6 +52,8 @@ export interface FeedItemsQuery {
   q?: string;
   page?: number;
   pageSize?: number;
+  from?: string;
+  to?: string;
 }
 
 /** Fields the triage UI consumes from the 201 ticket returned by take. */
@@ -128,6 +130,8 @@ export async function listFeedItems(
       status: query.status,
       feedSourceId: query.feedSourceId,
       q: query.q,
+      from: query.from,
+      to: query.to,
     })}`,
     { method: "GET" },
   );
