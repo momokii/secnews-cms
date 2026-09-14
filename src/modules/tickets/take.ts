@@ -47,7 +47,9 @@ export async function takeFeedItem(
         status: "OPEN",
         findingType: "OTHER",
         feedItemId: item.id,
+        takenById: actorId,
       },
+      include: { takenBy: { select: { name: true } } },
     });
     await recordActivity(tx, {
       ticketId: ticket.id,

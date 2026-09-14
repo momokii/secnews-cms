@@ -62,6 +62,7 @@ export const TicketSchema = z.object({
   otxPulseUrl: z.url().nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
+  takenByName: z.string().nullable(),
 });
 export type Ticket = z.infer<typeof TicketSchema>;
 

@@ -56,6 +56,7 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           skip: (page - 1) * pageSize,
           take: pageSize,
+          include: { takenBy: { select: { name: true } } },
         }),
         prisma.ticket.count({ where }),
       ]);
@@ -77,6 +78,7 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
           sources: { orderBy: { createdAt: "asc" } },
           iocs: { orderBy: { createdAt: "asc" } },
           _count: { select: { suggestions: { where: { status: "PENDING" } } } },
+          takenBy: { select: { name: true } },
         },
       });
       if (ticket === null) {

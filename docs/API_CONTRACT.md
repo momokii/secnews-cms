@@ -128,9 +128,9 @@ Schemas: `src/modules/tickets/schema.ts`. State machine + role gates:
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 21 | `GET /tickets` | ANY | `ListTicketsQuerySchema` `?q&status&origin&findingType&page&pageSize` | 200 `ListTicketsResponseSchema` | |
+| 21 | `GET /tickets` | ANY | `ListTicketsQuerySchema` `?q&status&origin&findingType&page&pageSize` | 200 `ListTicketsResponseSchema` (rows include `createdAt`, `updatedAt`, and `takenByName`; `takenByName` is null for manual tickets) | |
 | 22 | `POST /tickets` | WORK | `CreateTicketBodySchema` (discriminated on findingType) | 201 `TicketSchema` (origin `MANUAL`, status `OPEN`) | |
-| 23 | `GET /tickets/:id` | ANY | — | 200 `TicketDetailSchema` (+`sources[]`, `iocs[]`, `pendingSuggestions`) | |
+| 23 | `GET /tickets/:id` | ANY | — | 200 `TicketDetailSchema` (+`sources[]`, `iocs[]`, `pendingSuggestions`, `takenByName`) | |
 | 24 | `PATCH /tickets/:id` | WORK | `UpdateTicketBodySchema` | 200 `TicketSchema` | |
 | 25 | `POST /tickets/:id/transition` | gate | `TransitionBodySchema` `{to}` | 200 `TicketSchema` | 403 role gate fails; 422 `VALIDATION` illegal transition (TRN-02); 409 `PENDING_SUGGESTIONS` when `to=SENT` with PENDING suggestions |
 | 26 | `PATCH /tickets/:id/fields` | WORK | `PatchTicketFieldsBodySchema` | 200 `TicketSchema` | |

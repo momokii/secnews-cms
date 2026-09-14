@@ -42,6 +42,10 @@ describe("FE-TKT-01: tickets list", () => {
     expect(screen.getByRole("cell", { name: "AUTO_FEED" })).toBeTruthy();
     expect(screen.getByRole("cell", { name: "VULNERABILITY_CVE" })).toBeTruthy();
     expect(screen.getByRole("cell", { name: "2026-09-13 17:00" })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Updated" })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Taken By" })).toBeTruthy();
+    expect(screen.getByRole("cell", { name: "2026-09-14 15:00" })).toBeTruthy();
+    expect(screen.getByRole("cell", { name: "—" })).toBeTruthy();
   });
 
   it("sends the status filter as a query param", async () => {

@@ -152,6 +152,8 @@ export function TicketsListPage() {
               <th scope="col" className="py-2 pr-4 font-medium">Finding type</th>
               <th scope="col" className="py-2 pr-4 font-medium">TLP</th>
               <th scope="col" className="py-2 font-medium">Created</th>
+              <th scope="col" className="py-2 pr-4 font-medium">Updated</th>
+              <th scope="col" className="py-2 font-medium">Taken By</th>
             </tr>
           </thead>
           <tbody>
@@ -178,6 +180,10 @@ export function TicketsListPage() {
                 <td className="py-2 text-slate-500">
                   {formatTimestamp(ticket.createdAt)}
                 </td>
+                <td className="py-2 pr-4 text-slate-500">
+                  {formatTimestamp(ticket.updatedAt)}
+                </td>
+                <td className="py-2 text-slate-500">{ticket.takenByName ?? "—"}</td>
               </tr>
             ))}
           </tbody>

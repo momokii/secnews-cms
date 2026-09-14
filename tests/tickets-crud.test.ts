@@ -149,7 +149,7 @@ describe("Ticket CRUD + final fields (TKT-01, TKT-02, FLD-01, FLD-02)", () => {
       const allBody = all.json() as { items: unknown[]; total: number; page: number; pageSize: number };
       expect(all.statusCode).toBe(200);
       expect(allBody.total).toBe(3);
-      expect(allBody.items).toHaveLength(3);
+       expect(allBody.items).toHaveLength(3);
       expect((closed.json() as { items: unknown[] }).items).toHaveLength(1);
       expect((cve.json() as { items: unknown[] }).items).toHaveLength(1);
       const page2Body = page2.json() as { items: unknown[]; total: number; page: number; pageSize: number };
@@ -188,7 +188,7 @@ describe("Ticket CRUD + final fields (TKT-01, TKT-02, FLD-01, FLD-02)", () => {
       const detailBody = TicketDetailSchema.parse(detail.json());
       expect(detailBody.sources).toEqual([]);
       expect(detailBody.iocs).toEqual([]);
-      expect(detailBody.pendingSuggestions).toBe(0);
+       expect(detailBody.pendingSuggestions).toBe(0);
       expect(renamed.statusCode).toBe(200);
       expect((renamed.json() as { title: string }).title).toBe(`${c3Tag()} renamed`);
       expect(emptyPatch.statusCode).toBe(400);

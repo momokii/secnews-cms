@@ -184,6 +184,7 @@ describe("GET /tickets/:id/activity (ACT-01)", () => {
 
     // Then: the spawned ticket carries a TAKEN entry referencing the feed
     expect(taken.statusCode).toBe(201);
+    expect(taken.body["takenByName"]).toBe("C3 ADMIN");
     expect(list.body.items).toHaveLength(1);
     expect(first(list.body.items)["action"]).toBe("TAKEN");
     expect(first(list.body.items)["detail"]).toBe("taken from feed");

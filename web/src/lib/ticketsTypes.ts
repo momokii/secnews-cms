@@ -92,6 +92,7 @@ export interface Ticket {
   otxPulseUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  takenByName: string | null;
 }
 
 export interface TicketSource {

@@ -4,7 +4,9 @@ import type { Ioc as IocWire, Ticket as TicketWire, TicketSource as TicketSource
 /** DB row → wire DTO: the only place Date fields become ISO strings, so
  * response schemas (z.iso.datetime) validate without a second mapping. */
 
-export function toTicketDto(row: Ticket): TicketWire {
+type TicketWithTakenBy = Ticket & { takenBy?: { name: string } | null };
+
+export function toTicketDto(row: TicketWithTakenBy): TicketWire {
   return {
     id: row.id,
     title: row.title,
@@ -26,6 +28,7 @@ export function toTicketDto(row: Ticket): TicketWire {
     otxPulseUrl: row.otxPulseUrl,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    takenByName: row.takenBy?.name ?? null,
   };
 }
 
