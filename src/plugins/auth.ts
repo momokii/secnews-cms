@@ -1,6 +1,6 @@
 import jwt from "@fastify/jwt";
 import fp from "fastify-plugin";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Role } from "../generated/prisma/enums.js";
 import { AppError } from "../common/errors.js";
 
@@ -33,7 +33,7 @@ declare module "fastify" {
   }
 }
 
-async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
+async function authenticate(request: FastifyRequest): Promise<void> {
   try {
     await request.jwtVerify();
   } catch {
@@ -51,8 +51,8 @@ async function authenticate(request: FastifyRequest, _reply: FastifyReply): Prom
 }
 
 function requireRole(...roles: Role[]) {
-  return async function roleGate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
-    await authenticate(request, _reply);
+  return async function roleGate(request: FastifyRequest): Promise<void> {
+    await authenticate(request);
     if (request.authUser === null || !roles.includes(request.authUser.role)) {
       throw new AppError("FORBIDDEN", "Insufficient role for this operation");
     }

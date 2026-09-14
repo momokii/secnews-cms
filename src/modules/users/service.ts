@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { Prisma } from "../../generated/prisma/client.js";
+import type { Prisma } from "../../generated/prisma/client.js";
 import type { Role } from "../../generated/prisma/enums.js";
 import { AppError } from "../../common/errors.js";
 import { prisma } from "../../lib/db.js";
