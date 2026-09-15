@@ -545,7 +545,7 @@ describe("TASK-UIF: suggestion delete", () => {
     expect(confirmMock).toHaveBeenCalledTimes(1);
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        `/api/tickets/${TICKET_ID}/suggestions/${suggestionFixture().id}`,
+        `/api/tickets/suggestions/${suggestionFixture().id}`,
         expect.objectContaining({ method: "DELETE" }),
       ),
     );

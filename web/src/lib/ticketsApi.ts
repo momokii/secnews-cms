@@ -230,10 +230,10 @@ export async function rejectSuggestion(
   return readJson(response);
 }
 
-/** DELETE /tickets/:id/suggestions/:suggestionId — answers 204; the server
+/** DELETE /tickets/suggestions/:id — answers 204; the server
  * rejects deletes of ACCEPTED rows with 422. */
-export async function deleteSuggestion(id: string, suggestionId: string): Promise<void> {
-  await apiFetch(`/tickets/${id}/suggestions/${suggestionId}`, { method: "DELETE" });
+export async function deleteSuggestion(_ticketId: string, suggestionId: string): Promise<void> {
+  await apiFetch(`/tickets/suggestions/${suggestionId}`, { method: "DELETE" });
 }
 
 // ---- Delivery (#47-48) ----

@@ -195,12 +195,12 @@ describe("ticketsApi: AI suggestions", () => {
     });
   });
 
-  it("DELETEs /tickets/:id/suggestions/:suggestionId", async () => {
+  it("DELETEs /tickets/suggestions/:suggestionId", async () => {
     const fetchMock = stubFetch();
     const SUGGESTION_ID = "44444444-4444-4444-8444-444444444444";
     await deleteSuggestion(TICKET_ID, SUGGESTION_ID);
     expect(lastCall(fetchMock)).toMatchObject({
-      url: `/api/tickets/${TICKET_ID}/suggestions/${SUGGESTION_ID}`,
+      url: `/api/tickets/suggestions/${SUGGESTION_ID}`,
       init: expect.objectContaining({ method: "DELETE" }),
     });
   });
