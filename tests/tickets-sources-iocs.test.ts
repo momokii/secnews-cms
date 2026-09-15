@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
@@ -140,19 +139,35 @@ describe("Ticket sources + IOCs (SRC-01, IOC-01..03)", () => {
   });
 
   describe("IOC-01: create with 12 types and default includeInBulletin", () => {
+    /** Valid value per type — IOC writes validate value-vs-type (TASK-VALID). */
+    const VALID_IOC_VALUES: Record<string, string> = {
+      DOMAIN: "evil.example",
+      IPV4: "10.10.10.10",
+      IPV6: "2001:db8::1",
+      URL: "https://kelanach.example/payload",
+      EMAIL: "phish@kelanach.example",
+      MD5: "0123456789abcdef0123456789abcdef",
+      SHA1: "0123456789abcdef0123456789abcdef01234567",
+      SHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      FILEPATH: "C:\\Windows\\Temp\\payload.exe",
+      MUTEX: "Global\\payload",
+      CIDR: "10.10.10.0/24",
+      OTHER: "unmappable-artifact",
+    };
+
     it("creates one IOC per IocType, defaulting includeInBulletin to true", async () => {
       // Given: a ticket and a WORK token
       const ticket = await c3Ticket();
       ticketIds.push(ticket.id);
 
-      // When: one IOC per canonical type is created (values distinct to satisfy uniqueness)
+      // When: one IOC per canonical type is created
       const responses = await Promise.all(
         (Object.values(IocType) as string[]).map((type) =>
           app.inject({
             method: "POST",
             url: `/tickets/${ticket.id}/iocs`,
             headers: auth(analyst),
-            payload: { type, value: `${type.toLowerCase()}-payload-${randomUUID().slice(0, 8)}` },
+            payload: { type, value: VALID_IOC_VALUES[type] },
           }),
         ),
       );

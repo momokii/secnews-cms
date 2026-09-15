@@ -5,11 +5,13 @@ import { AppError } from "../../common/errors.js";
 import { prisma } from "../../lib/db.js";
 import { getAuthUser } from "../../plugins/auth.js";
 import { toIocDto, toTicketDto, toTicketSourceDto } from "./mappers.js";
+import { assertValidCveIds } from "./validation.js";
 import { recordActivity, registerActivityRoute } from "./activity.js";
 import { recentActivityTakenBy } from "./taken-by.js";
 import { registerFieldsRoute } from "./fields.js";
 import {
   CreateTicketBodySchema,
+  dateBound,
   ListTicketsQuerySchema,
   ListTicketsResponseSchema,
   TicketDetailSchema,
@@ -116,6 +118,9 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
     },
     async (request, reply) => {
       const body = request.body;
+      if (body.findingType === "VULNERABILITY_CVE" && body.cveIds !== undefined) {
+        assertValidCveIds(body.cveIds);
+      }
       // Quick capture: origin MANUAL; summary defaults to an empty working
       // summary; type-specific fields default to their Prisma empties. The
       // creator is recorded as takenBy (route 19 take semantics), so lists
@@ -257,8 +262,3 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
   );
 }
 
-function dateBound(value: string, endOfDay: boolean): Date {
-  return value.length === 10
-    ? new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`)
-    : new Date(value);
-}

@@ -12,6 +12,7 @@ import {
   SuggestionActionResponseSchema,
 } from "../ai/schema.js";
 import { SUGGESTIBLE_FIELDS, toSuggestion, type SuggestibleField } from "../ai/service.js";
+import { findInvalidCveIds } from "./validation.js";
 
 /**
  * Suggestion lifecycle (Surface 4, #34/#35/#36). accept merges the suggested
@@ -107,6 +108,21 @@ export default async function suggestionRoutes(app: FastifyInstance): Promise<vo
       throw new AppError("CONFLICT", `Suggestion already ${row.status.toLowerCase()}`);
     }
     const { field, suggestedValue } = parseSuggestion(row);
+    // Incident guard: an accepted cveIds suggestion with garbage entries once
+    // 500'd every tickets read. Validate BEFORE any write — the suggestion
+    // stays PENDING so the analyst can edit the fields manually or reject.
+    if (field === "cveIds") {
+      const invalid = findInvalidCveIds(toList(suggestedValue));
+      if (invalid.length > 0) {
+        throw new AppError(
+          "VALIDATION",
+          `Suggestion not accepted: cveIds contains invalid CVE id(s) ${invalid.join(", ")} ` +
+            "(expected CVE-YYYY-NNNNN) — edit the ticket fields manually or reject the suggestion",
+          { field, invalid },
+          422,
+        );
+      }
+    }
     const actorId = request.user.sub;
     const updated = await app.prisma.$transaction(async (tx) => {
       await tx.ticket.update({ where: { id }, data: mergeFor(field, suggestedValue) });

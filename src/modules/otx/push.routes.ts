@@ -6,6 +6,8 @@ import { decryptSecret } from "../../lib/crypto.js";
 import { assertNoPendingSuggestions } from "../../lib/guards/pending.js";
 import { createPulse, publicAllowed, toOtxMarking, updatePulse } from "../../lib/otx/client.js";
 import { prisma } from "../../lib/db.js";
+import { iocValueProblem } from "../tickets/validation.js";
+import { rethrowUpstreamFailure } from "./routes.js";
 import { PushOtxResponseSchema } from "./schema.js";
 import { recordActivity } from "../tickets/activity.js";
 
@@ -51,6 +53,21 @@ export default async function otxPushRoutes(app: FastifyInstance): Promise<void>
       }
       await assertNoPendingSuggestions(prisma, id);
 
+      // Pre-check (TASK-VALID): the incident row (IPv4 literal stored as IPV6)
+      // made every push answer 400 upstream. Re-validate the included IOCs and
+      // refuse the whole push naming the culprits — never push partial silently.
+      const culprits = ticket.iocs
+        .map((ioc) => ({ type: ioc.type, value: ioc.value, problem: iocValueProblem(ioc.type, ioc.value) }))
+        .filter((entry): entry is { type: typeof entry.type; value: string; problem: string } => entry.problem !== null);
+      if (culprits.length > 0) {
+        throw new AppError(
+          "VALIDATION",
+          `${culprits.length} invalid IOC value(s) block the OTX push — fix or exclude them first`,
+          { iocs: culprits },
+          422,
+        );
+      }
+
       const row = await prisma.integrationConfig.findUnique({ where: { kind: "OTX" } });
       if (row === null) {
         throw new AppError("VALIDATION", "No OTX key configured — set it under integrations first", undefined, 422);
@@ -72,8 +89,8 @@ export default async function otxPushRoutes(app: FastifyInstance): Promise<void>
       const existingPulseId = ticket.otxPulseId;
       const pulse =
         existingPulseId !== null
-          ? await updatePulse(existingPulseId, pulseInput)
-          : await createPulse(pulseInput);
+          ? await updatePulse(existingPulseId, pulseInput).catch(rethrowUpstreamFailure)
+          : await createPulse(pulseInput).catch(rethrowUpstreamFailure);
 
       await prisma.$transaction(async (tx) => {
         await tx.ticket.update({

@@ -8,6 +8,7 @@ import {
   SuggestionStatus as PrismaSuggestionStatus,
 } from "../../generated/prisma/enums.js";
 import { paginated, pageQuery } from "../../common/pagination.js";
+import { CVE_ID_PATTERN, iocValueProblem } from "./validation.js";
 
 /** Ticket workflow contract. State machine + role gates are pinned in
  * docs/STATES.md — this file is the wire-level mirror only. */
@@ -37,7 +38,10 @@ export type SuggestionStatus = z.infer<typeof SuggestionStatusEnum>;
 // ---- Entities ----
 // Ids mirror the Prisma uuid string PKs (B1 authoritative), same as auth/feeds modules.
 
-const cveId = z.string().regex(/^CVE-\d{4}-\d{4,}$/, "CVE-YYYY-NNNNN");
+/** Read-side shape: every stored cveIds entry matches the canonical CVE id
+ * (a stray "N/A" once 500'd every tickets read). Request writes re-check via
+ * validation.ts so rejections are 422 VALIDATION naming the bad value. */
+const cveId = z.string().regex(CVE_ID_PATTERN, "CVE-YYYY-NNNNN");
 
 export const TicketSchema = z.object({
   id: z.uuid(),
@@ -108,7 +112,8 @@ export const CreateTicketBodySchema = z.discriminatedUnion("findingType", [
     findingType: z.literal("VULNERABILITY_CVE"),
     title: z.string().min(1),
     summary: z.string().optional(),
-    cveIds: z.array(cveId).optional(),
+    /** Entries re-checked in the route so garbage answers 422 naming the value. */
+    cveIds: z.array(z.string()).optional(),
     affectedProduct: z.string().min(1).optional(),
     affectedVersions: z.string().min(1).optional(),
     mitigation: z.string().optional(),
@@ -139,7 +144,8 @@ export const TransitionBodySchema = z.object({
   to: TicketStatusEnum,
 });
 
-/** PATCH final output fields (any subset). tlp defaults AMBER on create. */
+/** PATCH final output fields (any subset). tlp defaults AMBER on create;
+ * cveIds entries are re-checked in the route (422 naming the bad value). */
 export const PatchTicketFieldsBodySchema = z
   .object({
     title: z.string().min(1).optional(),
@@ -147,6 +153,7 @@ export const PatchTicketFieldsBodySchema = z
     description: z.string().optional(),
     recommendations: z.string().optional(),
     references: z.array(z.url()).optional(),
+    cveIds: z.array(z.string()).optional(),
     tlp: TlpEnum.optional(),
   })
   .refine((body) => Object.keys(body).length > 0, { message: "At least one field required" });
@@ -165,13 +172,20 @@ export const CreateTicketSourceBodySchema = z
 
 // ---- IOCs ----
 
-export const CreateIocBodySchema = z.object({
-  type: IocTypeEnum,
-  value: z.string().min(1).max(512),
-  context: z.string().optional(),
-  origin: z.string().optional(),
-  includeInBulletin: z.boolean().default(true),
-});
+export const CreateIocBodySchema = z
+  .object({
+    type: IocTypeEnum,
+    value: z.string().min(1).max(512),
+    context: z.string().optional(),
+    origin: z.string().optional(),
+    includeInBulletin: z.boolean().default(true),
+  })
+  .superRefine(({ type, value }, ctx) => {
+    const problem = iocValueProblem(type, value);
+    if (problem !== null) {
+      ctx.addIssue({ code: "custom", message: problem, path: ["value"] });
+    }
+  });
 export type CreateIocBody = z.infer<typeof CreateIocBodySchema>;
 
 export const UpdateIocBodySchema = z
@@ -202,7 +216,8 @@ export const ListTicketsQuerySchema = pageQuery.extend({
   { message: "from must be before or equal to to", path: ["from"] },
 );
 
-function dateBound(value: string, endOfDay: boolean): Date {
+/** Parse a list-query bound: date-only means start/end of that UTC day. */
+export function dateBound(value: string, endOfDay: boolean): Date {
   return value.length === 10
     ? new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`)
     : new Date(value);

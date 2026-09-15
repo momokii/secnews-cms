@@ -1,4 +1,5 @@
-import { defaultFetch, upstreamError, type ChatCompletionOptions } from "./types.js";
+import { upstreamFailure } from "../../../common/upstream.js";
+import { defaultFetch, type ChatCompletionOptions } from "./types.js";
 
 /**
  * Anthropic adapter (AIP-02): POST /v1/messages with `x-api-key` +
@@ -22,7 +23,7 @@ export async function callAnthropic(options: ChatCompletionOptions): Promise<str
     }),
   });
   if (response.ok === false) {
-    throw upstreamError("anthropic", response.status);
+    throw await upstreamFailure("anthropic", response);
   }
   const body = (await response.json()) as {
     content?: Array<{ type?: string; text?: string }>;

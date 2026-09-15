@@ -1,5 +1,6 @@
 import type { FetchLike } from "../../modules/ai/providers/types.js";
 import type { IocType } from "../../generated/prisma/enums.js";
+import { upstreamFailure } from "../../common/upstream.js";
 
 /**
  * OTX AlienVault REST client (Surface 8b): TLP mapping and pulse push.
@@ -125,11 +126,11 @@ async function postPulseBody(
   });
 }
 
-/** POST /api/v1/pulses/create. Rejects non-2xx with the upstream status. */
+/** POST /api/v1/pulses/create. Rejects non-2xx with status + body snippet. */
 export async function createPulse(input: CreatePulseInput): Promise<CreatedPulse> {
   const response = await postPulseBody(input, "/api/v1/pulses/create", "POST");
   if (!response.ok) {
-    throw new Error(`OTX request failed with upstream status ${response.status}`);
+    throw await upstreamFailure("OTX", response);
   }
   const body = (await response.json()) as { id?: unknown };
   if (typeof body.id !== "string" || body.id === "") {
@@ -143,7 +144,7 @@ export async function updatePulse(pulseId: string, input: CreatePulseInput): Pro
   const base = input.baseUrl ?? OTX_BASE;
   const response = await postPulseBody(input, `/api/v1/pulses/${pulseId}`, "PATCH");
   if (!response.ok) {
-    throw new Error(`OTX request failed with upstream status ${response.status}`);
+    throw await upstreamFailure("OTX", response);
   }
   return { id: pulseId, url: `${base}/pulse/${pulseId}` };
 }

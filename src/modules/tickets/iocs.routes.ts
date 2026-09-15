@@ -12,6 +12,7 @@ import {
   UpdateIocBodySchema,
   UuidIdParamSchema,
 } from "./schema.js";
+import { iocValueProblem } from "./validation.js";
 
 /** Routes 29–31 — POST/PATCH/DELETE under /tickets/:id/iocs (WORK).
  * Uniqueness is (ticketId, type, value); duplicates answer 409 CONFLICT. */
@@ -80,13 +81,18 @@ export default async function ticketIocRoutes(app: FastifyInstance): Promise<voi
       const { id, iocId } = request.params;
       const existing = await prisma.ioc.findFirst({
         where: { id: iocId, ticketId: id },
-        select: { id: true },
+        select: { id: true, type: true },
       });
       if (existing === null) {
         throw new AppError("NOT_FOUND", `IOC ${iocId} not found on ticket ${id}`);
       }
       const data: Prisma.IocUncheckedUpdateInput = {};
       if (request.body.value !== undefined) {
+        // PATCH cannot change the type, so the new value must fit the STORED type.
+        const problem = iocValueProblem(existing.type, request.body.value);
+        if (problem !== null) {
+          throw new AppError("VALIDATION", problem, { type: existing.type, value: request.body.value }, 400);
+        }
         data.value = request.body.value;
       }
       if (request.body.context !== undefined) {

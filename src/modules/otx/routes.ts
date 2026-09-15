@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import type { z } from "zod/v4";
 import { AppError } from "../../common/errors.js";
+import { upstream502, UpstreamError } from "../../common/upstream.js";
 import type { ListPulsesInput, SubscribedPulse } from "../../lib/otx/read.js";
 import { getPulse, listMyPulses, listSubscribed, searchPulses } from "../../lib/otx/read.js";
 import { decryptSecret } from "../../lib/crypto.js";
@@ -47,7 +48,12 @@ async function loadOtxApiKey(app: FastifyInstance): Promise<string> {
   return apiKey;
 }
 
-function rethrowUpstreamFailure(error: unknown): never {
+/** Render any upstream failure as the 502 envelope; UpstreamError contributes
+ * the truncated body snippet in details for diagnosis (keys stay in headers). */
+export function rethrowUpstreamFailure(error: unknown): never {
+  if (error instanceof UpstreamError) {
+    throw upstream502(error);
+  }
   throw new AppError("INTERNAL", `OTX upstream request failed: ${(error as Error).message}`, undefined, 502);
 }
 

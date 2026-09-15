@@ -1,4 +1,5 @@
-import { defaultFetch, upstreamError, type ChatCompletionOptions } from "./types.js";
+import { upstreamFailure } from "../../../common/upstream.js";
+import { defaultFetch, type ChatCompletionOptions } from "./types.js";
 
 /**
  * Gemini adapter (AIP-03): POST /v1beta/models/{model}:generateContent with
@@ -19,7 +20,7 @@ export async function callGemini(options: ChatCompletionOptions): Promise<string
     }),
   });
   if (response.ok === false) {
-    throw upstreamError("gemini", response.status);
+    throw await upstreamFailure("gemini", response);
   }
   const body = (await response.json()) as {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;

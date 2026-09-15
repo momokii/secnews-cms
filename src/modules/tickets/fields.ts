@@ -6,6 +6,7 @@ import { prisma } from "../../lib/db.js";
 import { recordActivity } from "./activity.js";
 import { toTicketDto } from "./mappers.js";
 import { PatchTicketFieldsBodySchema, TicketSchema, UuidIdParamSchema } from "./schema.js";
+import { assertValidCveIds } from "./validation.js";
 
 /** Route 26 — PATCH /tickets/:id/fields: final (client-facing) output fields.
  * Working metadata is PATCH /tickets/:id (routes.ts); AI proposals merge into
@@ -50,6 +51,11 @@ export async function registerFieldsRoute(app: FastifyInstance): Promise<void> {
       if (request.body.references !== undefined) {
         data.references = request.body.references;
         changedFieldNames.push("references");
+      }
+      if (request.body.cveIds !== undefined) {
+        assertValidCveIds(request.body.cveIds);
+        data.cveIds = request.body.cveIds;
+        changedFieldNames.push("cveIds");
       }
       if (request.body.tlp !== undefined) {
         data.tlp = request.body.tlp;

@@ -44,7 +44,7 @@ Every non-2xx response uses the single envelope
 | Code | HTTP | Meaning |
 |---|---|---|
 | `VALIDATION` | 400 | Payload failed schema validation |
-| `VALIDATION` | **422** | Payload well-formed but semantically rejected: illegal ticket transition, send/preview on non-READY/missing final fields |
+| `VALIDATION` | **422** | Payload well-formed but semantically rejected: illegal ticket transition, send/preview on non-READY/missing final fields, CVE ids not matching `^CVE-\d{4}-\d{4,}$` on ticket create / fields PATCH / suggestion accept, OTX push with stored invalid IOCs |
 | `UNAUTHORIZED` | 401 | Missing/invalid credentials (also: wrong ingest key) |
 | `FORBIDDEN` | 403 | Authenticated but role/ownership gate failed |
 | `NOT_FOUND` | 404 | Unknown resource id |
@@ -135,15 +135,15 @@ Schemas: `src/modules/tickets/schema.ts`. State machine + role gates:
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
 | 21 | `GET /tickets` | ANY | `ListTicketsQuerySchema` `?q&status&origin&findingType&from&to&page&pageSize` | 200 `ListTicketsResponseSchema` (rows include `createdAt`, `updatedAt`, and `takenByName`; `takenByName` is the creating/taking user for API-created tickets, else the actor of the most recent `TAKEN`/`CREATED` ticket activity for legacy rows without an owner, else null) | 400 `VALIDATION` for malformed dates or `from` after `to` |
-| 22 | `POST /tickets` | WORK | `CreateTicketBodySchema` (discriminated on findingType; only `title` required — `summary` and the type-specific structured fields are optional at create, quick-capture shape) | 201 `TicketSchema` (origin `MANUAL`, status `OPEN`, `takenByName` = creating user; omitted structured fields default to `[]`/`null`) | |
+| 22 | `POST /tickets` | WORK | `CreateTicketBodySchema` (discriminated on findingType; only `title` required — `summary` and the type-specific structured fields are optional at create, quick-capture shape) | 201 `TicketSchema` (origin `MANUAL`, status `OPEN`, `takenByName` = creating user; omitted structured fields default to `[]`/`null`) | 422 `VALIDATION` when `cveIds` contains an entry not matching `^CVE-\d{4}-\d{4,}$` (message + `details.invalid` name the offending values) |
 | 23 | `GET /tickets/:id` | ANY | — | 200 `TicketDetailSchema` (+`sources[]`, `iocs[]`, `pendingSuggestions`, `takenByName`; `takenByName` falls back to the most recent `TAKEN`/`CREATED` activity actor for legacy ownerless rows) | |
 | 24 | `PATCH /tickets/:id` | WORK | `UpdateTicketBodySchema` | 200 `TicketSchema` | |
 | 25 | `POST /tickets/:id/transition` | gate | `TransitionBodySchema` `{to}` | 200 `TicketSchema` | 403 role gate fails; 422 `VALIDATION` illegal transition (TRN-02); 409 `PENDING_SUGGESTIONS` when `to=SENT` with PENDING suggestions |
-| 26 | `PATCH /tickets/:id/fields` | WORK | `PatchTicketFieldsBodySchema` | 200 `TicketSchema` | |
+| 26 | `PATCH /tickets/:id/fields` | WORK | `PatchTicketFieldsBodySchema` (any subset incl. `cveIds`) | 200 `TicketSchema` | 422 `VALIDATION` when `cveIds` contains an entry not matching `^CVE-\d{4}-\d{4,}$` (message + `details.invalid` name the offending values; nothing is written) |
 | 27 | `POST /tickets/:id/sources` | WORK | `CreateTicketSourceBodySchema` | 201 `TicketSourceSchema` | |
 | 28 | `DELETE /tickets/:id/sources/:sourceId` | WORK | — | 204 | |
-| 29 | `POST /tickets/:id/iocs` | WORK | `CreateIocBodySchema` | 201 `IocSchema` | |
-| 30 | `PATCH /tickets/:id/iocs/:iocId` | WORK | `UpdateIocBodySchema` | 200 `IocSchema` | |
+| 29 | `POST /tickets/:id/iocs` | WORK | `CreateIocBodySchema` | 201 `IocSchema` | 400 `VALIDATION` when `value` does not parse as its declared `type` (IPv4/IPv6 via `net.isIP`, DOMAIN hostname, http(s) URL, EMAIL, MD5/SHA1/SHA256 hex digests, CIDR `addr/prefix`; `FILEPATH`/`MUTEX`/`OTHER` free-form) — the message names type, problem, and value |
+| 30 | `PATCH /tickets/:id/iocs/:iocId` | WORK | `UpdateIocBodySchema` | 200 `IocSchema` | 400 `VALIDATION` when the new `value` contradicts the STORED `type` (type is not patchable) — same rules as #29 |
 | 31 | `DELETE /tickets/:id/iocs/:iocId` | WORK | — | 204 | |
 | 31a | `GET /tickets/:id/activity` | ANY | `?page&pageSize` | 200 `paginated(TicketActivitySchema)` (newest first, actor name joined) | |
 
@@ -158,10 +158,10 @@ integration config — never from the request.
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 32 | `POST /tickets/:id/ai/fill` | WORK | `{}` | 200 `AiFillResponseSchema` (strict: only missing final fields; never drafts the §10-optional `recommendations`/`references`) | 502 `INTERNAL` envelope when the configured provider is unreachable from the server (network/DNS timeout) — message names the provider and suggests checking server egress or switching providers |
-| 33 | `POST /tickets/:id/ai/enrich` | WORK | `{}` | 200 `AiFillResponseSchema` (full rewrite proposals) | 502 `INTERNAL` envelope as #32 for an unreachable provider |
+| 32 | `POST /tickets/:id/ai/fill` | WORK | `{}` | 200 `AiFillResponseSchema` (strict: only missing final fields; never drafts the §10-optional `recommendations`/`references`) | 502 `INTERNAL` envelope when the configured provider is unreachable from the server (network/DNS timeout) — message names the provider and suggests checking server egress or switching providers; upstream non-2xx → 502 `INTERNAL` with `details.upstreamStatus` + `details.upstreamBody` (≤300 chars of the upstream response body — keys travel in headers and never appear in the detail) |
+| 33 | `POST /tickets/:id/ai/enrich` | WORK | `{}` | 200 `AiFillResponseSchema` (full rewrite proposals) | 502 `INTERNAL` envelope as #32 for an unreachable provider or upstream non-2xx |
 | 34 | `GET /tickets/:id/suggestions` | WORK | `ListSuggestionsQuerySchema` `?status&page&pageSize` | 200 `ListSuggestionsResponseSchema` | |
-| 35 | `POST /tickets/:id/suggestions/:suggestionId/accept` | WORK | — | 200 `SuggestionActionResponseSchema` (value merged into final fields) | |
+| 35 | `POST /tickets/:id/suggestions/:suggestionId/accept` | WORK | — | 200 `SuggestionActionResponseSchema` (value merged into final fields) | 422 `VALIDATION` when accepting a `cveIds` suggestion whose entries don't match `^CVE-\d{4}-\d{4,}$` — the merge is refused, the suggestion STAYS `PENDING`, and the message explains edit-the-fields-or-reject |
 | 36 | `POST /tickets/:id/suggestions/:suggestionId/reject` | WORK | — | 200 `SuggestionActionResponseSchema` | |
 
 S2 contract: Send (#46) and OTX push (#51) MUST fail with `409
@@ -223,15 +223,20 @@ TLP→OTX mapping: `docs/STATES.md` §4.
 | 49 | `GET /bulletin/template` | ANY | — | 200 `BulletinTemplateSchema` | |
 | 50 | `PUT /bulletin/template` | ADMIN | `PutTemplateBodySchema` | 200 `BulletinTemplateSchema` | |
 | 51 | `POST /tickets/:id/bulletin/preview` | WORK | `{}` | 200 `PreviewResponseSchema` `{rendered}` | 422 `VALIDATION` missing required final fields — `overview`, `description` only (PREV-02); `recommendations`/`references` are optional (§10) and drop out of the render when empty |
-| 52 | `POST /tickets/:id/otx` | MGR | `{}` | 200 `PushOtxResponseSchema` `{pulseId, pulseUrl, isPublic, tlpMarking}` | 422 `VALIDATION` not `READY`; 409 `PENDING_SUGGESTIONS` (S2, OTX-02) |
-| 53 | `GET /otx/pulses` | MGR + ANALYST (read-only) | `?page&pageSize&source=subscribed\|mine\|search&q` (`source` defaults to `subscribed`; `pageSize` clamps into 1..50, default 20; `q` used only by `search`) | 200 `ListPulsesResponseSchema` `{items[{id, name, authorName, isPublic, tlp, tags, indicatorCount, created, modified}], total, page, pageSize}` | 400 `VALIDATION` for an unsupported source; upstream failure → 502-style error envelope |
-| 54 | `GET /otx/pulses/:id` | MGR + ANALYST (read-only) | — | 200 `OtxPulseDetailSchema` `{id, name, authorName, description, isPublic, tlp, tags, references, indicators[{value,type}], created, modified}` | upstream failure or pulse the key cannot access → 502-style error envelope (never leaks the key) |
+| 52 | `POST /tickets/:id/otx` | MGR | `{}` | 200 `PushOtxResponseSchema` `{pulseId, pulseUrl, isPublic, tlpMarking}` | 422 `VALIDATION` not `READY`; 422 `VALIDATION` push pre-check: any included IOC whose value does not parse as its `type` blocks the whole push (`details.iocs[]` names type/value/problem per culprit — nothing is sent upstream); 409 `PENDING_SUGGESTIONS` (S2, OTX-02); upstream non-2xx → 502 `INTERNAL` with `details.upstreamStatus` + `details.upstreamBody` (≤300 chars; never the key) |
+| 53 | `GET /otx/pulses` | MGR + ANALYST (read-only) | `?page&pageSize&source=subscribed\|mine\|search&q` (`source` defaults to `subscribed`; `pageSize` clamps into 1..50, default 20; `q` used only by `search`) | 200 `ListPulsesResponseSchema` `{items[{id, name, authorName, isPublic, tlp, tags, indicatorCount, created, modified}], total, page, pageSize}` | 400 `VALIDATION` for an unsupported source; upstream failure → 502-style error envelope with `details.upstreamBody` (≤300 chars) |
+| 54 | `GET /otx/pulses/:id` | MGR + ANALYST (read-only) | — | 200 `OtxPulseDetailSchema` `{id, name, authorName, description, isPublic, tlp, tags, references, indicators[{value,type}], created, modified}` | upstream failure or pulse the key cannot access → 502-style error envelope with `details.upstreamBody` (≤300 chars; never leaks the key) |
 
 Push includes only IOCs with `includeInBulletin = true` and sends them as
 typed `{indicator, type}` objects — our IocType maps to the exact OTX type
 names (`domain`, `IPv4`, `IPv6`, `URL`, `email`, `FileHash-MD5`,
 `FileHash-SHA1`, `FileHash-SHA256`, `FilePath`, `Mutex`, `CIDR`;
-`OTHER` has no OTX equivalent and is excluded). The pulse body's `TLP`
+`OTHER` has no OTX equivalent and is excluded). Before any upstream call the
+push pre-checks every included IOC's value against its type (same rules as
+route #29); any invalid value blocks the entire push with
+`422 VALIDATION` naming the culprits — OTX is never handed a partial or
+malformed indicator set (a stored IPv4-literal-as-IPV6 once answered 400
+upstream on every push). The pulse body's `TLP`
 field carries the LOWERCASE legacy value (official external API schema
 enum: `white|green|amber|red`); internal CLEAR maps to legacy WHITE.
 `AMBER`/`RED` force `public=false`. Stores
@@ -269,6 +274,9 @@ envelope. All datetimes normalize timezone-less upstream values to ISO.
 | Scenario | Route | Expected |
 |---|---|---|
 | S2 hard block | #25 (to=SENT), #47, #52 | `409 PENDING_SUGGESTIONS` |
+| Invalid CVE id write | #22, #26, #35 (accept) | `422 VALIDATION` naming the bad value; the accept merge is refused and the suggestion stays `PENDING` |
+| IOC value/type mismatch | #29, #30 | `400 VALIDATION` naming type, problem, and value |
+| Invalid stored IOCs at push | #52 | `422 VALIDATION` with `details.iocs[]` culprits; no upstream call |
 | S3 inactive gating | #47 | `all` excludes inactive (200); explicit inactive id → `409 INACTIVE_TARGET` |
 | S4 RBAC | #6 second call → `409 CONFLICT`; #8/#9/#10/#11 non-ADMIN → `403 FORBIDDEN` | analyst-create-admin covered by the 403 |
 | Illegal transition | #25 | `422 VALIDATION` |

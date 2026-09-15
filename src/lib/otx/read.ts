@@ -1,4 +1,5 @@
 import type { FetchLike } from "../../modules/ai/providers/types.js";
+import { upstreamFailure } from "../../common/upstream.js";
 import { OTX_BASE, type OtxTlp } from "./client.js";
 
 /**
@@ -114,7 +115,7 @@ export async function listSubscribed(input: ListPulsesInput): Promise<{ total: n
     headers: { "X-OTX-API-KEY": input.apiKey },
   });
   if (!response.ok) {
-    throw new Error(`OTX request failed with upstream status ${response.status}`);
+    throw await upstreamFailure("OTX", response);
   }
   const body = (await response.json()) as OtxSubscribedResponse;
   const rows = Array.isArray(body.results) ? body.results : [];
@@ -134,7 +135,7 @@ export async function listMyPulses(input: ListPulsesInput): Promise<{ total: num
     headers: { "X-OTX-API-KEY": input.apiKey },
   });
   if (!response.ok) {
-    throw new Error(`OTX request failed with upstream status ${response.status}`);
+    throw await upstreamFailure("OTX", response);
   }
   const body = (await response.json()) as OtxSubscribedResponse;
   const rows = Array.isArray(body.results) ? body.results : [];
@@ -172,7 +173,7 @@ export async function searchPulses(input: SearchPulsesInput): Promise<{ total: n
     headers: { "X-OTX-API-KEY": input.apiKey },
   });
   if (!response.ok) {
-    throw new Error(`OTX request failed with upstream status ${response.status}`);
+    throw await upstreamFailure("OTX", response);
   }
   const body = (await response.json()) as OtxSubscribedResponse;
   const rows = Array.isArray(body.results) ? body.results : [];
@@ -236,7 +237,7 @@ export async function getPulse(input: {
     headers: { "X-OTX-API-KEY": input.apiKey },
   });
   if (!response.ok) {
-    throw new Error(`OTX request failed with upstream status ${response.status}`);
+    throw await upstreamFailure("OTX", response);
   }
   const body = (await response.json()) as OtxPulseDetailResponse;
   if (typeof body.id !== "string" || body.id === "") {

@@ -1,4 +1,5 @@
-import { defaultFetch, upstreamError, type ChatCompletionOptions } from "./types.js";
+import { upstreamFailure } from "../../../common/upstream.js";
+import { defaultFetch, type ChatCompletionOptions } from "./types.js";
 
 /**
  * OpenAI adapter (AIP-01): POST /v1/chat/completions with
@@ -22,7 +23,7 @@ export async function callOpenAi(options: ChatCompletionOptions): Promise<string
     }),
   });
   if (response.ok === false) {
-    throw upstreamError("openai", response.status);
+    throw await upstreamFailure("openai", response);
   }
   const body = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
