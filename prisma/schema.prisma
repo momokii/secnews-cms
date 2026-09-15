@@ -131,6 +131,7 @@ model User {
   iocs         Ioc[]
   activities   TicketActivity[]
   ticketsTaken Ticket[]         @relation("TicketTakenBy")
+  promptRevisions PromptRevision[]
 }
 
 model FeedSource {
@@ -289,8 +290,8 @@ model BulletinTemplate {
 }
 
 // TASK-PROMPT: ADMIN-managed AI prompt template per flow. `kind` is unique —
-// exactly one row per FILL/ENRICH. Seeded by migration with the legacy
-// hardcoded prompts verbatim; a missing row falls back to the built-in
+// exactly one row per FILL/ENRICH. Seeded by migration with security-intelligence
+// drafting defaults; a missing row falls back to the built-in
 // default (src/modules/ai/prompt-template.ts).
 model PromptTemplate {
   id        String     @id @default(uuid())
@@ -298,6 +299,17 @@ model PromptTemplate {
   content   String
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+}
+
+model PromptRevision {
+  id         String     @id @default(uuid())
+  promptKind PromptKind
+  content    String
+  actorId    String?
+  actor      User?      @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime   @default(now())
+
+  @@index([promptKind, createdAt])
 }
 
 // TASK-ACT: append-only audit trail of every ticket change. actorId is
