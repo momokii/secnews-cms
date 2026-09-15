@@ -32,7 +32,15 @@ function centralTransport(): MailTransport {
     throw new Error("Missing required environment variable: SMTP_HOST");
   }
   const port = Number.parseInt(process.env["SMTP_PORT"] ?? "587", 10);
-  return nodemailer.createTransport({ host, port });
+  const user = process.env["SMTP_USER"];
+  const pass = process.env["SMTP_PASSWORD"];
+  const secure = port === 465;
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    ...(user && pass ? { auth: { user, pass } } : {}),
+  });
 }
 
 export async function sendEmail(options: EmailSendOptions): Promise<void> {
