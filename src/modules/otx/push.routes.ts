@@ -74,13 +74,15 @@ export default async function otxPushRoutes(app: FastifyInstance): Promise<void>
       }
       const { apiKey } = JSON.parse(decryptSecret(row.encryptedKey)) as { apiKey: string };
 
-      const description = [ticket.overview, ticket.description]
-        .filter((field) => field !== null && field.trim() !== "")
-        .join("\n\n");
+      // TASK-SYNCDEL: the pulse description is the OVERVIEW only — the
+      // internal narrative (ticket.description) never leaves the building.
+      // Empty overview falls back to the title so OTX's non-empty
+      // description constraint still holds.
+      const overview = ticket.overview ?? "";
       const pulseInput = {
         apiKey,
         name: ticket.title,
-        description: description === "" ? ticket.title : description,
+        description: overview.trim() === "" ? ticket.title : overview,
         tlp: ticket.tlp,
         tags: ["secnews", `TLP:${ticket.tlp}`],
         references: ticket.references,

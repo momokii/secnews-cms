@@ -184,7 +184,10 @@ export async function searchPulses(input: SearchPulsesInput): Promise<{ total: n
   };
 }
 
-/** One pulse detail mapped to the wire shape (OtxPulseDetailSchema). */
+/** One pulse detail mapped to the wire shape (OtxPulseDetailSchema). The
+ * per-indicator `id` is OTX's own row id — it names the entry in the
+ * documented PATCH {remove:[{id}]} op; the route-54 response serializer
+ * strips it, the wire shape is unchanged. */
 export type PulseDetail = {
   id: string;
   name: string;
@@ -194,12 +197,12 @@ export type PulseDetail = {
   tlp: OtxTlp;
   tags: string[];
   references: string[];
-  indicators: Array<{ value: string; type: string }>;
+  indicators: Array<{ id: string; value: string; type: string }>;
   created: string | null;
   modified: string | null;
 };
 
-type OtxIndicatorResponse = { indicator?: unknown; type?: unknown };
+type OtxIndicatorResponse = { id?: unknown; indicator?: unknown; type?: unknown };
 
 type OtxPulseDetailResponse = OtxPulseResponse & {
   description?: unknown;
@@ -214,14 +217,14 @@ function asReferences(value: unknown): string[] {
   return value.filter((row): row is string => typeof row === "string" && row !== "");
 }
 
-function asIndicators(value: unknown): Array<{ value: string; type: string }> {
+function asIndicators(value: unknown): Array<{ id: string; value: string; type: string }> {
   if (!Array.isArray(value)) {
     return [];
   }
   return value
     .map((row) => row as OtxIndicatorResponse)
     .filter((row) => typeof row.indicator === "string" && row.indicator !== "")
-    .map((row) => ({ value: row.indicator as string, type: asString(row.type) }));
+    .map((row) => ({ id: asString(row.id), value: row.indicator as string, type: asString(row.type) }));
 }
 
 /** GET /api/v1/pulses/:id — full pulse the configured key can access. */

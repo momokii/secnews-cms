@@ -145,7 +145,7 @@ Schemas: `src/modules/tickets/schema.ts`. State machine + role gates:
 | 29 | `POST /tickets/:id/iocs` | WORK | `CreateIocBodySchema` | 201 `IocSchema` | 400 `VALIDATION` when `value` does not parse as its declared `type` (IPv4/IPv6 via `net.isIP`, DOMAIN hostname, http(s) URL, EMAIL, MD5/SHA1/SHA256 hex digests, CIDR `addr/prefix`; `FILEPATH`/`MUTEX`/`OTHER` free-form) — the message names type, problem, and value |
 | 30 | `PATCH /tickets/:id/iocs/:iocId` | WORK | `UpdateIocBodySchema` | 200 `IocSchema` | 400 `VALIDATION` when the new `value` contradicts the STORED `type` (type is not patchable) — same rules as #29 |
 | 31 | `DELETE /tickets/:id/iocs/:iocId` | WORK | — | 204 | |
-| 31a | `GET /tickets/:id/activity` | ANY | `?page&pageSize` | 200 `paginated(TicketActivitySchema)` (newest first, actor name joined). `detail` per action: `STATUS_CHANGED` → `status <FROM>→<TO>`; `FIELDS_UPDATED` → JSON string `{"<field>":{"from":<old\|null>,"to":<new>}}` covering only the fields whose value actually changed (text truncated to 500 chars; string arrays joined with `", "` — empty array → `""`; no-op patch → no detail; legacy rows may still hold the old names-only string); `SUGGESTION_ACCEPTED`/`SUGGESTION_REJECTED` → JSON string `{"field":"<field>","value":"<suggestedValue, truncated to 500 chars>","decision":"ACCEPTED\|REJECTED"}` (legacy rows may hold the old bare-field string); `OTX_PUSHED` → `<pulseId>` + optional ` (updated)` | |
+| 31a | `GET /tickets/:id/activity` | ANY | `?page&pageSize&action` (`action` optional `TicketActivityAction` — narrows the timeline to one action; any other value → 400 `VALIDATION`) | 200 `paginated(TicketActivitySchema)` (newest first, actor name joined). `detail` per action: `STATUS_CHANGED` → `status <FROM>→<TO>`; `FIELDS_UPDATED` → JSON string `{"<field>":{"from":<old\|null>,"to":<new>}}` covering only the fields whose value actually changed (text truncated to 500 chars; string arrays joined with `", "` — empty array → `""`; no-op patch → no detail; legacy rows may still hold the old names-only string); `SUGGESTION_ACCEPTED`/`SUGGESTION_REJECTED` → JSON string `{"field":"<field>","value":"<suggestedValue, truncated to 500 chars>","decision":"ACCEPTED\|REJECTED"}` (legacy rows may hold the old bare-field string); `SUGGESTION_DELETED` → JSON string `{"field":"<field>","value":"<suggestedValue, truncated to 500 chars>","decision":"deleted"}`; `OTX_PUSHED` → `<pulseId>` + optional ` (updated)` | |
 
 Transition role gate (`to` → roles): `RESEARCH`,`READY` → WORK;
 `SENT`,`CLOSED` → MGR. `to=CLOSED` is legal from `OPEN|RESEARCH|READY`
@@ -167,6 +167,7 @@ never a silent fallback. Every stored suggestion records the resolved
 | 34 | `GET /tickets/:id/suggestions` | WORK | `ListSuggestionsQuerySchema` `?status&page&pageSize` | 200 `ListSuggestionsResponseSchema` (each item carries `provider` + `model`) | |
 | 35 | `POST /tickets/:id/suggestions/:suggestionId/accept` | WORK | — | 200 `SuggestionActionResponseSchema`. **Accept AUTO-MERGES** the `suggestedValue` into the ticket's matching final field (`overview`/`description`/`recommendations`/`mitigation`/`affectedVersions` as text; `references`/`cveIds` split on newlines/commas) — clients never copy values manually | 422 `VALIDATION` when accepting a `cveIds` suggestion whose entries don't match `^CVE-\d{4}-\d{4,}$` — the merge is refused, the suggestion STAYS `PENDING`, and the message explains edit-the-fields-or-reject |
 | 36 | `POST /tickets/:id/suggestions/:suggestionId/reject` | WORK | — | 200 `SuggestionActionResponseSchema` | |
+| 36b | `DELETE /tickets/suggestions/:suggestionId` | WORK | — | 204 (empty body); the row is removed and a `SUGGESTION_DELETED` activity entry is appended with the JSON detail `{"field","value≤500","decision":"deleted"}` — earlier decision rows are never rewritten (history is append-only, so a rejected-then-deleted suggestion keeps its `SUGGESTION_REJECTED` entry) | 422 `VALIDATION` when the suggestion is `ACCEPTED` (frozen audit material); 404 `NOT_FOUND` unknown id |
 
 S2 contract: Send (#46) and OTX push (#51) MUST fail with `409
 PENDING_SUGGESTIONS` while any suggestion for the ticket is `PENDING`
@@ -244,17 +245,26 @@ malformed indicator set (a stored IPv4-literal-as-IPV6 once answered 400
 upstream on every push). The pulse body's `TLP`
 field carries the LOWERCASE legacy value (official external API schema
 enum: `white|green|amber|red`); internal CLEAR maps to legacy WHITE.
-`AMBER`/`RED` force `public=false`. The pulse `description` (joined
-`overview` + `description`) is truncated to OTX's documented 0-1024 cap
-before the wire call: 1023 content chars + a trailing `…` (a 1882-char
-bulletin once failed every push with upstream 400 "description Must be
-0-1024 chars"); the pulse `name` is never truncated. Stores
-`otxPulseId`/`otxPulseUrl` on the ticket. Push is idempotent per ticket:
-a ticket that already has `otxPulseId` is updated upstream via the
-documented `PATCH /api/v1/pulses/{id}` ("any fields that can be used to
-create a pulse can also be used to edit") with the same create-shaped body
-— no second pulse is created; the ticket keeps pointing at the same pulse
-and the new `OTX_PUSHED` activity entry is marked `(updated)`.
+`AMBER`/`RED` force `public=false`. The pulse `description` is the ticket
+`overview` ONLY — the internal `description` narrative never leaves the
+building (TASK-SYNCDEL); an empty/blank overview falls back to the ticket
+`title`. It is truncated to OTX's documented 0-1024 cap before the wire
+call: 1023 content chars + a trailing `…` (a long description once failed
+every push with upstream 400 "description Must be 0-1024 chars"); the
+pulse `name` is never truncated. Stores `otxPulseId`/`otxPulseUrl` on the
+ticket. Push is idempotent per ticket: a ticket that already has
+`otxPulseId` is updated upstream via the documented
+`PATCH /api/v1/pulses/{id}` — no second pulse is created; the ticket keeps
+pointing at the same pulse and the new `OTX_PUSHED` activity entry is
+marked `(updated)`. The PATCH body is DIFF-based (the documented edit
+semantics answer 500 to plain list arrays): the current pulse is read
+first via `GET /api/v1/pulses/{id}`; the scalar literals `name`,
+`description`, `public`, `TLP` are always sent as-is, while the list
+fields arrive as `{add:[...]}` / `{remove:[...]}` dicts computed against
+the live pulse — `indicators` diffed by `(indicator,type)` (add the
+missing typed objects, remove the `[{id}]` of stale rows), `tags` and
+`references` diffed as string lists; an unchanged list is omitted from the
+body entirely, and an empty op side is omitted.
 
 The `subscribed` source proxies OTX `GET /api/v1/pulses/subscribed?limit=<pageSize>&page=<page>`.
 The `mine` source proxies OTX `GET /api/v1/pulses/my?limit=<pageSize>&page=<page>`;
@@ -284,6 +294,7 @@ envelope. All datetimes normalize timezone-less upstream values to ISO.
 |---|---|---|
 | S2 hard block | #25 (to=SENT), #47, #52 | `409 PENDING_SUGGESTIONS` |
 | Invalid CVE id write | #22, #26, #35 (accept) | `422 VALIDATION` naming the bad value; the accept merge is refused and the suggestion stays `PENDING` |
+| Delete an ACCEPTED suggestion | #36b | `422 VALIDATION` — accepted rows are frozen audit material; unknown id → `404 NOT_FOUND` |
 | IOC value/type mismatch | #29, #30 | `400 VALIDATION` naming type, problem, and value |
 | Invalid stored IOCs at push | #52 | `422 VALIDATION` with `details.iocs[]` culprits; no upstream call |
 | S3 inactive gating | #47 | `all` excludes inactive (200); explicit inactive id → `409 INACTIVE_TARGET` |

@@ -60,6 +60,12 @@ export type TicketActivity = z.infer<typeof TicketActivitySchema>;
 
 export const ListTicketActivityResponseSchema = paginated(TicketActivitySchema);
 
+/** ?page&pageSize&action — the optional action narrows the timeline to one
+ * TicketActivityAction; any other value is rejected as 400 VALIDATION. */
+const ActivityListQuerySchema = pageQuery.extend({
+  action: z.optional(z.enum(PrismaTicketActivityAction)),
+});
+
 type ActivityRow = Prisma.TicketActivityGetPayload<{
   include: { actor: { select: { name: true } } };
 }>;
@@ -77,7 +83,7 @@ export function toTicketActivityDto(row: ActivityRow): TicketActivity {
 }
 
 /** Route 53 — GET /tickets/:id/activity: the ticket's audit timeline,
- * newest first, actor names joined. */
+ * newest first, actor names joined, optionally narrowed by ?action=. */
 export async function registerActivityRoute(app: FastifyInstance): Promise<void> {
   const routeApp = app.withTypeProvider<ZodTypeProvider>();
 
@@ -86,15 +92,18 @@ export async function registerActivityRoute(app: FastifyInstance): Promise<void>
     {
       schema: {
         params: UuidIdParamSchema,
-        querystring: pageQuery,
+        querystring: ActivityListQuerySchema,
         response: { 200: ListTicketActivityResponseSchema },
       },
       onRequest: [app.requireRole("ADMIN", "EDITOR", "ANALYST")],
     },
     async (request) => {
       const { id } = request.params;
-      const { page, pageSize } = request.query;
-      const where: Prisma.TicketActivityWhereInput = { ticketId: id };
+      const { page, pageSize, action } = request.query;
+      const where: Prisma.TicketActivityWhereInput = {
+        ticketId: id,
+        ...(action === undefined ? {} : { action }),
+      };
       const [rows, total] = await prisma.$transaction([
         prisma.ticketActivity.findMany({
           where,

@@ -28,6 +28,8 @@ const actionParams = z.object({
   suggestionId: z.uuid(),
 });
 
+const deleteParams = z.object({ id: z.uuid() });
+
 function toList(value: string): string[] {
   return value
     .split(/\r?\n|,/)
@@ -65,7 +67,7 @@ function parseSuggestion(row: { content: string }): { field: SuggestibleField; s
 
 /** Activity detail JSON {field, value≤500, decision} — the value is capped
  * so the audit trail never balloons on long rewrites. */
-function decisionDetail(field: string, value: string, decision: "ACCEPTED" | "REJECTED"): string {
+function decisionDetail(field: string, value: string, decision: "ACCEPTED" | "REJECTED" | "deleted"): string {
   return JSON.stringify({ field, value: value.slice(0, 500), decision });
 }
 
@@ -183,5 +185,40 @@ export default async function suggestionRoutes(app: FastifyInstance): Promise<vo
       return updated;
     });
     return { suggestion: toSuggestion(updated) };
+  });
+
+  // DELETE /tickets/suggestions/:id — discard a suggestion row (204).
+  // PENDING and REJECTED rows are deletable cleanup; an ACCEPTED row is
+  // frozen audit material (422 VALIDATION). The SUGGESTION_DELETED entry is
+  // appended — earlier decision rows are never rewritten (history is
+  // append-only), so a rejected-then-deleted suggestion keeps its REJECTED
+  // entry alongside the delete marker.
+  f.delete("/suggestions/:id", {
+    onRequest: [work],
+    schema: {
+      params: deleteParams,
+    },
+  }, async (request, reply) => {
+    const { id } = request.params;
+    const row = await app.prisma.aiSuggestion.findUnique({ where: { id } });
+    if (row === null) {
+      throw new AppError("NOT_FOUND", "Suggestion not found");
+    }
+    if (row.status === SuggestionStatus.ACCEPTED) {
+      throw new AppError("VALIDATION", "An accepted suggestion is audit material and cannot be deleted", undefined, 422);
+    }
+    const payload = JSON.parse(row.content) as { field?: unknown; suggestedValue?: unknown };
+    const field = typeof payload.field === "string" ? payload.field : "";
+    const suggestedValue = typeof payload.suggestedValue === "string" ? payload.suggestedValue : "";
+    await app.prisma.$transaction(async (tx) => {
+      await tx.aiSuggestion.delete({ where: { id } });
+      await recordActivity(tx, {
+        ticketId: row.ticketId,
+        actorId: request.user.sub,
+        action: "SUGGESTION_DELETED",
+        detail: decisionDetail(field, suggestedValue, "deleted"),
+      });
+    });
+    return reply.code(204).send();
   });
 }

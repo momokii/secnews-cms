@@ -922,7 +922,7 @@ describe("TASK-PUSHFIX push correctness", () => {
       expect(body.TLP).toBe("red");
       expect(body.public).toBe(false);
       expect(body.name).toContain("C4 fixture");
-      expect(body.description).toBe("Adversaries target the sector.\n\nDetailed narrative.");
+      expect(body.description).toBe("Adversaries target the sector.");
       expect(body.tags).toEqual(["secnews", "TLP:RED"]);
       expect(body.references).toEqual(["https://example.com/advisory"]);
       const indicators = [...body.indicators].sort((a, b) => a.indicator.localeCompare(b.indicator));
@@ -976,11 +976,14 @@ describe("TASK-PUSHFIX push correctness", () => {
         name: string;
         public: boolean;
         TLP: string;
-        tags: string[];
-        indicators: Array<{ indicator: string; type: string }>;
+        indicators: { add: Array<{ indicator: string; type: string }>; remove?: Array<{ id: string }> };
       };
       expect(patchBody.TLP).toBe("amber");
-      expect(patchBody.indicators).toEqual([{ indicator: "kelanach.xyz", type: "domain" }]);
+      // TASK-SYNCDEL: the stubbed live pulse carries no indicators yet, so
+      // the documented {add,remove} dict adds the full desired set
+      expect(patchBody.indicators).toEqual({
+        add: [{ indicator: "kelanach.xyz", type: "domain" }],
+      });
 
       // And: the ticket still points at the SAME pulse and the activity
       // trail says the pulse was updated
@@ -1031,23 +1034,21 @@ describe("TASK-AIB OTX description truncation (OTX caps description at 1024)", (
     await app.close();
   });
 
-  /** READY ticket whose joined overview+description is exactly 1882 chars —
-   * the live-failure fixture ("description Must be 0-1024 chars (actual 1882)"). */
-  async function longDescriptionTicket(): Promise<{ ticketId: string; joined: string }> {
-    const overview = "O".repeat(500);
-    const description = "D".repeat(1380); // 500 + "\n\n" + 1380 = 1882
+  /** READY ticket whose OVERVIEW alone is 1100 chars — past OTX's 1024
+   * description cap (TASK-SYNCDEL: the pulse description is the overview). */
+  async function longDescriptionTicket(): Promise<{ ticketId: string; overview: string }> {
+    const overview = "O".repeat(1100);
     const ticketId = await createTestTicket({
       overview,
-      description,
       references: ["https://example.com/advisory"],
     });
     await prisma.ticket.update({ where: { id: ticketId }, data: { status: "READY" } });
-    return { ticketId, joined: `${overview}\n\n${description}` };
+    return { ticketId, overview };
   }
 
-  it("AIB-OTX-01: a 1882-char description truncates to 1024 chars with an ellipsis on create", async () => {
-    // Given: a READY ticket whose joined description exceeds OTX's 1024 cap
-    const { ticketId, joined } = await longDescriptionTicket();
+  it("AIB-OTX-01: a 1100-char overview truncates to 1024 chars with an ellipsis on create", async () => {
+    // Given: a READY ticket whose overview exceeds OTX's 1024 cap
+    const { ticketId, overview } = await longDescriptionTicket();
     const { calls } = stubFetch(200, { id: "pulse-long" });
     try {
       // When: it is pushed
@@ -1059,15 +1060,15 @@ describe("TASK-AIB OTX description truncation (OTX caps description at 1024)", (
       });
 
       // Then: the push succeeds where it previously answered 400 upstream…
-      expect(res.statusCode).toBe(200);
 
       // …and the wire description is capped at 1024 chars ending with '…',
       // the name untouched (truncation is description-only)
+      expect(res.statusCode).toBe(200);
       expect(calls).toHaveLength(1);
       const sent = JSON.parse(String(calls[0]?.init.body)) as { name: string; description: string };
       expect(sent.description).toHaveLength(1024);
       expect(sent.description.endsWith("…")).toBe(true);
-      expect(sent.description).toBe(`${joined.slice(0, 1023)}…`);
+      expect(sent.description).toBe(`${overview.slice(0, 1023)}…`);
       expect(sent.name).toContain("C4 fixture");
     } finally {
       await cleanupTicket(ticketId);
