@@ -180,18 +180,32 @@ describe("FE-PRM-03: placeholder legend", () => {
     // When: the prompts page renders
     renderPage();
 
-    // Then: the legend lists the three renderer bindings and states that
-    // unknown placeholders stay literal
+    // Then: the legend lists every renderer binding (the three aggregated
+    // blocks plus the granular fields, mirroring PROMPT_PLACEHOLDERS in
+    // prompt-template.ts) and states that unknown placeholders stay literal
     const legend = await screen.findByLabelText("Placeholder legend");
     for (const token of [
       "{{ticketContext}}",
       "{{missingFields}}",
       "{{currentFields}}",
+      "{{title}}",
+      "{{summary}}",
+      "{{findingType}}",
+      "{{tlp}}",
+      "{{iocs}}",
+      "{{sources}}",
+      "{{overview}}",
+      "{{description}}",
+      "{{recommendations}}",
+      "{{references}}",
+      "{{cveIds}}",
+      "{{affectedVersions}}",
+      "{{mitigation}}",
     ]) {
       expect(legend.textContent).toContain(token);
     }
-    expect(legend.textContent).not.toContain("{{title}}");
-    expect(legend.textContent).not.toContain("{{iocs}}");
+    const legendItems = legend.querySelectorAll("li");
+    expect(legendItems).toHaveLength(16);
     expect(legend.textContent).toContain("Unknown placeholders stay literal");
   });
 });

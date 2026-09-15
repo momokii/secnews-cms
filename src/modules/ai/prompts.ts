@@ -62,13 +62,23 @@ export function missingFields(ticket: TicketWithRelations): SuggestibleField[] {
   return AUTO_FILL_FIELDS.filter((field) => currentValueOf(ticket, field) === null);
 }
 
-/** The ticket header block injected as the {{ticketContext}} prompt placeholder. */
-export function ticketContext(ticket: TicketWithRelations): string {
-  const iocs = ticket.iocs.map((ioc) => `${ioc.type}:${ioc.value}`).join(", ");
-  const sources = ticket.sources
+/** Comma-joined "type:value" IOC list — empty string when the ticket has none. */
+export function iocValues(ticket: TicketWithRelations): string {
+  return ticket.iocs.map((ioc) => `${ioc.type}:${ioc.value}`).join(", ");
+}
+
+/** Comma-joined source urls/notes — empty string when the ticket has none. */
+export function sourceValues(ticket: TicketWithRelations): string {
+  return ticket.sources
     .map((source) => source.url ?? source.note ?? "")
     .filter((entry) => entry !== "")
     .join(", ");
+}
+
+/** The ticket header block injected as the {{ticketContext}} prompt placeholder. */
+export function ticketContext(ticket: TicketWithRelations): string {
+  const iocs = iocValues(ticket);
+  const sources = sourceValues(ticket);
   return [
     `title: ${ticket.title}`,
     `summary: ${ticket.summary}`,

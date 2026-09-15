@@ -96,6 +96,19 @@ describe("TASK-PROMPT prompt template management (fill/enrich)", () => {
       "ticketContext",
       "missingFields",
       "currentFields",
+      "title",
+      "summary",
+      "findingType",
+      "tlp",
+      "iocs",
+      "sources",
+      "overview",
+      "description",
+      "recommendations",
+      "references",
+      "cveIds",
+      "affectedVersions",
+      "mitigation",
     ]);
   });
 
@@ -234,26 +247,52 @@ describe("TASK-PROMPT prompt template management (fill/enrich)", () => {
     }
   });
 
-  it("seeded default ENRICH template includes the security drafting contract", async () => {
-    // Given: the seeded ENRICH row and a bare ticket with a known title
-    const ticketId = await createTestTicket();
-    await prisma.ticket.update({ where: { id: ticketId }, data: { title: FILL_TITLE } });
+  it("granular placeholders render ticket data into the provider payload", async () => {
+    // Given: an ADMIN-stored fill template using every granular placeholder
+    const ticketId = await createKnownTicket();
     try {
-      // When: AI enrich runs with the default template
+      await app.inject({
+        method: "PUT",
+        url: "/prompts/FILL",
+        headers: { authorization: admin },
+        payload: {
+          content: [
+            "GRAN-TEST",
+            "title={{title}} summary={{summary}} findingType={{findingType}} tlp={{tlp}}",
+            "iocs={{iocs}} sources={{sources}}",
+            "overview={{overview}} description={{description}} recommendations={{recommendations}}",
+            "references={{references}} cveIds={{cveIds}} affectedVersions={{affectedVersions}} mitigation={{mitigation}}",
+            "Answer JSON only.",
+          ].join("\n"),
+        },
+      });
+
+      // When: AI fill runs
       const prompts = captureUserPrompts();
       const res = await app.inject({
         method: "POST",
-        url: `/tickets/${ticketId}/ai/enrich`,
+        url: `/tickets/${ticketId}/ai/fill`,
         headers: { authorization: editor },
         payload: {},
       });
 
-      // Then: the prompt includes the current security drafting contract
+      // Then: each granular placeholder is substituted with ticket data —
+      // headers verbatim, evidence lists, unset finals as empty strings
       expect(res.statusCode).toBe(200);
-      expect(prompts[0]).toContain("Use these exact sections: Overview, Description, IOC, Recommendations, References");
-      expect(prompts[0]).toContain("Clearly separate enrichment");
+      expect(prompts[0]).toContain("GRAN-TEST");
+      expect(prompts[0]).toContain(`title=${FILL_TITLE}`);
+      expect(prompts[0]).toContain("summary=Adversaries brute-forcing public SSH endpoints.");
+      expect(prompts[0]).toContain("findingType=OTHER");
+      expect(prompts[0]).toContain("tlp=AMBER");
+      expect(prompts[0]).toContain("iocs=DOMAIN:evil.com");
+      expect(prompts[0]).toContain("sources=https://src.example/a");
+      expect(prompts[0]).toContain("overview=");
+      expect(prompts[0]).toContain("cveIds=");
+      expect(prompts[0]).toContain("mitigation=");
+      expect(prompts[0]).not.toContain("{{");
     } finally {
       await cleanupTicket(ticketId);
+      await reseedDefaults();
     }
   });
 });

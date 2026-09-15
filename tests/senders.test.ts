@@ -152,6 +152,31 @@ describe("Telegram sender (SND-P-02)", () => {
     // Then: both attempts hit the wire — the sender is stateless per call
     expect(calls).toBe(2);
   });
+
+  it("TASK-TELEGRAM-NET: a rejected fetch names the underlying cause instead of a bare 'fetch failed'", async () => {
+    // Given: the wire rejects exactly like undici does — TypeError wrapping the real cause
+    const fetchImpl = async (): Promise<Response> => {
+      throw new TypeError("fetch failed", { cause: new Error("connect ETIMEDOUT 149.154.166.110:443") });
+    };
+
+    // When: the send is invoked
+    // Then: the rejection carries the cause so the DeliveryAudit is diagnosable
+    await expect(
+      sendTelegram({ token: "t", chatId: "c", text: "x", fetchImpl }),
+    ).rejects.toThrow(/connect ETIMEDOUT 149\.154\.166\.110:443/);
+  });
+
+  it("TASK-TELEGRAM-NET: the send carries an abort timeout so a hung connection cannot stall dispatch", async () => {
+    // Given: a mock fetch capturing the request init
+    const { requests, fetchImpl } = fetchCapture();
+
+    // When: the send is invoked
+    await sendTelegram({ token: "t", chatId: "c", text: "x", fetchImpl });
+
+    // Then: the request carries an AbortSignal (the connect/read timeout)
+    const req = requests[0] as CapturedRequest;
+    expect(req.init.signal).toBeInstanceOf(AbortSignal);
+  });
 });
 
 describe("SMTP sender (SND-P-03)", () => {

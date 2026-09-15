@@ -2,7 +2,9 @@ import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PromptKind } from "../../generated/prisma/enums.js";
 import {
   currentValueOf,
+  iocValues,
   missingFields,
+  sourceValues,
   SUGGESTIBLE_FIELDS,
   ticketContext,
   type TicketWithRelations,
@@ -40,7 +42,59 @@ export const PROMPT_PLACEHOLDERS = [
     name: "currentFields",
     description: "One line per suggestible final field: \"<field>: <current value or <empty>>\"",
   },
-] as const;
+  {
+    name: "title",
+    description: "Ticket title verbatim",
+  },
+  {
+    name: "summary",
+    description: "Ticket summary verbatim",
+  },
+  {
+    name: "findingType",
+    description: "Ticket finding type (VULNERABILITY, THREAT_CAMPAIGN, OTHER)",
+  },
+  {
+    name: "tlp",
+    description: "Ticket TLP level (AMBER default)",
+  },
+  {
+    name: "iocs",
+    description: "IOCs as type:value, comma-joined — empty string when none",
+  },
+  {
+    name: "sources",
+    description: "Source urls/notes, comma-joined — empty string when none",
+  },
+  {
+    name: "overview",
+    description: "Current overview, or empty string when unset",
+  },
+  {
+    name: "description",
+    description: "Current description, or empty string when unset",
+  },
+  {
+    name: "recommendations",
+    description: "Current recommendations, or empty string when unset",
+  },
+  {
+    name: "references",
+    description: "Current newline-joined references, or empty string when unset",
+  },
+  {
+    name: "cveIds",
+    description: "Current newline-joined CVE ids, or empty string when unset",
+  },
+  {
+    name: "affectedVersions",
+    description: "Current newline-joined affected versions, or empty string when unset",
+  },
+  {
+    name: "mitigation",
+    description: "Current mitigation, or empty string when unset",
+  },
+] as const satisfies readonly { name: keyof PromptBindings; description: string }[];
 
 export const DEFAULT_PROMPTS: Record<PromptKind, string> = {
   FILL: [
@@ -86,12 +140,41 @@ export const DEFAULT_PROMPTS: Record<PromptKind, string> = {
   ].join("\n"),
 };
 
-/** The ticket-data values the renderer substitutes into a template. */
+/** The ticket-data values the renderer substitutes into a template: the three
+ * aggregated blocks plus one granular entry per ticket header, evidence list,
+ * and suggestible final field. Every key matches a PROMPT_PLACEHOLDERS name. */
 export type PromptBindings = {
   ticketContext: string;
   missingFields: string;
   currentFields: string;
+  title: string;
+  summary: string;
+  findingType: string;
+  tlp: string;
+  iocs: string;
+  sources: string;
+  overview: string;
+  description: string;
+  recommendations: string;
+  references: string;
+  cveIds: string;
+  affectedVersions: string;
+  mitigation: string;
 };
+
+type FinalFieldBindings = Pick<PromptBindings, (typeof SUGGESTIBLE_FIELDS)[number]>;
+
+function finalFieldBindings(ticket: TicketWithRelations): FinalFieldBindings {
+  return {
+    overview: currentValueOf(ticket, "overview") ?? "",
+    description: currentValueOf(ticket, "description") ?? "",
+    recommendations: currentValueOf(ticket, "recommendations") ?? "",
+    references: currentValueOf(ticket, "references") ?? "",
+    cveIds: currentValueOf(ticket, "cveIds") ?? "",
+    affectedVersions: currentValueOf(ticket, "affectedVersions") ?? "",
+    mitigation: currentValueOf(ticket, "mitigation") ?? "",
+  };
+}
 
 export function promptBindings(ticket: TicketWithRelations): PromptBindings {
   return {
@@ -100,15 +183,24 @@ export function promptBindings(ticket: TicketWithRelations): PromptBindings {
     currentFields: SUGGESTIBLE_FIELDS.map((field) => `${field}: ${currentValueOf(ticket, field) ?? "<empty>"}`).join(
       "\n",
     ),
+    title: ticket.title,
+    summary: ticket.summary,
+    findingType: ticket.findingType,
+    tlp: ticket.tlp,
+    iocs: iocValues(ticket),
+    sources: sourceValues(ticket),
+    ...finalFieldBindings(ticket),
   };
 }
 
-/** Substitute every bound placeholder occurrence (repeatable). */
+/** Substitute every bound placeholder occurrence (repeatable). Unknown
+ * {{...}} text is untouched — only keys of PromptBindings are replaced. */
 export function renderPromptTemplate(template: string, bindings: PromptBindings): string {
-  return template
-    .replaceAll("{{ticketContext}}", bindings.ticketContext)
-    .replaceAll("{{missingFields}}", bindings.missingFields)
-    .replaceAll("{{currentFields}}", bindings.currentFields);
+  let rendered = template;
+  for (const [name, value] of Object.entries(bindings)) {
+    rendered = rendered.replaceAll(`{{${name}}}`, value);
+  }
+  return rendered;
 }
 
 /** Stored ADMIN template for the kind — or the built-in default when the row

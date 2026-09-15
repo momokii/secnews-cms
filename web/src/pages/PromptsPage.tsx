@@ -6,8 +6,9 @@ import { usePrompts, useSavePrompt } from "../lib/usePrompts";
 import { PromptHistory } from "./PromptHistory";
 
 /** Mirrors PROMPT_PLACEHOLDERS in src/modules/ai/prompt-template.ts — the
- * variables the renderer actually binds. Unknown placeholders are left
- * literal by the backend renderer. */
+ * variables the renderer actually binds (aggregated blocks plus granular
+ * ticket/evidence fields). Unknown placeholders are left literal by the
+ * backend renderer. */
 const PROMPT_PLACEHOLDERS = [
   {
     token: "{{ticketContext}}",
@@ -22,6 +23,58 @@ const PROMPT_PLACEHOLDERS = [
   {
     token: "{{currentFields}}",
     gloss: "One line per suggestible final field: \"<field>: <current value or <empty>>\"",
+  },
+  {
+    token: "{{title}}",
+    gloss: "Ticket title verbatim",
+  },
+  {
+    token: "{{summary}}",
+    gloss: "Ticket summary verbatim",
+  },
+  {
+    token: "{{findingType}}",
+    gloss: "Ticket finding type (VULNERABILITY, THREAT_CAMPAIGN, OTHER)",
+  },
+  {
+    token: "{{tlp}}",
+    gloss: "Ticket TLP level (AMBER default)",
+  },
+  {
+    token: "{{iocs}}",
+    gloss: "IOCs as type:value, comma-joined — empty string when none",
+  },
+  {
+    token: "{{sources}}",
+    gloss: "Source urls/notes, comma-joined — empty string when none",
+  },
+  {
+    token: "{{overview}}",
+    gloss: "Current overview, or empty string when unset",
+  },
+  {
+    token: "{{description}}",
+    gloss: "Current description, or empty string when unset",
+  },
+  {
+    token: "{{recommendations}}",
+    gloss: "Current recommendations, or empty string when unset",
+  },
+  {
+    token: "{{references}}",
+    gloss: "Current newline-joined references, or empty string when unset",
+  },
+  {
+    token: "{{cveIds}}",
+    gloss: "Current newline-joined CVE ids, or empty string when unset",
+  },
+  {
+    token: "{{affectedVersions}}",
+    gloss: "Current newline-joined affected versions, or empty string when unset",
+  },
+  {
+    token: "{{mitigation}}",
+    gloss: "Current mitigation, or empty string when unset",
   },
 ] as const;
 
