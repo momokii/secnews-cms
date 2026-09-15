@@ -3,6 +3,7 @@ import { formatTimestamp } from "../lib/datetime";
 import { getUser } from "../lib/tokenStore";
 import type { PromptEntry, PromptKind } from "../lib/promptsApi";
 import { usePrompts, useSavePrompt } from "../lib/usePrompts";
+import { PromptHistory } from "./PromptHistory";
 
 /** Mirrors the backend renderer vocabulary (src/modules/ai/prompts.ts):
  * the ticket-context lines plus the suggestible final fields. Unknown
@@ -26,6 +27,20 @@ const PROMPT_PLACEHOLDERS = [
 const CARD_TITLES: Readonly<Record<PromptKind, string>> = {
   FILL: "Fill",
   ENRICH: "Enrich",
+};
+
+/** Analyst-facing guidance per template: when it runs, what it may use, what
+ * it guarantees, and how its output lands in the ticket. */
+const CARD_GUIDANCE: Readonly<Record<PromptKind, readonly string[]>> = {
+  FILL: [
+    "Runs from the Fill button on a ticket: it drafts the report body from the ticket's working materials.",
+    "It never invents ticket facts — it organizes only what the ticket already contains.",
+  ],
+  ENRICH: [
+    "Runs from the Enrich button on a ticket: it drafts the overview, description, recommendations, references and CVE context from the ticket's working materials.",
+    "It never invents findings — every suggestion traces back to the ticket's own sources.",
+    "PENDING suggestions auto-merge on accept, so every addition needs Accept, Edit, or Reject before it reaches the final fields.",
+  ],
 };
 
 interface PromptCardProps {
@@ -54,6 +69,12 @@ function PromptCard({ kind, content, updatedAt, isAdmin }: PromptCardProps) {
           Updated {formatTimestamp(updatedAt)}
         </span>
       </div>
+
+      <ul className="mt-2 space-y-1 text-xs text-slate-500">
+        {CARD_GUIDANCE[kind].map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
 
       <textarea
         aria-label={label}
@@ -86,6 +107,13 @@ function PromptCard({ kind, content, updatedAt, isAdmin }: PromptCardProps) {
           Save {label}
         </button>
       ) : null}
+
+      <PromptHistory
+        kind={kind}
+        title={CARD_TITLES[kind]}
+        isAdmin={isAdmin}
+        onRestored={() => setDraft(null)}
+      />
     </div>
   );
 }

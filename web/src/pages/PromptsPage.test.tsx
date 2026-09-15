@@ -234,3 +234,93 @@ describe("FE-PRM-04: role gating", () => {
     expect(screen.getByText("Only ADMIN can edit the org-wide prompts.")).toBeTruthy();
   });
 });
+
+describe("FE-PRM-05: prompt guidance", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it("explains when each prompt runs, its inputs, guarantees, and output", async () => {
+    // Given: both prompt templates load
+    setToken("test-token");
+    vi.stubGlobal(
+      "fetch",
+      routeFetch([
+        {
+          match: (url, method) => method === "GET" && url === "/api/prompts",
+          respond: () => jsonResponse(promptsFixture),
+        },
+      ]),
+    );
+
+    // When: the prompts page renders
+    renderPage();
+
+    // Then: analyst guidance is visible on both cards
+    expect(await screen.findByText(/Runs from the Fill button/i)).toBeTruthy();
+    expect(screen.getByText(/Runs from the Enrich button/i)).toBeTruthy();
+    expect(screen.getAllByText(/working materials/i)).toHaveLength(2);
+    expect(screen.getAllByText(/never invents/i)).toHaveLength(2);
+    expect(screen.getByText(/PENDING suggestions auto-merge on accept/i)).toBeTruthy();
+    expect(screen.getByText(/every addition needs Accept, Edit, or Reject/i)).toBeTruthy();
+  });
+});
+
+describe("FE-PRM-06: prompt history", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it("lists paginated revisions and restores a selected revision through PUT", async () => {
+    // Given: history has two revisions on its first page and one on its second
+    setToken("test-token");
+    setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "a@b.c", name: "Admin", role: "ADMIN" });
+    const fetchMock = routeFetch([
+      {
+        match: (url, method) => method === "GET" && url === "/api/prompts",
+        respond: () => jsonResponse(promptsFixture),
+      },
+      {
+        match: (url, method) => method === "GET" && url === "/api/prompts/FILL/history?page=1&pageSize=2",
+        respond: () => jsonResponse({
+          items: [
+            { content: "fill revision newest", actorName: "Nadia", createdAt: "2026-09-03T05:00:00.000Z" },
+            { content: "fill revision older", actorName: null, createdAt: "2026-09-02T05:00:00.000Z" },
+          ], total: 3, page: 1, pageSize: 2,
+        }),
+      },
+      {
+        match: (url, method) => method === "GET" && url === "/api/prompts/FILL/history?page=2&pageSize=2",
+        respond: () => jsonResponse({
+          items: [{ content: "fill revision oldest", actorName: "Raka", createdAt: "2026-09-01T05:00:00.000Z" }],
+          total: 3, page: 2, pageSize: 2,
+        }),
+      },
+      {
+        match: (url, method) => method === "PUT" && url === "/api/prompts/FILL",
+        respond: () => jsonResponse({ kind: "FILL", content: "fill revision oldest", updatedAt: "2026-09-04T05:00:00.000Z" }),
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    // When: history opens, the admin pages, then confirms restoring the oldest revision
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "View Fill history" }));
+    expect(await screen.findByText("fill revision newest")).toBeTruthy();
+    expect(screen.getByText(/Page 1 of 2/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next history page for Fill" }));
+    expect(await screen.findByText("fill revision oldest")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Restore fill revision oldest" }));
+    fireEvent.click(screen.getByRole("button", { name: "Restore prompt" }));
+
+    // Then: the existing save endpoint receives the exact revision content
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/prompts/FILL",
+        expect.objectContaining({ method: "PUT", body: JSON.stringify({ content: "fill revision oldest" }) }),
+      ),
+    );
+  });
+});

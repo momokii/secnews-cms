@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listPrompts, putPrompt } from "./promptsApi";
+import { listPrompts, listPromptHistory, putPrompt } from "./promptsApi";
 import type { PromptKind } from "./promptsApi";
 
 /** React Query bindings for the AI prompt templates. Saving invalidates the
@@ -9,6 +9,24 @@ export function usePrompts() {
   return useQuery({
     queryKey: ["prompts"],
     queryFn: listPrompts,
+  });
+}
+
+export function usePromptHistory({
+  kind,
+  page,
+  pageSize,
+  enabled,
+}: {
+  readonly kind: PromptKind;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly enabled: boolean;
+}) {
+  return useQuery({
+    queryKey: ["prompts", "history", kind, page, pageSize],
+    queryFn: () => listPromptHistory(kind, page, pageSize),
+    enabled,
   });
 }
 
