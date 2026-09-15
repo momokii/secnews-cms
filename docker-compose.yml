@@ -21,6 +21,12 @@ services:
   api:
     image: node:22-alpine
     working_dir: /app
+    # Public DNS: the host stub resolver answers Google hosts with
+    # IPv6-only records on networks without IPv6 egress, which wedges
+    # AI provider calls (ETIMEDOUT). Scoped to this service on purpose.
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     environment:
       APP_ENV: ${APP_ENV:-development}
       # Inside the compose network the DB hostname is `db`, not localhost.
