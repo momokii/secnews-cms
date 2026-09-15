@@ -160,7 +160,7 @@ DEEPSEEK) with its configured (or default) model. An explicit provider without
 a configured key is `422 VALIDATION` — never a silent fallback. Every stored
 suggestion records the resolved `provider` + `model` that produced it. The
 fill/enrich prompt text comes from the ADMIN-managed template per kind (#55/#56,
-default = the legacy hardcoded prompts verbatim); the engine substitutes
+default = the best-practice built-in security-intelligence prompts); the engine substitutes
 `{{ticketContext}}` / `{{missingFields}}` / `{{currentFields}}` with the
 ticket's actual data.
 
@@ -172,8 +172,9 @@ ticket's actual data.
 | 35 | `POST /tickets/:id/suggestions/:suggestionId/accept` | WORK | — | 200 `SuggestionActionResponseSchema`. **Accept AUTO-MERGES** the `suggestedValue` into the ticket's matching final field (`overview`/`description`/`recommendations`/`mitigation`/`affectedVersions` as text; `references`/`cveIds` split on newlines/commas) — clients never copy values manually | 422 `VALIDATION` when accepting a `cveIds` suggestion whose entries don't match `^CVE-\d{4}-\d{4,}$` — the merge is refused, the suggestion STAYS `PENDING`, and the message explains edit-the-fields-or-reject |
 | 36 | `POST /tickets/:id/suggestions/:suggestionId/reject` | WORK | — | 200 `SuggestionActionResponseSchema` | |
 | 36b | `DELETE /tickets/suggestions/:suggestionId` | WORK | — | 204 (empty body); the row is removed and a `SUGGESTION_DELETED` activity entry is appended with the JSON detail `{"field","value≤500","decision":"deleted"}` — earlier decision rows are never rewritten (history is append-only, so a rejected-then-deleted suggestion keeps its `SUGGESTION_REJECTED` entry and an accepted-then-deleted one keeps its `SUGGESTION_ACCEPTED` entry) | 404 `NOT_FOUND` unknown id |
-| 55 | `GET /prompts` | ANY | — | 200 `[{kind: "FILL"\|"ENRICH", content, updatedAt (null = built-in default, never edited), placeholders: [{name, description}]}]` — one item per kind. Serves the stored ADMIN template per kind, or the built-in default when the row is missing. `placeholders` is the legend of variables the engine injects: `{{ticketContext}}` (title, summary, findingType, tlp, iocs, sources — lines only when non-empty), `{{missingFields}}` (comma-joined strict fill scope), `{{currentFields}}` (`<field>: <value or <empty>>` per suggestible field) | |
-| 56 | `PUT /prompts/:kind` | ADMIN | `{content}` (non-empty, kind `FILL\|ENRICH`; 400 otherwise) | 200 `PromptTemplateSchema` (upserted row) — #32/#33 render this stored template by substituting the placeholder legend above with the ticket's actual data; unknown `{{...}}` text passes through untouched. Missing row → built-in default (seeded with the legacy hardcoded prompts verbatim) | 403 non-ADMIN; 400 empty content / unknown kind |
+| 55 | `GET /prompts` | ANY | — | 200 `[{kind: "FILL"\|"ENRICH", content, updatedAt (null = built-in default, never edited), placeholders: [{name, description}]}]` — one item per kind. Serves the stored ADMIN template per kind, or the best-practice built-in default when the row is missing. `placeholders` is the legend of variables the engine injects: `{{ticketContext}}` (title, summary, findingType, tlp, iocs, sources — lines only when non-empty), `{{missingFields}}` (comma-joined strict fill scope), `{{currentFields}}` (`<field>: <value or <empty>>` per suggestible field) | |
+| 56 | `PUT /prompts/:kind` | ADMIN | `{content}` (non-empty, kind `FILL\|ENRICH`; 400 otherwise) | 200 `PromptTemplateSchema` (upserted row); every successful PUT atomically appends a revision `{promptKind,content,actorId,createdAt}`. #32/#33 render this stored template by substituting the placeholder legend above with the ticket's actual data; unknown `{{...}}` text passes through untouched. Missing row → best-practice built-in default | 403 non-ADMIN; 400 empty content / unknown kind |
+| 56a | `GET /prompts/:kind/history` | ANY | `?page&pageSize` | 200 `{items:[{id,promptKind,content,actorId,actorName,createdAt}],total,page,pageSize}` — append-only revisions, newest first | 400 unknown kind |
 
 Deletion is available for EVERY suggestion status (`PENDING`, `REJECTED`
 **and** `ACCEPTED`). It removes ONLY the suggestion row: a value already
@@ -223,7 +224,7 @@ Schemas: `src/modules/delivery/schema.ts`.
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 47 | `POST /tickets/:id/send` | MGR | `SendBodySchema` `{channelIds[]\|all}` | 200 `SendResponseSchema` `{ticket, audit[]}` | 422 `VALIDATION` ticket not `READY` (SND-02); 409 `PENDING_SUGGESTIONS` (S2, SND-03); 409 `INACTIVE_TARGET` explicit inactive channel id |
+| 47 | `POST /tickets/:id/send` | MGR | `SendBodySchema` `{channelIds[]\|all}` | 200 `SendResponseSchema` `{ticket, audit[]}`; action is allowed from `READY` or `SENT`, leaves status `SENT`, and appends audit/activity rows on every channel attempt | 422 `VALIDATION` ticket not `READY` or `SENT` (SND-02); 409 `PENDING_SUGGESTIONS` (S2, SND-03); 409 `INACTIVE_TARGET` explicit inactive channel id |
 | 48 | `GET /tickets/:id/delivery-audit` | ANY | `?page&pageSize` | 200 `ListDeliveryAuditResponseSchema` | |
 
 S3 contract: `all` resolves to **currently-ACTIVE channels only** (inactive
@@ -241,7 +242,7 @@ TLP→OTX mapping: `docs/STATES.md` §4.
 | 49 | `GET /bulletin/template` | ANY | — | 200 `BulletinTemplateSchema` | |
 | 50 | `PUT /bulletin/template` | ADMIN | `PutTemplateBodySchema` | 200 `BulletinTemplateSchema` | |
 | 51 | `POST /tickets/:id/bulletin/preview` | WORK | `{}` | 200 `PreviewResponseSchema` `{rendered}` | 422 `VALIDATION` missing required final fields — `overview`, `description` only (PREV-02); `recommendations`/`references` are optional (§10) and drop out of the render when empty |
-| 52 | `POST /tickets/:id/otx` | MGR | `{}` | 200 `PushOtxResponseSchema` `{pulseId, pulseUrl, isPublic, tlpMarking}` | 422 `VALIDATION` not `READY`; 422 `VALIDATION` push pre-check: any included IOC whose value does not parse as its `type` blocks the whole push (`details.iocs[]` names type/value/problem per culprit — nothing is sent upstream); 409 `PENDING_SUGGESTIONS` (S2, OTX-02); upstream non-2xx → 502 `INTERNAL` with `details.upstreamStatus` + `details.upstreamBody` (≤300 chars; never the key) |
+| 52 | `POST /tickets/:id/otx` | MGR | `{}` | 200 `PushOtxResponseSchema` `{pulseId, pulseUrl, isPublic, tlpMarking}`; action is allowed from `READY` or `SENT`, leaves status `SENT`, and appends activity for each attempt | 422 `VALIDATION` not `READY` or `SENT`; 422 `VALIDATION` push pre-check: any included IOC whose value does not parse as its `type` blocks the whole push (`details.iocs[]` names type/value/problem per culprit — nothing is sent upstream); 409 `PENDING_SUGGESTIONS` (S2, OTX-02); upstream non-2xx → 502 `INTERNAL` with `details.upstreamStatus` + `details.upstreamBody` (≤300 chars; never the key) |
 | 53 | `GET /otx/pulses` | MGR + ANALYST (read-only) | `?page&pageSize&source=subscribed\|mine\|search&q` (`source` defaults to `subscribed`; `pageSize` clamps into 1..50, default 20; `q` used only by `search`) | 200 `ListPulsesResponseSchema` `{items[{id, name, authorName, isPublic, tlp, tags, indicatorCount, created, modified}], total, page, pageSize}` | 400 `VALIDATION` for an unsupported source; upstream failure → 502-style error envelope with `details.upstreamBody` (≤300 chars) |
 | 54 | `GET /otx/pulses/:id` | MGR + ANALYST (read-only) | — | 200 `OtxPulseDetailSchema` `{id, name, authorName, description, isPublic, tlp, tags, references, indicators[{value,type}], created, modified}` | upstream failure or pulse the key cannot access → 502-style error envelope with `details.upstreamBody` (≤300 chars; never leaks the key) |
 
