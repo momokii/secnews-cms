@@ -110,6 +110,12 @@ enum IntegrationKind {
   OTX
 }
 
+/** TASK-PROMPT: which AI flow a stored prompt template drives. */
+enum PromptKind {
+  FILL
+  ENRICH
+}
+
 // ── Models ───────────────────────────────────────────────────────────────────
 
 model User {
@@ -280,6 +286,18 @@ model BulletinTemplate {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// TASK-PROMPT: ADMIN-managed AI prompt template per flow. `kind` is unique —
+// exactly one row per FILL/ENRICH. Seeded by migration with the legacy
+// hardcoded prompts verbatim; a missing row falls back to the built-in
+// default (src/modules/ai/prompt-template.ts).
+model PromptTemplate {
+  id        String     @id @default(uuid())
+  kind      PromptKind @unique
+  content   String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
 
 // TASK-ACT: append-only audit trail of every ticket change. actorId is
