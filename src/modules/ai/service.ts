@@ -4,6 +4,7 @@ import { AppError } from "../../common/errors.js";
 import { decryptSecret } from "../../lib/crypto.js";
 import { upstream502, UpstreamError } from "../../common/upstream.js";
 import { callAnthropic } from "./providers/anthropic.js";
+import { callDeepSeek } from "./providers/deepseek.js";
 import { callGemini } from "./providers/gemini.js";
 import { callOpenAi } from "./providers/openai.js";
 import { DEFAULT_MODELS, type ChatCompletionOptions, type ChatProviderFn } from "./providers/types.js";
@@ -22,9 +23,9 @@ import {
 /**
  * AI assist engine for fill/enrich. Provider + model resolve per request:
  * an explicit {provider, model} body choice wins; otherwise the first
- * configured provider (OPENAI → ANTHROPIC → GEMINI) with its configured
- * (or default) model. An explicit provider without a key is a semantic
- * rejection — never a silent fallback. Model output is parsed into
+ * configured provider (OPENAI → ANTHROPIC → GEMINI → DEEPSEEK) with its
+ * configured (or default) model. An explicit provider without a key is a
+ * semantic rejection — never a silent fallback. Model output is parsed into
  * per-field suggestions that land as PENDING AiSuggestion rows carrying
  * the resolved provider + model — the ticket's final fields are only
  * touched later, by suggestion accept.
@@ -45,17 +46,18 @@ export type SuggestionDraft = {
 type StoredProviderConfig = { apiKey: string; model?: string };
 
 type ProviderChoice = {
-  provider?: "OPENAI" | "ANTHROPIC" | "GEMINI";
+  provider?: "OPENAI" | "ANTHROPIC" | "GEMINI" | "DEEPSEEK";
   model?: string;
 };
 
-const PROVIDERS: Record<"OPENAI" | "ANTHROPIC" | "GEMINI", ChatProviderFn> = {
+const PROVIDERS: Record<"OPENAI" | "ANTHROPIC" | "GEMINI" | "DEEPSEEK", ChatProviderFn> = {
   OPENAI: callOpenAi,
   ANTHROPIC: callAnthropic,
   GEMINI: callGemini,
+  DEEPSEEK: callDeepSeek,
 };
 
-const PROVIDER_ORDER = [IntegrationKind.OPENAI, IntegrationKind.ANTHROPIC, IntegrationKind.GEMINI] as const;
+const PROVIDER_ORDER = [IntegrationKind.OPENAI, IntegrationKind.ANTHROPIC, IntegrationKind.GEMINI, IntegrationKind.DEEPSEEK] as const;
 
 type ProviderKind = (typeof PROVIDER_ORDER)[number];
 

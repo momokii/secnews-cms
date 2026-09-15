@@ -11,15 +11,15 @@ import { generateSuggestions, SemanticError, storeSuggestions, toSuggestion } fr
  * AI assist endpoints (Surface 4, #32/#33). Ticket content is the only
  * mandatory input; the body may optionally pick a provider and/or model —
  * omitted values fall back to the first configured provider (OPENAI →
- * ANTHROPIC → GEMINI) and its configured/default model. An explicit provider
- * without a key is a 422, never a silent fallback. Results land ONLY as
- * PENDING AiSuggestion rows (carrying provider + model) — final fields are
- * touched later by suggestion accept (SUG-01), never here.
+ * ANTHROPIC → GEMINI → DEEPSEEK) and its configured/default model. An
+ * explicit provider without a key is a 422, never a silent fallback. Results
+ * land ONLY as PENDING AiSuggestion rows (carrying provider + model) — final
+ * fields are touched later by suggestion accept (SUG-01), never here.
  */
 
 const fillBody = z
   .object({
-    provider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI"]).optional(),
+    provider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "DEEPSEEK"]).optional(),
     model: z.string().min(1).optional(),
   })
   .strict();
@@ -38,7 +38,7 @@ export default async function fillRoutes(app: FastifyInstance): Promise<void> {
     mode: "fill" | "enrich";
     actorId: string;
     reply: FastifyReply;
-    body: { provider?: "OPENAI" | "ANTHROPIC" | "GEMINI" | undefined; model?: string | undefined };
+    body: { provider?: "OPENAI" | "ANTHROPIC" | "GEMINI" | "DEEPSEEK" | undefined; model?: string | undefined };
   }) => {
     const { ticketId, mode, actorId, reply, body } = input;
     const ticket = await app.prisma.ticket.findUnique({

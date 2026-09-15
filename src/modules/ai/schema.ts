@@ -18,8 +18,8 @@ export const AiSuggestionSchema = z.object({
   status: SuggestionStatusEnum,
   /** Model id that produced the suggestion (null for hand-written rows). */
   model: z.string().nullable(),
-  /** Provider kind (OPENAI|ANTHROPIC|GEMINI) that produced the suggestion
-   * (null for hand-written rows). */
+  /** Provider kind (OPENAI|ANTHROPIC|GEMINI|DEEPSEEK) that produced the
+   * suggestion (null for hand-written rows). */
   provider: z.string().nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

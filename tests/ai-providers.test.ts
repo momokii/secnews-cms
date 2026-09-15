@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { callAnthropic } from "../src/modules/ai/providers/anthropic.js";
+import { callDeepSeek } from "../src/modules/ai/providers/deepseek.js";
 import { callGemini } from "../src/modules/ai/providers/gemini.js";
 import { callOpenAi } from "../src/modules/ai/providers/openai.js";
-import type { FetchLike } from "../src/modules/ai/providers/types.js";
+import { DEFAULT_MODELS, type FetchLike } from "../src/modules/ai/providers/types.js";
 
 /** Capturing fetch stub: records every call, replies with a fixed JSON body. */
 function stubFetch(status: number, body: unknown): { fetch: FetchLike; calls: Array<{ url: string; init: RequestInit }> } {
@@ -91,6 +92,51 @@ describe("TASK-C4 AI provider adapters (injectable fetch)", () => {
     };
     expect(body.contents).toEqual([{ role: "user", parts: [{ text: BASE.prompt }] }]);
     expect(body.systemInstruction).toEqual({ parts: [{ text: BASE.system }] });
+  });
+
+  it("AIP-04: deepseek posts Bearer auth to https://api.deepseek.com/chat/completions with {model,messages}", async () => {
+    // Given: a DeepSeek (OpenAI-compatible) upstream that echoes assistant text
+    const { fetch, calls } = stubFetch(200, {
+      choices: [{ message: { content: "deepseek text" }, finish_reason: "stop", index: 0 }],
+    });
+
+    // When: callDeepSeek runs
+    const out = await callDeepSeek({ ...BASE, fetchImpl: fetch });
+
+    // Then: URL, auth header and body shape match the documented DeepSeek
+    // chat-completions contract (POST {base}/chat/completions, Bearer key)
+    expect(out).toBe("deepseek text");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("https://api.deepseek.com/chat/completions");
+    expect(calls[0]?.init.method).toBe("POST");
+    const headers = new Headers(calls[0]?.init.headers);
+    expect(headers.get("authorization")).toBe(`Bearer ${BASE.apiKey}`);
+    expect(headers.get("content-type")).toBe("application/json");
+    const body = JSON.parse(String(calls[0]?.init.body)) as {
+      model: string;
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(body.model).toBe(BASE.model);
+    expect(body.messages).toEqual([
+      { role: "system", content: BASE.system },
+      { role: "user", content: BASE.prompt },
+    ]);
+  });
+
+  it("AIP-04: deepseek 401 throws with the upstream status and never the key; the default model is deepseek-flash", async () => {
+    // Given: a DeepSeek upstream answering 401 (bad key)
+    const { fetch } = stubFetch(401, { error: { message: "bad key" } });
+
+    // When/Then: the adapter throws with the status, the key never appears
+    await expect(callDeepSeek({ ...BASE, fetchImpl: fetch })).rejects.toThrow(/401/);
+    try {
+      await callDeepSeek({ ...BASE, fetchImpl: fetch });
+    } catch (error) {
+      expect(String(error)).not.toContain(BASE.apiKey);
+    }
+
+    // And: the central default model is the documented cheap chat model
+    expect(DEFAULT_MODELS.DEEPSEEK).toBe("deepseek-flash");
   });
 
   it("AIP-*: upstream failures never leak the api key in the thrown error", async () => {

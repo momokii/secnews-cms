@@ -1,5 +1,5 @@
 /**
- * Shared contract for the three AI provider adapters (AIP-01..03).
+ * Shared contract for the four AI provider adapters (AIP-01..04).
  * `fetchImpl` is injectable so tests stub the wire instead of the SDK;
  * production passes nothing and the adapter late-binds globalThis.fetch.
  */
@@ -19,11 +19,13 @@ export type ChatCompletionOptions = {
 
 export type ChatProviderFn = (options: ChatCompletionOptions) => Promise<string>;
 
-/** Central-config models are optional; these defaults keep fill/test usable. */
+/** Central-config models are optional; these defaults keep fill/test usable.
+ * DEEPSEEK's default is the documented cheap chat model (api-docs.deepseek.com). */
 export const DEFAULT_MODELS = {
   OPENAI: "gpt-4o-mini",
   ANTHROPIC: "claude-3-5-haiku-latest",
   GEMINI: "gemini-2.0-flash",
+  DEEPSEEK: "deepseek-flash",
 } as const;
 
 /** Late-bound default fetch so runtime fetch stubbing keeps working. */

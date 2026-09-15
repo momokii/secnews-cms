@@ -5,13 +5,15 @@ import { prisma } from "../src/lib/db.js";
 import { bearerFor, cleanupTicket, cleanupUsers, createTestSuggestion, createTestTicket } from "./helpers.js";
 
 /**
- * TASK-SYNCDEL — DELETE /tickets/suggestions/:id.
- * PENDING and REJECTED suggestions are deletable (204); an ACCEPTED one is
- * frozen audit material (422 VALIDATION); an unknown id is 404. The delete
- * appends a SUGGESTION_DELETED activity entry with the JSON detail
+ * TASK-BE — DELETE /tickets/suggestions/:id.
+ * PENDING, REJECTED and ACCEPTED suggestions are all deletable (204). The
+ * delete appends a SUGGESTION_DELETED activity entry with the JSON detail
  * {field, value≤500, decision:"deleted"} and never touches earlier decision
  * rows — the audit trail is append-only, so a rejected-then-deleted
- * suggestion keeps its SUGGESTION_REJECTED entry.
+ * suggestion keeps its SUGGESTION_REJECTED entry and an accepted-then-deleted
+ * one keeps its SUGGESTION_ACCEPTED entry. Deleting removes ONLY the
+ * suggestion row: a value already merged into the ticket by accept stays
+ * merged (the delete never reverts ticket fields). Unknown id is 404.
  */
 
 describe("DELETE /tickets/suggestions/:id (SUG-DEL)", () => {
@@ -69,25 +71,49 @@ describe("DELETE /tickets/suggestions/:id (SUG-DEL)", () => {
     await cleanupTicket(ticketId);
   });
 
-  it("SUG-DEL-02: an ACCEPTED suggestion is 422 VALIDATION and survives", async () => {
-    // Given: a suggestion the analyst already accepted
+  it("SUG-DEL-02: an ACCEPTED suggestion deletes with 204 — audit row appended, merged field untouched", async () => {
+    // Given: a suggestion the analyst accepted through the API, so the
+    // suggested value is already merged into the ticket's overview
     const { ticketId, suggestionId } = await newSuggestion("merged text");
-    await prisma.aiSuggestion.update({
-      where: { id: suggestionId },
-      data: { status: "ACCEPTED" },
+    const accepted = await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/suggestions/${suggestionId}/accept`,
+      headers: { authorization: admin },
     });
+    expect(accepted.statusCode).toBe(200);
+    const before = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { overview: true } });
+    expect(before?.overview).toBe("merged text");
 
-    // When: the delete is attempted
+    // When: the accepted suggestion is deleted
     const res = await app.inject({
       method: "DELETE",
       url: `/tickets/suggestions/${suggestionId}`,
       headers: { authorization: admin },
     });
 
-    // Then: 422 VALIDATION and the row stays (audit material)
-    expect(res.statusCode).toBe(422);
-    expect((res.json() as { error: { code: string } }).error.code).toBe("VALIDATION");
-    expect(await prisma.aiSuggestion.findFirst({ where: { id: suggestionId } })).not.toBeNull();
+    // Then: 204, the row is gone, and the audit entry carries field+value
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe("");
+    expect(await prisma.aiSuggestion.findFirst({ where: { id: suggestionId } })).toBeNull();
+    const entries = await prisma.ticketActivity.findMany({
+      where: { ticketId, action: "SUGGESTION_DELETED" },
+    });
+    expect(entries).toHaveLength(1);
+    expect(JSON.parse(entries[0]?.detail ?? "null")).toEqual({
+      field: "overview",
+      value: "merged text",
+      decision: "deleted",
+    });
+
+    // And: the merge is NOT reverted and the earlier ACCEPTED entry remains
+    const after = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { overview: true } });
+    expect(after?.overview).toBe("merged text");
+    const actions = await prisma.ticketActivity.findMany({
+      where: { ticketId },
+      select: { action: true },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(actions.map((entry) => entry.action)).toEqual(["SUGGESTION_ACCEPTED", "SUGGESTION_DELETED"]);
     await cleanupTicket(ticketId);
   });
 

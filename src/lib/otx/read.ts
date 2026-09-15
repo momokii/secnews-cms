@@ -186,8 +186,11 @@ export async function searchPulses(input: SearchPulsesInput): Promise<{ total: n
 
 /** One pulse detail mapped to the wire shape (OtxPulseDetailSchema). The
  * per-indicator `id` is OTX's own row id — it names the entry in the
- * documented PATCH {remove:[{id}]} op; the route-54 response serializer
- * strips it, the wire shape is unchanged. */
+ * documented PATCH {remove:[{id}]} op. OTX returns that id as a NUMBER
+ * (ApiV2 docs: {"id": 2829827}); it is kept verbatim (string|number) so the
+ * remove op names real rows — coercing it to "" once silently no-op'd every
+ * removal. null = upstream sent no usable id. The route-54 response
+ * serializer strips it, the wire shape is unchanged. */
 export type PulseDetail = {
   id: string;
   name: string;
@@ -197,7 +200,7 @@ export type PulseDetail = {
   tlp: OtxTlp;
   tags: string[];
   references: string[];
-  indicators: Array<{ id: string; value: string; type: string }>;
+  indicators: Array<{ id: string | number | null; value: string; type: string }>;
   created: string | null;
   modified: string | null;
 };
@@ -217,14 +220,20 @@ function asReferences(value: unknown): string[] {
   return value.filter((row): row is string => typeof row === "string" && row !== "");
 }
 
-function asIndicators(value: unknown): Array<{ id: string; value: string; type: string }> {
+/** OTX indicator ids arrive as numbers (or legacy strings) — both pass
+ * through verbatim; anything else has no upstream identity (null). */
+function asIndicatorId(value: unknown): string | number | null {
+  return typeof value === "string" || typeof value === "number" ? value : null;
+}
+
+function asIndicators(value: unknown): Array<{ id: string | number | null; value: string; type: string }> {
   if (!Array.isArray(value)) {
     return [];
   }
   return value
     .map((row) => row as OtxIndicatorResponse)
     .filter((row) => typeof row.indicator === "string" && row.indicator !== "")
-    .map((row) => ({ id: asString(row.id), value: row.indicator as string, type: asString(row.type) }));
+    .map((row) => ({ id: asIndicatorId(row.id), value: row.indicator as string, type: asString(row.type) }));
 }
 
 /** GET /api/v1/pulses/:id — full pulse the configured key can access. */

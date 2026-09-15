@@ -3,7 +3,9 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod/v4";
 import { AppError } from "../../common/errors.js";
 import { decryptSecret, encryptSecret, maskKey } from "../../lib/crypto.js";
+import type { IntegrationKind } from "../../generated/prisma/enums.js";
 import { callAnthropic } from "../ai/providers/anthropic.js";
+import { callDeepSeek } from "../ai/providers/deepseek.js";
 import { callGemini } from "../ai/providers/gemini.js";
 import { callOpenAi } from "../ai/providers/openai.js";
 import { DEFAULT_MODELS, type ChatCompletionOptions, type ChatProviderFn, type FetchLike } from "../ai/providers/types.js";
@@ -38,13 +40,16 @@ function send422(reply: FastifyReply, message: string): void {
   void reply.code(422).send({ error: { code: "VALIDATION", message, details: null } });
 }
 
-const AI_CALLERS: Partial<Record<"OPENAI" | "ANTHROPIC" | "GEMINI", ChatProviderFn>> = {
+type AiKind = "OPENAI" | "ANTHROPIC" | "GEMINI" | "DEEPSEEK";
+
+const AI_CALLERS: Partial<Record<AiKind, ChatProviderFn>> = {
   OPENAI: callOpenAi,
   ANTHROPIC: callAnthropic,
   GEMINI: callGemini,
+  DEEPSEEK: callDeepSeek,
 };
 
-function toResponse(kind: "OPENAI" | "ANTHROPIC" | "GEMINI" | "OTX", row: { encryptedKey: string; updatedAt: Date } | null): IntegrationConfigResponse {
+function toResponse(kind: IntegrationKind, row: { encryptedKey: string; updatedAt: Date } | null): IntegrationConfigResponse {
   if (row === null) {
     return { kind, model: null, hasKey: false, maskedKey: null, updatedAt: EPOCH };
   }
@@ -58,7 +63,7 @@ function toResponse(kind: "OPENAI" | "ANTHROPIC" | "GEMINI" | "OTX", row: { encr
   };
 }
 
-async function storedKey(app: FastifyInstance, kind: "OPENAI" | "ANTHROPIC" | "GEMINI" | "OTX"): Promise<StoredConfig | null> {
+async function storedKey(app: FastifyInstance, kind: IntegrationKind): Promise<StoredConfig | null> {
   const row = await app.prisma.integrationConfig.findUnique({ where: { kind } });
   if (row === null) {
     return null;

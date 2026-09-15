@@ -188,8 +188,9 @@ export default async function suggestionRoutes(app: FastifyInstance): Promise<vo
   });
 
   // DELETE /tickets/suggestions/:id — discard a suggestion row (204).
-  // PENDING and REJECTED rows are deletable cleanup; an ACCEPTED row is
-  // frozen audit material (422 VALIDATION). The SUGGESTION_DELETED entry is
+  // Every status is deletable cleanup (PENDING, REJECTED and ACCEPTED alike).
+  // Deletion removes ONLY the suggestion row: a value already merged into the
+  // ticket by accept is never reverted, and the SUGGESTION_DELETED entry is
   // appended — earlier decision rows are never rewritten (history is
   // append-only), so a rejected-then-deleted suggestion keeps its REJECTED
   // entry alongside the delete marker.
@@ -203,9 +204,6 @@ export default async function suggestionRoutes(app: FastifyInstance): Promise<vo
     const row = await app.prisma.aiSuggestion.findUnique({ where: { id } });
     if (row === null) {
       throw new AppError("NOT_FOUND", "Suggestion not found");
-    }
-    if (row.status === SuggestionStatus.ACCEPTED) {
-      throw new AppError("VALIDATION", "An accepted suggestion is audit material and cannot be deleted", undefined, 422);
     }
     const payload = JSON.parse(row.content) as { field?: unknown; suggestedValue?: unknown };
     const field = typeof payload.field === "string" ? payload.field : "";

@@ -155,10 +155,10 @@ Transition role gate (`to` → roles): `RESEARCH`,`READY` → WORK;
 
 Schemas: `src/modules/ai/schema.ts`. Provider/model resolution per request:
 an explicit `{provider?, model?}` body wins; otherwise the first configured
-provider (OPENAI → ANTHROPIC → GEMINI) with its configured (or default)
-model. An explicit provider without a configured key is `422 VALIDATION` —
-never a silent fallback. Every stored suggestion records the resolved
-`provider` + `model` that produced it.
+provider (OPENAI → ANTHROPIC → GEMINI → DEEPSEEK) with its configured (or
+default) model. An explicit provider without a configured key is
+`422 VALIDATION` — never a silent fallback. Every stored suggestion records
+the resolved `provider` + `model` that produced it.
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
@@ -167,7 +167,13 @@ never a silent fallback. Every stored suggestion records the resolved
 | 34 | `GET /tickets/:id/suggestions` | WORK | `ListSuggestionsQuerySchema` `?status&page&pageSize` | 200 `ListSuggestionsResponseSchema` (each item carries `provider` + `model`) | |
 | 35 | `POST /tickets/:id/suggestions/:suggestionId/accept` | WORK | — | 200 `SuggestionActionResponseSchema`. **Accept AUTO-MERGES** the `suggestedValue` into the ticket's matching final field (`overview`/`description`/`recommendations`/`mitigation`/`affectedVersions` as text; `references`/`cveIds` split on newlines/commas) — clients never copy values manually | 422 `VALIDATION` when accepting a `cveIds` suggestion whose entries don't match `^CVE-\d{4}-\d{4,}$` — the merge is refused, the suggestion STAYS `PENDING`, and the message explains edit-the-fields-or-reject |
 | 36 | `POST /tickets/:id/suggestions/:suggestionId/reject` | WORK | — | 200 `SuggestionActionResponseSchema` | |
-| 36b | `DELETE /tickets/suggestions/:suggestionId` | WORK | — | 204 (empty body); the row is removed and a `SUGGESTION_DELETED` activity entry is appended with the JSON detail `{"field","value≤500","decision":"deleted"}` — earlier decision rows are never rewritten (history is append-only, so a rejected-then-deleted suggestion keeps its `SUGGESTION_REJECTED` entry) | 422 `VALIDATION` when the suggestion is `ACCEPTED` (frozen audit material); 404 `NOT_FOUND` unknown id |
+| 36b | `DELETE /tickets/suggestions/:suggestionId` | WORK | — | 204 (empty body); the row is removed and a `SUGGESTION_DELETED` activity entry is appended with the JSON detail `{"field","value≤500","decision":"deleted"}` — earlier decision rows are never rewritten (history is append-only, so a rejected-then-deleted suggestion keeps its `SUGGESTION_REJECTED` entry and an accepted-then-deleted one keeps its `SUGGESTION_ACCEPTED` entry) | 404 `NOT_FOUND` unknown id |
+
+Deletion is available for EVERY suggestion status (`PENDING`, `REJECTED`
+**and** `ACCEPTED`). It removes ONLY the suggestion row: a value already
+merged into the ticket's final fields by accept is never reverted — the
+merged field value stays, and the appended `SUGGESTION_DELETED` entry
+(field + value + `decision:"deleted"`) is the audit record of the cleanup.
 
 S2 contract: Send (#46) and OTX push (#51) MUST fail with `409
 PENDING_SUGGESTIONS` while any suggestion for the ticket is `PENDING`
@@ -180,8 +186,8 @@ encrypted at rest; never serialized in a response (INT-01) — masked only.
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 37 | `GET /integrations/:kind` | ADMIN | `:kind ∈ OPENAI\|ANTHROPIC\|GEMINI\|OTX` | 200 `IntegrationConfigResponseSchema` `{kind, model, hasKey, maskedKey, updatedAt}` | |
-| 37a | `GET /integrations/available` | WORK | — | 200 `[{kind, model, hasKey}]` for ALL four kinds (unconfigured → `model: null, hasKey: false`) — dropdown info for the fill/enrich provider picker; carries NO key material of any kind (no `maskedKey`, no blobs) | |
+| 37 | `GET /integrations/:kind` | ADMIN | `:kind ∈ OPENAI\|ANTHROPIC\|GEMINI\|DEEPSEEK\|OTX` | 200 `IntegrationConfigResponseSchema` `{kind, model, hasKey, maskedKey, updatedAt}` | |
+| 37a | `GET /integrations/available` | WORK | — | 200 `[{kind, model, hasKey}]` for ALL five kinds (unconfigured → `model: null, hasKey: false`) — dropdown info for the fill/enrich provider picker; carries NO key material of any kind (no `maskedKey`, no blobs) | |
 | 38 | `PUT /integrations/:kind` | ADMIN | `PutIntegrationConfigBodySchema`; OTX uses `PutOtxConfigBodySchema` (no model) | 200 `IntegrationConfigResponseSchema` | |
 | 39 | `POST /integrations/:kind/test` | ADMIN | `{}` | 200 `TestConnectionResponseSchema` `{ok, detail?, latencyMs?}` | upstream failure reported in `ok:false`, not HTTP error |
 
@@ -262,7 +268,11 @@ first via `GET /api/v1/pulses/{id}`; the scalar literals `name`,
 `description`, `public`, `TLP` are always sent as-is, while the list
 fields arrive as `{add:[...]}` / `{remove:[...]}` dicts computed against
 the live pulse — `indicators` diffed by `(indicator,type)` (add the
-missing typed objects, remove the `[{id}]` of stale rows), `tags` and
+missing typed objects, remove the `[{id}]` of stale rows where each `id`
+is the per-indicator upstream id read from `GET /api/v1/pulses/{id}`,
+passed through verbatim — OTX sends those ids as NUMBERS, and coercing
+them to strings once turned every remove into a silent no-op that left
+deleted IOCs in the pulse), `tags` and
 `references` diffed as string lists; an unchanged list is omitted from the
 body entirely, and an empty op side is omitted.
 
@@ -294,7 +304,7 @@ envelope. All datetimes normalize timezone-less upstream values to ISO.
 |---|---|---|
 | S2 hard block | #25 (to=SENT), #47, #52 | `409 PENDING_SUGGESTIONS` |
 | Invalid CVE id write | #22, #26, #35 (accept) | `422 VALIDATION` naming the bad value; the accept merge is refused and the suggestion stays `PENDING` |
-| Delete an ACCEPTED suggestion | #36b | `422 VALIDATION` — accepted rows are frozen audit material; unknown id → `404 NOT_FOUND` |
+| Delete a suggestion (any status, incl. ACCEPTED) | #36b | `204` — the row is deleted, the merged ticket field (if any) is NOT reverted, and a `SUGGESTION_DELETED` audit entry is appended; unknown id → `404 NOT_FOUND` |
 | IOC value/type mismatch | #29, #30 | `400 VALIDATION` naming type, problem, and value |
 | Invalid stored IOCs at push | #52 | `422 VALIDATION` with `details.iocs[]` culprits; no upstream call |
 | S3 inactive gating | #47 | `all` excludes inactive (200); explicit inactive id → `409 INACTIVE_TARGET` |

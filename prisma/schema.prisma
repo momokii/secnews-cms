@@ -106,6 +106,7 @@ enum IntegrationKind {
   OPENAI
   ANTHROPIC
   GEMINI
+  DEEPSEEK
   OTX
 }
 
