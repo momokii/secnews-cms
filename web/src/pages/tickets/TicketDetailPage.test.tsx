@@ -103,7 +103,7 @@ describe("TicketDetailPage: workspace composition", () => {
     // Audit timeline.
     expect(screen.getByText(/Acme SOC/)).toBeTruthy();
     expect(screen.getByText("Activity")).toBeTruthy();
-    expect(screen.getByText("status OPEN→RESEARCH")).toBeTruthy();
+    expect(screen.getByText("Status: OPEN → RESEARCH")).toBeTruthy();
     expect(screen.getByText(/Editor/)).toBeTruthy();
   });
 

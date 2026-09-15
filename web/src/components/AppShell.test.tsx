@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
@@ -19,17 +19,27 @@ function renderApp(initialEntry: string): void {
   );
 }
 
+/** Empty tickets-list response — every SHELL route mounts a list-backed page. */
+function stubTicketListFetch(): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), {
+        status: 200,
+      }),
+    ),
+  );
+}
+
+function signInAsAdmin(): void {
+  setToken("admin-token");
+  setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" });
+}
+
 describe("SHELL-01: role-aware navigation", () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), {
-          status: 200,
-        }),
-      ),
-    );
+    stubTicketListFetch();
   });
 
   afterEach(() => {
@@ -94,14 +104,7 @@ describe("SHELL-01: role-aware navigation", () => {
 describe("SHELL-02: logout", () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), {
-          status: 200,
-        }),
-      ),
-    );
+    stubTicketListFetch();
   });
 
   afterEach(() => {
@@ -128,14 +131,7 @@ describe("SHELL-02: logout", () => {
 describe("SHELL-03: signed-in users skip guest routes", () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), {
-          status: 200,
-        }),
-      ),
-    );
+    stubTicketListFetch();
   });
 
   afterEach(() => {
@@ -159,25 +155,13 @@ describe("SHELL-03: signed-in users skip guest routes", () => {
 describe("TASK-UXB: collapsible sidebar", () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), {
-          status: 200,
-        }),
-      ),
-    );
+    stubTicketListFetch();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     clearToken();
   });
-
-  function signInAsAdmin(): void {
-    setToken("admin-token");
-    setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" });
-  }
 
   function asideClasses(): string {
     const nav = screen.getByRole("navigation", { name: "Primary" });
@@ -244,17 +228,10 @@ describe("TASK-UXB: collapsible sidebar", () => {
   });
 });
 
-describe("TASK-UIC: sidebar footer divider", () => {
+describe("TASK-UIB: unified sidebar user block", () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), {
-          status: 200,
-        }),
-      ),
-    );
+    stubTicketListFetch();
   });
 
   afterEach(() => {
@@ -262,30 +239,31 @@ describe("TASK-UIC: sidebar footer divider", () => {
     clearToken();
   });
 
-  function signInAsAdmin(): void {
-    setToken("admin-token");
-    setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" });
-  }
-
-  it("sits Account under a divider with Logout below the nav, not inside it", () => {
+  it("groups identity, Account, and Logout in one block above the nav", () => {
     // Given: an authenticated admin session with the rail expanded
     signInAsAdmin();
     renderApp("/feeds/items");
 
-    // When: the footer block is located via the Account link
-    const account = screen.getByRole("link", { name: "Account" });
+    // Then: a single user block holds the avatar initials, name, role badge,
+    // Account link and Logout button — and it sits above the primary nav,
+    // with no leftover footer divider
+    const block = screen.getByRole("group", { name: "Signed-in user" });
+    expect(within(block).getByText("Admin")).toBeTruthy();
+    expect(within(block).getByText("ADMIN")).toBeTruthy();
+    expect(within(block).getByText("AD")).toBeTruthy();
+    expect(
+      within(block).getByRole("link", { name: "Account" }).getAttribute("href"),
+    ).toBe("/account");
+    expect(within(block).getByRole("button", { name: "Logout" })).toBeTruthy();
 
-    // Then: Account is not part of the primary nav; its footer container
-    // carries the border-t divider and also holds the Logout button
-    expect(account.closest("nav")).toBeNull();
-    const footer = account.parentElement;
-    expect(footer?.className).toContain("border-t");
-    expect(footer?.querySelector('button[title="Logout"], button')).not.toBeNull();
-    const logout = footer?.querySelector("button");
-    expect(logout?.textContent).toContain("Logout");
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(
+      block.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(block.className).not.toContain("border-t");
   });
 
-  it("keeps the divider block with Account and Logout while the rail is collapsed", () => {
+  it("collapses to an avatar with a name tooltip while keeping Account and Logout", () => {
     // Given: an authenticated session
     signInAsAdmin();
     renderApp("/feeds/items");
@@ -293,11 +271,24 @@ describe("TASK-UIC: sidebar footer divider", () => {
     // When: the rail is collapsed
     fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
 
-    // Then: Account remains under the divider with Logout
-    const account = screen.getByRole("link", { name: "Account" });
-    expect(account.closest("nav")).toBeNull();
-    const footer = account.parentElement;
-    expect(footer?.className).toContain("border-t");
-    expect(screen.getByRole("button", { name: "Logout" }).closest("div")).toBe(footer);
+    // Then: the block shrinks to the avatar whose tooltip names the user,
+    // while Account and Logout stay reachable
+    const block = screen.getByRole("group", { name: "Signed-in user" });
+    const avatar = within(block).getByText("AD");
+    expect(avatar.getAttribute("title")).toContain("Admin");
+    expect(within(block).queryByText("Admin")).toBeNull();
+    expect(within(block).getByRole("link", { name: "Account" })).toBeTruthy();
+    expect(within(block).getByRole("button", { name: "Logout" })).toBeTruthy();
+  });
+
+  it("renders no user block for guests", () => {
+    // Given: no stored session
+    clearToken();
+
+    // When: the app renders at the login route
+    renderApp("/login");
+
+    // Then: the rail has no user block at all
+    expect(screen.queryByRole("group", { name: "Signed-in user" })).toBeNull();
   });
 });

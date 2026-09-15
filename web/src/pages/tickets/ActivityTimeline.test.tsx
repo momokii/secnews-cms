@@ -21,7 +21,7 @@ describe("FE-ACT-01: ticket activity timeline", () => {
     expect(await screen.findByText("STATUS_CHANGED")).toBeTruthy();
     expect(screen.getByText(/by Editor/)).toBeTruthy();
     expect(screen.getByText("2026-09-14 16:00 WIB")).toBeTruthy();
-    expect(screen.getByText("status OPEN→RESEARCH")).toBeTruthy();
+    expect(screen.getByText("Status: OPEN → RESEARCH")).toBeTruthy();
   });
 
   it("requests the next page via the shared Pagination controls", async () => {
@@ -87,5 +87,65 @@ describe("TASK-UIC: activity page size", () => {
       expect.stringContaining("/activity?page=1&pageSize=20"),
       expect.anything(),
     ));
+  });
+});
+
+describe("TASK-UIB: activity detail rendering", () => {
+  const OTX_PULSE_ID = "4d5e6f70-a1b2-4c3d-8e9f-001122334455";
+
+  function stubActivity(entry: Partial<ReturnType<typeof activityFixture>>): void {
+    vi.stubGlobal("fetch", routeFetch([{
+      match: (url, method) => method === "GET" && url.includes("/activity"),
+      respond: () => jsonResponse(paginated([activityFixture(entry)])),
+    }]));
+  }
+
+  it("lists edited field names with a values-not-recorded note for field edits", async () => {
+    // Given: the backend only logs which fields changed, never their values
+    setToken("test-token");
+    stubActivity({ action: "FIELDS_UPDATED", detail: "title, overview" });
+
+    // When: the timeline renders the FIELDS_UPDATED entry
+    renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
+
+    // Then: the field names are listed with an explicit note, no invented values
+    expect(await screen.findByText("Updated fields: title, overview")).toBeTruthy();
+    expect(screen.getByText("previous values are not recorded")).toBeTruthy();
+  });
+
+  it("expands OTX pushes to the pulse id with a View-on-OTX link", async () => {
+    // Given: an OTX_PUSHED entry whose pulse id matches the ticket's pulse
+    setToken("test-token");
+    stubActivity({ action: "OTX_PUSHED", detail: `${OTX_PULSE_ID} (updated)` });
+
+    // When: the timeline renders with the confirmed pulse url
+    renderWithProviders(
+      <ActivityTimeline
+        ticketId={TICKET_ID}
+        pulseId={OTX_PULSE_ID}
+        pulseUrl={`https://otx.alienvault.com/pulse/${OTX_PULSE_ID}`}
+      />,
+    );
+
+    // Then: the expandable row shows the pulse id, the update marker, and a
+    // View on OTX link pointing at the pulse url
+    fireEvent.click(await screen.findByText("OTX push detail"));
+    expect(screen.getByText(`${OTX_PULSE_ID} (updated)`)).toBeTruthy();
+    const link = screen.getByRole("link", { name: "View on OTX" });
+    expect(link.getAttribute("href")).toBe(`https://otx.alienvault.com/pulse/${OTX_PULSE_ID}`);
+  });
+
+  it("shows only the pulse id when no confirmed pulse url is available", async () => {
+    // Given: an OTX_PUSHED entry and no pulse props on the timeline
+    setToken("test-token");
+    stubActivity({ action: "OTX_PUSHED", detail: OTX_PULSE_ID });
+
+    // When: the timeline renders without pulse context
+    renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
+
+    // Then: the id is shown without an invented link
+    fireEvent.click(await screen.findByText("OTX push detail"));
+    expect(screen.getByText(OTX_PULSE_ID)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "View on OTX" })).toBeNull();
   });
 });

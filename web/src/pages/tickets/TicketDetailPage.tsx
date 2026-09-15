@@ -144,7 +144,11 @@ export function TicketDetailPage() {
 
       <SourcesEditor ticketId={ticket.id} sources={ticket.sources} />
       <IocTable ticketId={ticket.id} iocs={ticket.iocs} />
-      <ActivityTimeline ticketId={ticket.id} />
+      <ActivityTimeline
+        ticketId={ticket.id}
+        pulseId={ticket.otxPulseId}
+        pulseUrl={ticket.otxPulseUrl}
+      />
       <AuditTimeline ticketId={ticket.id} />
     </div>
   );

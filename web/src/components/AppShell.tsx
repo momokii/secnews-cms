@@ -72,8 +72,21 @@ const navLinkClass =
       collapsed ? "justify-center px-2" : "px-3"
     } ${isActive ? "bg-indigo-600 text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white"}`;
 
-/** App layout: dark sidebar rail whose nav and footer follow the live session;
- * the rail collapses to an icon-only strip persisted in localStorage. */
+/** First letters of the first two name words (or the word's first two chars). */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0] ?? "";
+  const second = parts[1] ?? "";
+  const head =
+    second === "" ? first.slice(0, 2) : `${first.charAt(0)}${second.charAt(0)}`;
+  return head.toUpperCase();
+}
+
+const avatarClass =
+  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold uppercase text-white";
+
+/** App layout: dark sidebar rail whose user block and nav follow the live
+ * session; the rail collapses to an icon-only strip persisted in localStorage. */
 export function AppShell() {
   const { token, user } = useSession();
   const navigate = useNavigate();
@@ -133,30 +146,29 @@ export function AppShell() {
             <NavIcon d={collapsed ? EXPAND_ICON : COLLAPSE_ICON} />
           </button>
         </div>
-        <nav id="primary-nav" aria-label="Primary" className="flex flex-col gap-1">
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/feeds"}
-              className={navLinkClass(collapsed)}
-              title={item.label}
-            >
-              <NavIcon d={NAV_ICONS[item.to] ?? NAV_ICONS["/account"]} />
-              <span className={collapsed ? "hidden" : undefined}>{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
         {user !== null ? (
-          <div className="mt-auto flex flex-col gap-2 border-t border-slate-700 pt-4">
-            {collapsed ? null : (
-              <div className="px-3">
-                <p className="text-sm font-medium text-white">{user.name}</p>
-                <span className="mt-1 inline-block rounded-md bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-                  {user.role}
-                </span>
-              </div>
-            )}
+          <div
+            role="group"
+            aria-label="Signed-in user"
+            className={
+              collapsed
+                ? "mb-4 flex flex-col items-center gap-1"
+                : "mb-4 flex flex-col gap-1 rounded-md border border-slate-700 p-2"
+            }
+          >
+            <div className={collapsed ? "flex justify-center pt-1" : "flex items-center gap-2 px-1 py-1"}>
+              <span aria-hidden="true" title={`${user.name} — ${user.role}`} className={avatarClass}>
+                {initialsOf(user.name)}
+              </span>
+              {collapsed ? null : (
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-white">{user.name}</p>
+                  <span className="mt-0.5 inline-block rounded-md bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">
+                    {user.role}
+                  </span>
+                </div>
+              )}
+            </div>
             <NavLink
               to="/account"
               className={navLinkClass(collapsed)}
@@ -180,6 +192,20 @@ export function AppShell() {
             </button>
           </div>
         ) : null}
+        <nav id="primary-nav" aria-label="Primary" className="flex flex-col gap-1">
+          {items.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === "/feeds"}
+              className={navLinkClass(collapsed)}
+              title={item.label}
+            >
+              <NavIcon d={NAV_ICONS[item.to] ?? NAV_ICONS["/account"]} />
+              <span className={collapsed ? "hidden" : undefined}>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
       </aside>
       <main className="flex-1 p-6">
         <Outlet />
