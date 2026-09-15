@@ -68,8 +68,8 @@ function otherKindsRoute(): {
   respond: () => Response;
 } {
   return {
-    match: (url: string, method: string) =>
-      method === "GET" && /^\/api\/integrations\/(ANTHROPIC|GEMINI|OTX)$/.test(url),
+    match: (url, method) =>
+      method === "GET" && /^\/api\/integrations\/(ANTHROPIC|GEMINI|DEEPSEEK|OTX)$/.test(url),
     respond: () => new Response(JSON.stringify(UNCONFIGURED("OTX")), { status: 200 }),
   };
 }
@@ -150,7 +150,7 @@ describe("FE-INT-01: masked key is never resubmitted", () => {
       {
         match: (url, method) =>
           method === "GET" &&
-          /^\/api\/integrations\/(OPENAI|ANTHROPIC|GEMINI)$/.test(url),
+          /^\/api\/integrations\/(OPENAI|ANTHROPIC|GEMINI|DEEPSEEK)$/.test(url),
         respond: () => new Response(JSON.stringify(UNCONFIGURED("OPENAI")), { status: 200 }),
       },
       {
@@ -246,5 +246,100 @@ describe("FE-INT-02: test connection call and result badge", () => {
 
     // Then: the failure lands in the badge, not an error boundary
     expect(await within(card).findByText(/upstream status 401/)).not.toBeNull();
+  });
+});
+
+describe("TASK-UIFE: integrations grouping and DeepSeek", () => {
+  function groupedRoutes(): Array<{
+    match: (url: string, method: string) => boolean;
+    respond: () => Response;
+  }> {
+    return [
+      {
+        match: (url, method) => method === "GET" && url === "/api/integrations/OPENAI",
+        respond: () => new Response(JSON.stringify(OPENAI_CONFIG), { status: 200 }),
+      },
+      {
+        match: (url, method) =>
+          method === "GET" && /^\/api\/integrations\/(ANTHROPIC|GEMINI|DEEPSEEK|OTX)$/.test(url),
+        respond: () => new Response(JSON.stringify(UNCONFIGURED("OTX")), { status: 200 }),
+      },
+    ];
+  }
+
+  it("groups AI provider cards under 'AI providers' and OTX under 'Threat intel'", async () => {
+    // Given: the integrations page with all five kinds configured-server-side
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch(groupedRoutes()));
+    renderPage();
+
+    // Then: each group has a header, description, and only its own cards
+    const aiSection = await screen.findByRole("region", { name: "AI providers" });
+    const threatSection = screen.getByRole("region", { name: "Threat intel" });
+    expect(within(aiSection).getByRole("heading", { name: "AI providers" })).toBeTruthy();
+    expect(within(threatSection).getByRole("heading", { name: "Threat intel" })).toBeTruthy();
+
+    for (const kind of ["OPENAI", "ANTHROPIC", "GEMINI", "DEEPSEEK"] as const) {
+      expect(within(aiSection).getByRole("region", { name: kind })).toBeTruthy();
+    }
+    expect(within(threatSection).getByRole("region", { name: "OTX" })).toBeTruthy();
+    expect(within(threatSection).queryByRole("region", { name: "OPENAI" })).toBeNull();
+
+    // Group descriptions render as one-liners under each header
+    expect(aiSection.textContent).toContain("Fill and Enrich");
+    expect(threatSection.textContent).toContain("OTX");
+  });
+
+  it("shows a DeepSeek card with a provider blurb and server default model hint", async () => {
+    setToken("test-token");
+    vi.stubGlobal(
+      "fetch",
+      routeFetch([
+        ...groupedRoutes().filter((route) => !route.match("/api/integrations/DEEPSEEK", "GET")),
+        {
+          match: (url, method) => method === "GET" && url === "/api/integrations/DEEPSEEK",
+          respond: () =>
+            new Response(
+              JSON.stringify({
+                kind: "DEEPSEEK",
+                model: "deepseek-chat",
+                hasKey: true,
+                maskedKey: "sk-ds…9f2e",
+                updatedAt: "2026-09-14T08:00:00.000Z",
+              }),
+              { status: 200 },
+            ),
+        },
+      ]),
+    );
+    renderPage();
+
+    // Then: the DeepSeek card renders with blurb and default model hint
+    const card = await screen.findByRole("region", { name: "DEEPSEEK" });
+    expect(within(card).getByText(/strong reasoning/)).toBeTruthy();
+    expect(await within(card).findByText(/deepseek-chat/)).toBeTruthy();
+  });
+
+  it("POSTs the DeepSeek test endpoint and renders the OK badge", async () => {
+    setToken("test-token");
+    const fetchMock = routeFetch([
+      ...groupedRoutes(),
+      {
+        match: (url, method) =>
+          method === "POST" && url === "/api/integrations/DEEPSEEK/test",
+        respond: () =>
+          new Response(JSON.stringify({ ok: true, latencyMs: 143 }), { status: 200 }),
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+
+    const card = await screen.findByRole("region", { name: "DEEPSEEK" });
+    fireEvent.click(within(card).getByRole("button", { name: "Test connection" }));
+
+    await waitFor(() =>
+      expect(callsTo(fetchMock, "POST", "/api/integrations/DEEPSEEK/test")).toHaveLength(1),
+    );
+    expect(await within(card).findByText(/OK\s*·\s*143\s*ms/)).not.toBeNull();
   });
 });

@@ -5,7 +5,7 @@ import { apiFetch } from "./api";
  * (INT-01). The raw key exists solely in PUT bodies, and only when the admin
  * types a fresh one. */
 
-export type IntegrationKind = "OPENAI" | "ANTHROPIC" | "GEMINI" | "OTX";
+export type IntegrationKind = "OPENAI" | "ANTHROPIC" | "GEMINI" | "DEEPSEEK" | "OTX";
 
 export interface IntegrationConfigResponse {
   kind: IntegrationKind;

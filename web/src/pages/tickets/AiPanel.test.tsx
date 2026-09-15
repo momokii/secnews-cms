@@ -470,8 +470,10 @@ describe("TASK-UIC2: AI loading states, picker, provenance, help", () => {
   });
 });
 
-describe("TASK-UIF: suggestion delete", () => {
+describe("TASK-UIFE: suggestion delete via confirm dialog", () => {
+  const PENDING_ID = suggestionFixture().id;
   const REJECTED_ID = "66666666-6666-4666-8666-666666666666";
+  const ACCEPTED_ID = "77777777-7777-4777-8777-777777777777";
 
   function deleteRoutes(): Array<{
     match: (url: string, method: string) => boolean;
@@ -491,7 +493,7 @@ describe("TASK-UIF: suggestion delete", () => {
                 status: "REJECTED",
               }),
               suggestionFixture({
-                id: "77777777-7777-4777-8777-777777777777",
+                id: ACCEPTED_ID,
                 field: "recommendations",
                 status: "ACCEPTED",
               }),
@@ -507,7 +509,15 @@ describe("TASK-UIF: suggestion delete", () => {
     ];
   }
 
-  it("shows Delete on PENDING and REJECTED rows but never on ACCEPTED", async () => {
+  function deleteCalls(fetchMock: ReturnType<typeof routeFetch>): number {
+    return fetchMock.mock.calls.filter(
+      ([url, init]) =>
+        String(url).includes("/suggestions/") &&
+        ((init as RequestInit | undefined)?.method ?? "GET") === "DELETE",
+    ).length;
+  }
+
+  it("shows Delete on every row, ACCEPTED included", async () => {
     // Given: one suggestion in each of PENDING, REJECTED and ACCEPTED
     setToken("test-token");
     vi.stubGlobal("fetch", routeFetch(deleteRoutes()));
@@ -517,23 +527,21 @@ describe("TASK-UIF: suggestion delete", () => {
       <AiPanel ticketId={TICKET_ID} pendingSuggestions={1} blocked={false} />,
     );
 
-    // Then: exactly the two non-accepted rows carry a Delete button
+    // Then: all three rows carry a Delete button
     await screen.findByText("recommendations");
-    const deleteButtons = screen.getAllByRole("button", { name: /^Delete / });
-    expect(deleteButtons).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Delete / })).toHaveLength(3);
     expect(screen.getByRole("button", { name: "Delete overview suggestion" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete description suggestion" })).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Delete description suggestion" }),
+      screen.getByRole("button", { name: "Delete recommendations suggestion" }),
     ).toBeTruthy();
   });
 
-  it("asks for confirmation, DELETEs the row, and refetches suggestions", async () => {
-    // Given: the user confirms the delete prompt
+  it("opens the app confirm dialog instead of window.confirm", async () => {
+    // Given: window.confirm is wired to fail the test if it ever runs
     setToken("test-token");
-    const confirmMock = vi.fn(() => true);
-    vi.stubGlobal("confirm", confirmMock);
-    const fetchMock = routeFetch(deleteRoutes());
-    vi.stubGlobal("fetch", fetchMock);
+    const confirmSpy = vi.spyOn(window, "confirm");
+    vi.stubGlobal("fetch", routeFetch(deleteRoutes()));
     renderWithProviders(
       <AiPanel ticketId={TICKET_ID} pendingSuggestions={1} blocked={false} />,
     );
@@ -541,11 +549,30 @@ describe("TASK-UIF: suggestion delete", () => {
     // When: Delete is clicked on the pending row
     fireEvent.click(await screen.findByRole("button", { name: "Delete overview suggestion" }));
 
-    // Then: confirm ran, the DELETE hit the suggestion URL, and the list refetched
-    expect(confirmMock).toHaveBeenCalledTimes(1);
+    // Then: no window.confirm fires — an in-app dialog asks instead
+    expect(confirmSpy).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("dialog", { name: "Delete suggestion" });
+    expect(dialog.textContent).toContain("overview");
+    expect(within(dialog).getByRole("button", { name: "Confirm" })).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeTruthy();
+    confirmSpy.mockRestore();
+  });
+
+  it("DELETEs the row and refetches suggestions after Confirm", async () => {
+    setToken("test-token");
+    const fetchMock = routeFetch(deleteRoutes());
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={1} blocked={false} />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete overview suggestion" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+
+    // Then: the DELETE hit the suggestion URL and the list refetched
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        `/api/tickets/suggestions/${suggestionFixture().id}`,
+        `/api/tickets/suggestions/${PENDING_ID}`,
         expect.objectContaining({ method: "DELETE" }),
       ),
     );
@@ -557,27 +584,104 @@ describe("TASK-UIF: suggestion delete", () => {
       );
       expect(suggestionGets.length).toBeGreaterThanOrEqual(2);
     });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  it("keeps the row when confirmation is dismissed", async () => {
-    // Given: the user cancels the delete prompt
+  it("keeps the row when Cancel is clicked", async () => {
     setToken("test-token");
-    const confirmMock = vi.fn(() => false);
-    vi.stubGlobal("confirm", confirmMock);
     const fetchMock = routeFetch(deleteRoutes());
     vi.stubGlobal("fetch", fetchMock);
     renderWithProviders(
       <AiPanel ticketId={TICKET_ID} pendingSuggestions={1} blocked={false} />,
     );
 
-    // When: Delete is clicked on the pending row
     fireEvent.click(await screen.findByRole("button", { name: "Delete overview suggestion" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
 
-    // Then: confirm ran but no DELETE request left the page
-    expect(confirmMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("/suggestions/"),
-      expect.objectContaining({ method: "DELETE" }),
+    expect(deleteCalls(fetchMock)).toBe(0);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByRole("button", { name: "Delete overview suggestion" })).toBeTruthy();
+  });
+
+  it("DELETEs ACCEPTED rows after Confirm (backend now allows it)", async () => {
+    // Given: an ACCEPTED suggestions row
+    setToken("test-token");
+    const fetchMock = routeFetch(deleteRoutes());
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={1} blocked={false} />,
     );
+
+    // When: Delete + Confirm run on the accepted row
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete recommendations suggestion" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+
+    // Then: the endpoint receives the accepted suggestion id
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/tickets/suggestions/${ACCEPTED_ID}`,
+        expect.objectContaining({ method: "DELETE" }),
+      ),
+    );
+  });
+
+  it("notes on the dialog and tooltip that merged field values stay", async () => {
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch(deleteRoutes()));
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={1} blocked={false} />,
+    );
+
+    // Tooltip on the delete button
+    const acceptedDelete = await screen.findByRole("button", {
+      name: "Delete recommendations suggestion",
+    });
+    expect(acceptedDelete.getAttribute("title")).toMatch(/remain/i);
+
+    // Dialog message for the accepted row
+    fireEvent.click(acceptedDelete);
+    const dialog = await screen.findByRole("dialog", { name: "Delete suggestion" });
+    expect(dialog.textContent).toMatch(/remain/i);
+  });
+});
+
+describe("TASK-UIFE: DeepSeek picker option", () => {
+  it("lists DEEPSEEK among the keyed providers rendered from /integrations/available", async () => {
+    // Given: DEEPSEEK is keyed server-side alongside OPENAI
+    setToken("test-token");
+    vi.stubGlobal(
+      "fetch",
+      routeFetch([
+        {
+          match: (url, method) =>
+            method === "GET" && url.startsWith(`/api/tickets/${TICKET_ID}/suggestions`),
+          respond: () => jsonResponse(paginated([])),
+        },
+        {
+          match: (url, method) => method === "GET" && url.endsWith("/integrations/available"),
+          respond: () =>
+            jsonResponse([
+              { kind: "OPENAI", model: null, hasKey: false },
+              { kind: "ANTHROPIC", model: null, hasKey: false },
+              { kind: "GEMINI", model: null, hasKey: false },
+              { kind: "DEEPSEEK", model: "deepseek-chat", hasKey: true },
+              { kind: "OTX", model: null, hasKey: true },
+            ]),
+        },
+      ]),
+    );
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={0} blocked={false} />,
+    );
+
+    // Then: the picker offers exactly Auto + the keyed AI provider
+    const select = await screen.findByLabelText("AI provider");
+    await screen.findByRole("option", { name: "DEEPSEEK" });
+    const names = within(select)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(names).toEqual(["Auto (first configured)", "DEEPSEEK"]);
   });
 });

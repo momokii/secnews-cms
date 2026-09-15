@@ -46,7 +46,7 @@ export const SUGGESTION_STATUSES = ["PENDING", "ACCEPTED", "REJECTED"] as const;
 export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
 
 /** AI providers that accept per-run overrides on ai/fill and ai/enrich. */
-export const AI_PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI"] as const;
+export const AI_PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI", "DEEPSEEK"] as const;
 export type AiProviderKind = (typeof AI_PROVIDERS)[number];
 
 /** Optional provider/model overrides for the AI run endpoints. */

@@ -230,8 +230,8 @@ export async function rejectSuggestion(
   return readJson(response);
 }
 
-/** DELETE /tickets/suggestions/:id — answers 204; the server
- * rejects deletes of ACCEPTED rows with 422. */
+/** DELETE /tickets/suggestions/:id — answers 204; ACCEPTED rows delete too
+ * and the merged field values stay on the ticket. */
 export async function deleteSuggestion(_ticketId: string, suggestionId: string): Promise<void> {
   await apiFetch(`/tickets/suggestions/${suggestionId}`, { method: "DELETE" });
 }
