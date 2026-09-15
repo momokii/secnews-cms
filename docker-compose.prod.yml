@@ -6,6 +6,11 @@
 # are given explicitly. Only the web port is published; api and db stay on the
 # internal compose network. Project name (and volumes) are isolated from the
 # dev stack.
+#
+# The db service is NOT redefined as a full service here: base supplies its
+# image (postgres:16.4-alpine), restart policy, pgdata volume and healthcheck;
+# this overlay only overrides its environment (fail-fast on missing secrets).
+# Always pass BOTH files — the prod file alone has no db image to run.
 name: secnews-cms-prod
 
 services:

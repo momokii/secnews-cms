@@ -16,7 +16,17 @@ Security-news aggregation CMS: Fastify API (`src/`), React/Vite web UI (`web/`),
 
 ## Deploy
 
-### 1. Configure
+### One-click
+
+```sh
+./scripts/setup-prod.sh
+```
+
+The script checks Docker, creates `.env` from `.env.example` with freshly generated secrets on first run (an existing `.env` is kept — delete it to regenerate), builds and starts the full stack, waits until the API container reports healthy, then prints URLs and next steps. Safe to re-run. DB migrations (`prisma migrate deploy`) run inside the api container on every start — no manual step. Host port defaults to 8080; override with `WEB_PORT=18080 ./scripts/setup-prod.sh`.
+
+### Manual (same steps, by hand)
+
+#### 1. Configure
 
 ```sh
 cp .env.example .env
@@ -41,11 +51,11 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 The API container waits for the DB healthcheck, then on every start runs `prisma generate && prisma migrate deploy && npm start` — migrations apply automatically.
 
-### 3. Bootstrap the first ADMIN
+#### 3. Bootstrap the first ADMIN
 
 Open `http://localhost:8080/bootstrap` and create the first administrator (name / email / password). Under the hood this is `POST /api/bootstrap`; it answers `409 CONFLICT` once any user exists.
 
-### 4. Sign in
+#### 4. Sign in
 
 Open `http://localhost:8080/login` and sign in with the admin account. Sanity check:
 
@@ -55,7 +65,10 @@ curl http://localhost:8080/api/health   # → {"status":"ok"}
 
 ### Logs / stop
 
+> **Why is `docker compose ps` (no flags) empty?** The prod stack runs under the isolated project `secnews-cms-prod` (set via `name:` in `docker-compose.prod.yml`), while a bare `docker compose` targets the dev project `secnews-cms` and auto-merges `docker-compose.override.yml`. Always pass the two `-f` flags, or use the short form `docker compose -p secnews-cms-prod ps`.
+
 ```sh
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f api
 docker compose -f docker-compose.yml -f docker-compose.prod.yml down   # keeps data (volume secnews-cms-prod_pgdata)
 ```
