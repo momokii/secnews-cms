@@ -10,6 +10,7 @@ import {
   useChannels,
   useCreateChannel,
   useDeleteChannel,
+  useTestChannel,
   useUpdateChannel,
 } from "../../lib/useClients";
 
@@ -68,6 +69,7 @@ export function ChannelsPanel({ client, onClose }: ChannelsPanelProps) {
   const createChannel = useCreateChannel(client.id);
   const updateChannel = useUpdateChannel();
   const deleteChannel = useDeleteChannel();
+  const testChannel = useTestChannel(client.id);
 
   const submit = (): void => {
     createChannel.mutate(buildCreateBody(form), {
@@ -130,6 +132,16 @@ export function ChannelsPanel({ client, onClose }: ChannelsPanelProps) {
                   </label>
                 </td>
                 <td className="py-2">
+                  {channel.type === "TELEGRAM" ? (
+                    <button
+                      type="button"
+                      onClick={() => testChannel.mutate(channel.id)}
+                      disabled={testChannel.isPending}
+                      className="mr-2 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    >
+                      Test connection
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => remove(channel)}
@@ -143,6 +155,28 @@ export function ChannelsPanel({ client, onClose }: ChannelsPanelProps) {
           </tbody>
         </table>
       )}
+
+      {testChannel.isPending ? (
+        <p role="status" className="mt-2 text-sm text-slate-500">
+          Testing connection…
+        </p>
+      ) : testChannel.data !== undefined ? (
+        testChannel.data.ok ? (
+          <p role="status" className="mt-2 text-sm font-medium text-emerald-600">
+            OK
+            {testChannel.data.latencyMs !== undefined
+              ? ` · ${testChannel.data.latencyMs} ms`
+              : ""}
+          </p>
+        ) : (
+          <p role="alert" className="mt-2 text-sm font-medium text-red-600">
+            Failed
+            {testChannel.data.detail !== undefined
+              ? `: ${testChannel.data.detail}`
+              : ""}
+          </p>
+        )
+      ) : null}
 
       <form
         onSubmit={(event) => {

@@ -144,3 +144,26 @@ export async function updateChannel(
 export async function deleteChannel(id: string): Promise<void> {
   await apiFetch(`/channels/${id}`, { method: "DELETE" });
 }
+
+/** POST /clients/:clientId/channels/:id/test — upstream failures answer
+ * ok:false with detail, not an HTTP error (same shape as integration tests). */
+export interface ChannelTestResponse {
+  ok: boolean;
+  detail?: string;
+  latencyMs?: number;
+}
+
+export async function testChannel(
+  clientId: string,
+  channelId: string,
+): Promise<ChannelTestResponse> {
+  const response = await apiFetch(
+    `/clients/${clientId}/channels/${channelId}/test`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    },
+  );
+  return (await response.json()) as ChannelTestResponse;
+}

@@ -5,7 +5,14 @@ import { apiFetch } from "./api";
  * (INT-01). The raw key exists solely in PUT bodies, and only when the admin
  * types a fresh one. */
 
-export type IntegrationKind = "OPENAI" | "ANTHROPIC" | "GEMINI" | "DEEPSEEK" | "OTX";
+export type IntegrationKind =
+  | "OPENAI"
+  | "ANTHROPIC"
+  | "GEMINI"
+  | "DEEPSEEK"
+  | "OTX"
+  | "SMTP"
+  | "WAHA";
 
 export interface IntegrationConfigResponse {
   kind: IntegrationKind;
@@ -13,6 +20,16 @@ export interface IntegrationConfigResponse {
   hasKey: boolean;
   maskedKey: string | null;
   updatedAt: string;
+  /** SMTP only — plain echo; the password never leaves the server unmasked. */
+  host?: string | null;
+  port?: number | null;
+  user?: string | null;
+  from?: string | null;
+  maskedPassword?: string | null;
+  /** WAHA only — plain echo; the API key never leaves the server unmasked. */
+  baseUrl?: string | null;
+  session?: string | null;
+  maskedApiKey?: string | null;
 }
 
 /** Row of GET /integrations/available — configured kinds with default model. */
@@ -22,12 +39,13 @@ export interface AvailableIntegration {
   hasKey: boolean;
 }
 
-/** Body for PUT /integrations/:kind — apiKey required (contract #38); OTX
- * callers must omit model (route 422s otherwise). */
-export interface PutIntegrationConfigBody {
-  apiKey: string;
-  model?: string;
-}
+/** Body for PUT /integrations/:kind — keyed kinds carry {apiKey}(+model, AI
+ * only; OTX route 422s on model, contract #38). SMTP/WAHA carry their own
+ * field sets; the kind travels in the URL, never in the body. */
+export type PutIntegrationConfigBody =
+  | { apiKey: string; model?: string }
+  | { host: string; port: number; user: string; password: string; from: string }
+  | { baseUrl: string; session: string; apiKey: string };
 
 export interface TestConnectionResponse {
   ok: boolean;

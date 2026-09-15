@@ -6,7 +6,7 @@ import { prisma } from "../src/lib/db.js";
 import { bearerFor, cleanupUsers } from "./helpers.js";
 
 const KEY = "sk-plain-secret-abcdef1234567890";
-const KINDS = ["OPENAI", "ANTHROPIC", "GEMINI", "DEEPSEEK", "OTX"] as const;
+const KINDS = ["OPENAI", "ANTHROPIC", "GEMINI", "DEEPSEEK", "OTX", "SMTP", "WAHA"] as const;
 
 describe("TASK-C4 integrations surface (encrypted at rest, masked out)", () => {
   let app: FastifyInstance;
@@ -208,18 +208,20 @@ describe("TASK-C4 integrations surface (encrypted at rest, masked out)", () => {
       headers: { authorization: await bearerFor(app, "ANALYST") },
     });
 
-    // Then: every WORK role may read it and all five kinds appear
+    // Then: every WORK role may read it and all seven kinds appear
     expect(byAdmin.statusCode).toBe(200);
     expect(byEditor.statusCode).toBe(200);
     expect(byAnalyst.statusCode).toBe(200);
     const body = byAdmin.json() as Array<{ kind: string; model: string | null; hasKey: boolean }>;
-    expect(body).toHaveLength(5);
+    expect(body).toHaveLength(7);
     const byKind = new Map(body.map((entry) => [entry.kind, entry]));
     expect(byKind.get("OPENAI")).toEqual({ kind: "OPENAI", model: "gpt-4o-mini", hasKey: true });
     expect(byKind.get("ANTHROPIC")).toEqual({ kind: "ANTHROPIC", model: null, hasKey: false });
     expect(byKind.get("GEMINI")).toEqual({ kind: "GEMINI", model: null, hasKey: false });
     expect(byKind.get("DEEPSEEK")).toEqual({ kind: "DEEPSEEK", model: null, hasKey: false });
     expect(byKind.get("OTX")).toEqual({ kind: "OTX", model: null, hasKey: false });
+    expect(byKind.get("SMTP")).toEqual({ kind: "SMTP", model: null, hasKey: false });
+    expect(byKind.get("WAHA")).toEqual({ kind: "WAHA", model: null, hasKey: false });
 
     // And: the wire carries neither plaintext keys, nor masks, nor config blobs
     expect(byAdmin.body).not.toContain(KEY);

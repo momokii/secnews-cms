@@ -186,17 +186,20 @@ S2 contract: Send (#46) and OTX push (#51) MUST fail with `409
 PENDING_SUGGESTIONS` while any suggestion for the ticket is `PENDING`
 (BLK-01). `TicketDetailSchema.pendingSuggestions > 0` is the FE banner signal.
 
-## 6. Surface 5 — Integrations (AI providers + OTX key)
+## 6. Surface 5 — Integrations (AI providers + OTX + SMTP + WAHA)
 
 Schemas: `src/modules/integrations/schema.ts`. Keys are AES-256-GCM
 encrypted at rest; never serialized in a response (INT-01) — masked only.
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 37 | `GET /integrations/:kind` | ADMIN | `:kind ∈ OPENAI\|ANTHROPIC\|GEMINI\|DEEPSEEK\|OTX` | 200 `IntegrationConfigResponseSchema` `{kind, model, hasKey, maskedKey, updatedAt}` | |
-| 37a | `GET /integrations/available` | WORK | — | 200 `[{kind, model, hasKey}]` for ALL five kinds (unconfigured → `model: null, hasKey: false`) — dropdown info for the fill/enrich provider picker; carries NO key material of any kind (no `maskedKey`, no blobs) | |
-| 38 | `PUT /integrations/:kind` | ADMIN | `PutIntegrationConfigBodySchema`; OTX uses `PutOtxConfigBodySchema` (no model) | 200 `IntegrationConfigResponseSchema` | |
-| 39 | `POST /integrations/:kind/test` | ADMIN | `{}` | 200 `TestConnectionResponseSchema` `{ok, detail?, latencyMs?}` | upstream failure reported in `ok:false`, not HTTP error |
+| 37 | `GET /integrations/:kind` | ADMIN | `:kind ∈ OPENAI\|ANTHROPIC\|GEMINI\|DEEPSEEK\|OTX\|SMTP\|WAHA` | 200 `IntegrationConfigResponseSchema` `{kind, model, hasKey, maskedKey, host, port, from, secure, baseUrl, session, updatedAt}` — SMTP carries host/port/from/secure + masked password, WAHA carries baseUrl/session + masked apiKey; all other fields null | |
+| 37a | `GET /integrations/available` | WORK | — | 200 `[{kind, model, hasKey}]` for ALL seven kinds (unconfigured → `model: null, hasKey: false`) — dropdown info for the fill/enrich provider picker; carries NO key material of any kind (no `maskedKey`, no blobs) | |
+| 38 | `PUT /integrations/:kind` | ADMIN | AI kinds: `PutIntegrationConfigBodySchema`; OTX: `PutOtxConfigBodySchema` (no model); SMTP: `{host, port, user, password, from, secure?}`; WAHA: `{baseUrl, session, apiKey}` — each stored as ONE encrypted blob | 200 `IntegrationConfigResponseSchema` | |
+| 39 | `POST /integrations/:kind/test` | ADMIN | `{}` | 200 `TestConnectionResponseSchema` `{ok, detail?, latencyMs?}` — SMTP: nodemailer `verify()` (10s timeout); WAHA: `GET {baseUrl}/api/sessions/{session}` with `X-Api-Key`, falling back to `GET {baseUrl}/api/health` on 404; OTX: subscribed-pulses probe; AI kinds: pong completion | upstream failure reported in `ok:false`, not HTTP error |
+
+SMTP/WAHA precedence: the Integrations-menu entry wins; the `SMTP_*` /
+`WAHA_*` env vars remain a fallback until a DB row exists.
 
 ## 7. Surface 6 — Clients + Channels
 
@@ -213,10 +216,12 @@ Read ANY (send-dialog context); mutations MGR.
 | 44b | `GET /clients/:clientId/channels` | ANY | — | 200 `[ChannelSchema]` (plain array, `createdAt` asc) | |
 | 45 | `PATCH /channels/:id` | MGR | `UpdateChannelBodySchema` | 200 `ChannelSchema` | |
 | 46 | `DELETE /channels/:id` | MGR | — | 204 | |
+| 46b | `POST /clients/:clientId/channels/:channelId/test` | MGR | `{}` | 200 `TestConnectionResponseSchema` — probe WITHOUT sending: TELEGRAM calls `getMe` with the stored token; WHATSAPP probes the stored WAHA session; EMAIL verifies the stored SMTP relay | unknown id pair → 404; upstream failure in `ok:false`, not HTTP error |
 
 Wire secrecy: TELEGRAM channel responses carry `tokenMasked` + `hasToken`,
-never the raw token (CHN-02). WHATSAPP uses the WAHA gateway (env-configured);
-EMAIL uses central SMTP.
+never the raw token (CHN-02). WHATSAPP uses the WAHA gateway (Integrations
+menu, `WAHA_*` env fallback); EMAIL uses central SMTP (Integrations menu,
+`SMTP_*` env fallback).
 
 ## 8. Surface 7 — Delivery (send + audit trail)
 

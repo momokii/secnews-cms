@@ -31,7 +31,7 @@ openssl rand -hex 32   # INGEST_API_KEY   (shared secret for feed ingest)
 openssl rand -hex 16   # POSTGRES_PASSWORD
 ```
 
-While in `.env`, also set `POSTGRES_DB=secnews_prod`. Set `WEB_PORT` only if 8080 is taken on the host. `CORS_ORIGIN` is not needed for the bundled web UI (nginx serves SPA and API on one origin). `SMTP_*` / `WAHA_*` only if you use those channels. Never commit `.env`.
+While in `.env`, also set `POSTGRES_DB=secnews_prod`. Set `WEB_PORT` only if 8080 is taken on the host. `CORS_ORIGIN` is not needed for the bundled web UI (nginx serves SPA and API on one origin). `SMTP_*` / `WAHA_*` only if you use those channels — prefer configuring them in the Integrations menu (ADMIN, stored encrypted, testable); the env vars remain the fallback until a DB row exists. Never commit `.env`.
 
 ### 2. Start the production stack
 

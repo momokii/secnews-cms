@@ -145,6 +145,20 @@ function createChannelRoute(channels: Channel[]): {
   };
 }
 
+/** POST /clients/:clientId/channels/:id/test — Telegram send probe (#46b). */
+function testChannelRoute(result: Record<string, unknown>): {
+  match: (url: string, method: string) => boolean;
+  respond: (init?: RequestInit) => Response;
+} {
+  return {
+    match: (url, method) =>
+      method === "POST" &&
+      url === `/api/clients/${acme.id}/channels/${TELEGRAM_CHANNEL_ID}/test`,
+    respond: () =>
+      new Response(JSON.stringify(result), { status: 200 }),
+  };
+}
+
 /** PATCH /channels/:id — applies {active} to the "server" state. */
 function toggleChannelRoute(channels: Channel[], id: string, active: boolean): {
   match: (url: string, method: string) => boolean;
@@ -366,5 +380,103 @@ describe("FE-CHN-02: channel active toggle PATCHes only {active}", () => {
     // And: the row reflects the server state via the post-toggle refetch
     await waitFor(() => expect(listGetCount(calls)).toBe(3));
     expect(await within(dialog).findByText("Inactive")).not.toBeNull();
+  });
+});
+
+describe("FE-CHN-TEST: telegram channel test connection", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it("POSTs /clients/:clientId/channels/:id/test and surfaces a green OK", async () => {
+    // Given: Acme's panel is open with one existing Telegram channel
+    setToken("test-token");
+    const persisted: Channel[] = [telegramChannel()];
+    const calls: RecordedCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      stubFetch(
+        [
+          clientsRoute(),
+          channelsListRoute(persisted),
+          testChannelRoute({ ok: true, latencyMs: 340 }),
+        ],
+        calls,
+      ),
+    );
+    const dialog = await openChannelsPanel();
+    const row = (await within(dialog).findByText(/@secops/)).closest("tr");
+    expect(row).not.toBeNull();
+
+    // When: the admin clicks the row's Test connection button
+    fireEvent.click(
+      within(row as HTMLElement).getByRole("button", { name: "Test connection" }),
+    );
+
+    // Then: the POST hits the contract URL and a green OK badge appears
+    await waitFor(() => {
+      const posts = calls.filter(
+        (c) =>
+          c.method === "POST" &&
+          c.url === `/api/clients/${acme.id}/channels/${TELEGRAM_CHANNEL_ID}/test`,
+      );
+      expect(posts).toHaveLength(1);
+    });
+    expect(
+      await within(dialog).findByText(/OK\s*·\s*340\s*ms/),
+    ).not.toBeNull();
+  });
+
+  it("surfaces upstream failure detail in red without breaking the panel", async () => {
+    // Given: the same panel, but the Telegram probe reports ok:false
+    setToken("test-token");
+    const persisted: Channel[] = [telegramChannel()];
+    const calls: RecordedCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      stubFetch(
+        [
+          clientsRoute(),
+          channelsListRoute(persisted),
+          testChannelRoute({
+            ok: false,
+            detail: "telegram getMe failed with upstream status 401",
+          }),
+        ],
+        calls,
+      ),
+    );
+    const dialog = await openChannelsPanel();
+    const row = (await within(dialog).findByText(/@secops/)).closest("tr");
+    expect(row).not.toBeNull();
+
+    // When: the admin runs Test connection on the Telegram row
+    fireEvent.click(
+      within(row as HTMLElement).getByRole("button", { name: "Test connection" }),
+    );
+
+    // Then: the failure detail lands in the status line, panel still usable
+    expect(
+      await within(dialog).findByText(/getMe failed with upstream status 401/),
+    ).not.toBeNull();
+    expect(
+      within(dialog).getByRole("button", { name: "Add channel" }),
+    ).toBeTruthy();
+  });
+
+  it("shows no Test connection button on WHATSAPP and EMAIL rows", async () => {
+    // Given: Acme's panel with one channel of each non-telegram type
+    setToken("test-token");
+    const persisted: Channel[] = [whatsappChannel("12025550123"), emailChannel(["a@corp.io"])];
+    const calls: RecordedCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      stubFetch([clientsRoute(), channelsListRoute(persisted)], calls),
+    );
+    const dialog = await openChannelsPanel();
+
+    // Then: only Telegram rows offer Test connection
+    expect(within(dialog).queryByRole("button", { name: "Test connection" })).toBeNull();
   });
 });

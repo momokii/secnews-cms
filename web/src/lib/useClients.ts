@@ -6,6 +6,7 @@ import {
   deleteClient,
   listChannels,
   listClients,
+  testChannel,
   updateChannel,
   updateClient,
   type ChannelPatch,
@@ -93,5 +94,12 @@ export function useDeleteChannel() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["channels"] });
     },
+  });
+}
+
+/** Test probes are point-in-time — like integration tests, never cached. */
+export function useTestChannel(clientId: string) {
+  return useMutation({
+    mutationFn: (channelId: string) => testChannel(clientId, channelId),
   });
 }

@@ -35,3 +35,6 @@ export const ListClientsResponseSchema = paginated(ClientSchema);
 
 export const UuidIdParamSchema = z.object({ id: z.uuid() });
 export const ClientIdParamSchema = z.object({ clientId: z.uuid() });
+
+// POST /clients/:clientId/channels/:channelId/test
+export const ChannelTestParamSchema = z.object({ clientId: z.uuid(), channelId: z.uuid() });

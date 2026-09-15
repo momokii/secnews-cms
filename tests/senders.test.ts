@@ -1,7 +1,33 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/** The SMTP transport is stubbed at the nodemailer boundary — production code
+ * builds real transports only outside tests. Captured transports expose the
+ * options they were built with and every mail handed to sendMail. */
+const smtpMock = vi.hoisted(() => ({
+  created: [] as Array<{ options: unknown; mails: unknown[]; sendMail: (mail: unknown) => Promise<unknown> }>,
+}));
+vi.mock("nodemailer", () => ({
+  default: {
+    createTransport: vi.fn((options: unknown) => {
+      const transport = {
+        options,
+        mails: [] as unknown[],
+        sendMail: async (mail: unknown) => {
+          transport.mails.push(mail);
+          return {};
+        },
+      };
+      smtpMock.created.push(transport);
+      return transport;
+    }),
+  },
+}));
+
 import { sendWhatsApp } from "../src/modules/delivery/senders/waha.js";
 import { sendTelegram } from "../src/modules/delivery/senders/telegram.js";
 import { sendEmail, type MailTransport } from "../src/modules/delivery/senders/email.js";
+import { encryptSecret } from "../src/lib/crypto.js";
+import { prisma } from "../src/lib/db.js";
 
 /** SND-P-01…03: the three sender adapters against injected mocks —
  * no real WAHA / Telegram / SMTP traffic ever leaves the test. */
@@ -213,6 +239,7 @@ describe("SMTP sender (SND-P-03)", () => {
     // Given: no SMTP_HOST in the environment and no injected transport
     const previous = process.env["SMTP_HOST"];
     delete process.env["SMTP_HOST"];
+    await prisma.integrationConfig.deleteMany({ where: { kind: "SMTP" } });
 
     // When: the email send is invoked
     // Then: it rejects asking for SMTP_HOST instead of attempting a connection
@@ -222,5 +249,140 @@ describe("SMTP sender (SND-P-03)", () => {
     if (previous !== undefined) {
       process.env["SMTP_HOST"] = previous;
     }
+  });
+});
+
+describe("DB-first central gateway config (senders read IntegrationConfig before env)", () => {
+  const envKeys = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM", "WAHA_BASE_URL", "WAHA_SESSION", "WAHA_API_KEY"] as const;
+
+  beforeEach(async () => {
+    await prisma.integrationConfig.deleteMany({ where: { kind: { in: ["SMTP", "WAHA"] } } });
+    smtpMock.created.length = 0;
+  });
+
+  afterEach(() => {
+    for (const key of envKeys) {
+      delete process.env[key];
+    }
+  });
+
+  afterAll(async () => {
+    await prisma.integrationConfig.deleteMany({ where: { kind: { in: ["SMTP", "WAHA"] } } });
+    await prisma.$disconnect();
+  });
+
+  function lastTransport(): { options: Record<string, unknown>; mails: unknown[] } {
+    const transport = smtpMock.created.at(-1);
+    if (transport === undefined) {
+      throw new Error("no transport was created");
+    }
+    return { options: transport.options as Record<string, unknown>, mails: transport.mails };
+  }
+
+  it("SND-P-03: sendEmail builds the transport from the stored SMTP integration, not env", async () => {
+    // Given: a stored SMTP integration row distinct from any env values
+    await prisma.integrationConfig.create({
+      data: {
+        kind: "SMTP",
+        encryptedKey: encryptSecret(JSON.stringify({
+          host: "db-smtp.test",
+          port: 465,
+          user: "db-user",
+          password: "db-pass",
+          from: "DB SecNews <db@secnews.test>",
+          secure: true,
+        })),
+      },
+    });
+    process.env["SMTP_HOST"] = "env-smtp.test";
+    process.env["SMTP_FROM"] = "Env <env@secnews.test>";
+
+    // When: the email send runs with no injected transport
+    await sendEmail({ bcc: ["a@corp.test"], subject: "s", text: "t" });
+
+    // Then: the transport was built from the DB row (host, auth, secure) and from came from it
+    const { options, mails } = lastTransport();
+    expect(options).toMatchObject({
+      host: "db-smtp.test",
+      port: 465,
+      secure: true,
+      auth: { user: "db-user", pass: "db-pass" },
+    });
+    expect(mails[0]).toMatchObject({ from: "DB SecNews <db@secnews.test>" });
+  });
+
+  it("SND-P-03: sendEmail falls back to env SMTP settings when no SMTP row exists", async () => {
+    // Given: no DB row and env-configured central relay
+    process.env["SMTP_HOST"] = "env-smtp.test";
+    process.env["SMTP_PORT"] = "2525";
+    process.env["SMTP_USER"] = "env-user";
+    process.env["SMTP_PASSWORD"] = "env-pass";
+
+    // When: the email send runs with no injected transport
+    await sendEmail({ bcc: ["a@corp.test"], subject: "s", text: "t" });
+
+    // Then: the transport was built from env
+    const { options } = lastTransport();
+    expect(options).toMatchObject({
+      host: "env-smtp.test",
+      port: 2525,
+      auth: { user: "env-user", pass: "env-pass" },
+    });
+  });
+
+  it("SND-P-01: sendWhatsApp uses the stored WAHA integration before env", async () => {
+    // Given: a stored WAHA row and conflicting env vars
+    await prisma.integrationConfig.create({
+      data: {
+        kind: "WAHA",
+        encryptedKey: encryptSecret(JSON.stringify({
+          baseUrl: "http://db-waha.test",
+          session: "db-session",
+          apiKey: "db-key",
+        })),
+      },
+    });
+    process.env["WAHA_BASE_URL"] = "http://env-waha.test";
+    process.env["WAHA_SESSION"] = "env-session";
+    process.env["WAHA_API_KEY"] = "env-key";
+    const requests: CapturedRequest[] = [];
+    const fetchImpl = async (url: string, init?: RequestInit): Promise<Response> => {
+      requests.push({ url, init: init ?? {} });
+      return new Response("{}", { status: 200 });
+    };
+
+    // When: the WhatsApp send runs with no explicit gateway options
+    await sendWhatsApp({ chatId: "chat-1", text: "hi", fetchImpl });
+
+    // Then: the DB row won
+    expect(requests[0]?.url).toBe("http://db-waha.test/api/sendText");
+    expect(JSON.parse(requests[0]?.init.body as string).session).toBe("db-session");
+    expect((requests[0]?.init.headers as Record<string, string>)["X-Api-Key"]).toBe("db-key");
+  });
+
+  it("SND-P-01: explicit send options still override the stored WAHA integration", async () => {
+    // Given: a stored row AND explicit gateway options
+    await prisma.integrationConfig.create({
+      data: {
+        kind: "WAHA",
+        encryptedKey: encryptSecret(JSON.stringify({
+          baseUrl: "http://db-waha.test",
+          session: "db-session",
+          apiKey: "db-key",
+        })),
+      },
+    });
+    const requests: CapturedRequest[] = [];
+    const fetchImpl = async (url: string, init?: RequestInit): Promise<Response> => {
+      requests.push({ url, init: init ?? {} });
+      return new Response("{}", { status: 200 });
+    };
+
+    // When: the caller passes explicit gateway settings
+    await sendWhatsApp({ chatId: "c", text: "t", baseUrl: "http://override.test", session: "override", apiKey: "override-key", fetchImpl });
+
+    // Then: the explicit options win
+    expect(requests[0]?.url).toBe("http://override.test/api/sendText");
+    expect((requests[0]?.init.headers as Record<string, string>)["X-Api-Key"]).toBe("override-key");
   });
 });

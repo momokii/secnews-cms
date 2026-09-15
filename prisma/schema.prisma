@@ -108,6 +108,8 @@ enum IntegrationKind {
   GEMINI
   DEEPSEEK
   OTX
+  SMTP
+  WAHA
 }
 
 /** TASK-PROMPT: which AI flow a stored prompt template drives. */

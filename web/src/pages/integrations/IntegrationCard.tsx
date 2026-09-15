@@ -13,6 +13,8 @@ const KIND_LABELS: Record<IntegrationKind, string> = {
   GEMINI: "Gemini",
   DEEPSEEK: "DeepSeek",
   OTX: "OTX",
+  SMTP: "SMTP",
+  WAHA: "WAHA",
 };
 
 const AI_KINDS: readonly IntegrationKind[] = AI_PROVIDERS;

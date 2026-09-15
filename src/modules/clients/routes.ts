@@ -1,12 +1,17 @@
 import { Prisma } from "../../generated/prisma/client.js";
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
+import { z } from "zod/v4";
 import { sendError } from "../../common/errors.js";
 import { prisma } from "../../lib/db.js";
-import { encodeChannelTarget, toChannelWire } from "../channels/map.js";
+import { decodeChannelTarget, encodeChannelTarget, toChannelWire } from "../channels/map.js";
 import { ChannelListSchema, ChannelSchema, CreateChannelBodySchema } from "../channels/schema.js";
+import { loadStoredConfig } from "../integrations/config-store.js";
+import { probeSmtp, probeTelegram, probeWaha, type ProbeOutcome } from "../integrations/probes.js";
+import { TestConnectionResponseSchema, type SmtpStoredConfig, type WahaStoredConfig } from "../integrations/schema.js";
 import { toClientWire } from "./map.js";
 import {
+  ChannelTestParamSchema,
   ClientIdParamSchema,
   CreateClientBodySchema,
   ClientSchema,
@@ -27,6 +32,8 @@ function prismaErrorToReply(reply: Parameters<typeof sendError>[0], err: unknown
   }
   throw err;
 }
+
+const testBody = z.object({}).strict();
 
 // Autoload prefixes the module directory, so "/" here resolves to /clients.
 export default async function clientRoutes(app: FastifyInstance): Promise<void> {
@@ -149,6 +156,50 @@ export default async function clientRoutes(app: FastifyInstance): Promise<void> 
         orderBy: { createdAt: "asc" },
       });
       return rows.map(toChannelWire);
+    },
+  );
+
+  // POST /clients/:clientId/channels/:channelId/test (#46b) — probe without
+  // sending: TELEGRAM validates the stored bot token via getMe, WHATSAPP
+  // probes the stored WAHA gateway session, EMAIL verifies the stored SMTP
+  // relay. Upstream failures are ok:false results, not HTTP errors.
+  f.post(
+    "/:clientId/channels/:channelId/test",
+    {
+      schema: {
+        params: ChannelTestParamSchema,
+        body: testBody,
+        response: { 200: TestConnectionResponseSchema },
+      },
+      onRequest: mgr,
+    },
+    async (request, reply) => {
+      const startedAt = Date.now();
+      const channel = await prisma.channel.findFirst({
+        where: { id: request.params.channelId, clientId: request.params.clientId },
+      });
+      if (channel === null) {
+        return sendError(reply, "NOT_FOUND", "Unknown resource id");
+      }
+      const decoded = decodeChannelTarget(channel);
+      let outcome: ProbeOutcome;
+      switch (decoded.type) {
+        case "TELEGRAM": {
+          outcome = await probeTelegram(decoded.token);
+          break;
+        }
+        case "WHATSAPP": {
+          const waha = await loadStoredConfig<WahaStoredConfig>("WAHA");
+          outcome = waha === null ? { ok: false, detail: "no WAHA configuration stored" } : await probeWaha(waha);
+          break;
+        }
+        case "EMAIL": {
+          const smtp = await loadStoredConfig<SmtpStoredConfig>("SMTP");
+          outcome = smtp === null ? { ok: false, detail: "no SMTP configuration stored" } : await probeSmtp(smtp);
+          break;
+        }
+      }
+      return { ...outcome, latencyMs: Date.now() - startedAt };
     },
   );
 }

@@ -69,7 +69,7 @@ function otherKindsRoute(): {
 } {
   return {
     match: (url, method) =>
-      method === "GET" && /^\/api\/integrations\/(ANTHROPIC|GEMINI|DEEPSEEK|OTX)$/.test(url),
+      method === "GET" &&       /^\/api\/integrations\/(ANTHROPIC|GEMINI|DEEPSEEK|OTX|SMTP|WAHA)$/.test(url),
     respond: () => new Response(JSON.stringify(UNCONFIGURED("OTX")), { status: 200 }),
   };
 }
@@ -150,7 +150,7 @@ describe("FE-INT-01: masked key is never resubmitted", () => {
       {
         match: (url, method) =>
           method === "GET" &&
-          /^\/api\/integrations\/(OPENAI|ANTHROPIC|GEMINI|DEEPSEEK)$/.test(url),
+          /^\/api\/integrations\/(OPENAI|ANTHROPIC|GEMINI|DEEPSEEK|SMTP|WAHA)$/.test(url),
         respond: () => new Response(JSON.stringify(UNCONFIGURED("OPENAI")), { status: 200 }),
       },
       {
@@ -224,7 +224,7 @@ describe("FE-INT-02: test connection call and result badge", () => {
       {
         match: (url, method) =>
           method === "GET" &&
-          /^\/api\/integrations\/(OPENAI|ANTHROPIC|GEMINI)$/.test(url),
+          /^\/api\/integrations\/(OPENAI|ANTHROPIC|GEMINI|DEEPSEEK|SMTP|WAHA)$/.test(url),
         respond: () => new Response(JSON.stringify(UNCONFIGURED("OTX")), { status: 200 }),
       },
       {
@@ -261,7 +261,8 @@ describe("TASK-UIFE: integrations grouping and DeepSeek", () => {
       },
       {
         match: (url, method) =>
-          method === "GET" && /^\/api\/integrations\/(ANTHROPIC|GEMINI|DEEPSEEK|OTX)$/.test(url),
+          method === "GET" &&
+          /^\/api\/integrations\/(ANTHROPIC|GEMINI|DEEPSEEK|OTX|SMTP|WAHA)$/.test(url),
         respond: () => new Response(JSON.stringify(UNCONFIGURED("OTX")), { status: 200 }),
       },
     ];

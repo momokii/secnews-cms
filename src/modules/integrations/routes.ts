@@ -13,16 +13,25 @@ import {
   AvailableIntegrationSchema,
   IntegrationConfigResponseSchema,
   IntegrationKindEnum,
+  PutAnyIntegrationBodySchema,
   PutIntegrationConfigBodySchema,
   PutOtxConfigBodySchema,
+  PutSmtpConfigBodySchema,
+  PutWahaConfigBodySchema,
   TestConnectionResponseSchema,
+  type AiStoredConfig,
   type IntegrationConfigResponse,
+  type SmtpStoredConfig,
+  type WahaStoredConfig,
 } from "./schema.js";
+import { loadStoredConfig } from "./config-store.js";
+import { probeSmtp, probeWaha } from "./probes.js";
 
 /**
- * Central integration credentials (AI providers + OTX), ADMIN-only.
- * Keys are AES-256-GCM encrypted at rest (blob also carries the optional
- * model) and NEVER serialized: responses expose maskedKey + hasKey (INT-01).
+ * Central integration credentials (AI providers + OTX + SMTP + WAHA), ADMIN-only.
+ * Every kind stores ONE AES-256-GCM encrypted JSON blob and NEVER serializes
+ * secrets: responses expose maskedKey + hasKey plus the kind's non-secret
+ * coordinates (INT-01).
  */
 
 const kindParam = z.object({ kind: IntegrationKindEnum });
@@ -32,8 +41,6 @@ const EPOCH = "1970-01-01T00:00:00.000Z";
 const OTX_BASE = "https://otx.alienvault.com";
 /** Probe path: the same subscribed-pulses endpoint the app itself uses (OTX has no /subscriber/mine). */
 const OTX_TEST_PATH = "/api/v1/pulses/subscribed?limit=1";
-
-type StoredConfig = { apiKey: string; model?: string };
 
 /** Render a semantic rejection as the 422 VALIDATION envelope (contract §Errors). */
 function send422(reply: FastifyReply, message: string): void {
@@ -49,26 +56,62 @@ const AI_CALLERS: Partial<Record<AiKind, ChatProviderFn>> = {
   DEEPSEEK: callDeepSeek,
 };
 
+const EMPTY_RESPONSE: Omit<IntegrationConfigResponse, "kind" | "updatedAt"> = {
+  model: null,
+  hasKey: false,
+  maskedKey: null,
+  host: null,
+  port: null,
+  from: null,
+  secure: null,
+  baseUrl: null,
+  session: null,
+};
+
 function toResponse(kind: IntegrationKind, row: { encryptedKey: string; updatedAt: Date } | null): IntegrationConfigResponse {
   if (row === null) {
-    return { kind, model: null, hasKey: false, maskedKey: null, updatedAt: EPOCH };
+    return { kind, ...EMPTY_RESPONSE, updatedAt: EPOCH };
   }
-  const config = JSON.parse(decryptSecret(row.encryptedKey)) as StoredConfig;
-  return {
-    kind,
-    model: config.model ?? null,
-    hasKey: true,
-    maskedKey: maskKey(config.apiKey),
-    updatedAt: row.updatedAt.toISOString(),
-  };
+  const config: unknown = JSON.parse(decryptSecret(row.encryptedKey));
+  const updatedAt = row.updatedAt.toISOString();
+  if (kind === "SMTP") {
+    const smtp = config as SmtpStoredConfig;
+    return {
+      kind,
+      ...EMPTY_RESPONSE,
+      hasKey: true,
+      maskedKey: maskKey(smtp.password),
+      host: smtp.host,
+      port: smtp.port,
+      from: smtp.from,
+      secure: smtp.secure ?? smtp.port === 465,
+      updatedAt,
+    };
+  }
+  if (kind === "WAHA") {
+    const waha = config as WahaStoredConfig;
+    return {
+      kind,
+      ...EMPTY_RESPONSE,
+      hasKey: true,
+      maskedKey: waha.apiKey === undefined ? null : maskKey(waha.apiKey),
+      baseUrl: waha.baseUrl,
+      session: waha.session,
+      updatedAt,
+    };
+  }
+  const ai = config as AiStoredConfig;
+  return { kind, ...EMPTY_RESPONSE, hasKey: true, model: ai.model ?? null, maskedKey: maskKey(ai.apiKey), updatedAt };
 }
 
-async function storedKey(app: FastifyInstance, kind: IntegrationKind): Promise<StoredConfig | null> {
-  const row = await app.prisma.integrationConfig.findUnique({ where: { kind } });
-  if (row === null) {
-    return null;
-  }
-  return JSON.parse(decryptSecret(row.encryptedKey)) as StoredConfig;
+/** Upsert one kind's config blob and answer the masked view. */
+async function storeConfig(app: FastifyInstance, kind: IntegrationKind, blob: string): Promise<IntegrationConfigResponse> {
+  const row = await app.prisma.integrationConfig.upsert({
+    where: { kind },
+    update: { encryptedKey: blob },
+    create: { kind, encryptedKey: blob },
+  });
+  return toResponse(kind, row);
 }
 
 export default async function integrationRoutes(app: FastifyInstance): Promise<void> {
@@ -92,7 +135,7 @@ export default async function integrationRoutes(app: FastifyInstance): Promise<v
       if (row === undefined) {
         return { kind, model: null, hasKey: false };
       }
-      const config = JSON.parse(decryptSecret(row.encryptedKey)) as StoredConfig;
+      const config = JSON.parse(decryptSecret(row.encryptedKey)) as AiStoredConfig;
       return { kind, model: config.model ?? null, hasKey: true };
     });
   });
@@ -110,16 +153,23 @@ export default async function integrationRoutes(app: FastifyInstance): Promise<v
     return toResponse(kind, row);
   });
 
-  // PUT /integrations/:kind — upsert; OTX forbids model (422, semantic rule).
+  // PUT /integrations/:kind — upsert; the blob shape branches on the kind.
   f.put("/:kind", {
     onRequest: [app.requireRole("ADMIN")],
     schema: {
       params: kindParam,
-      body: PutIntegrationConfigBodySchema,
+      body: PutAnyIntegrationBodySchema,
       response: { 200: IntegrationConfigResponseSchema },
     },
   }, async (request, reply) => {
     const { kind } = request.params;
+    if (kind === "SMTP" || kind === "WAHA") {
+      const parsed = (kind === "SMTP" ? PutSmtpConfigBodySchema : PutWahaConfigBodySchema).safeParse(request.body);
+      if (parsed.success === false) {
+        throw new AppError("VALIDATION", `${kind} configuration is incomplete`, parsed.error.issues);
+      }
+      return storeConfig(app, kind, encryptSecret(JSON.stringify(parsed.data)));
+    }
     if (kind === "OTX") {
       const parsed = PutOtxConfigBodySchema.safeParse(request.body);
       if (parsed.success === false) {
@@ -129,22 +179,10 @@ export default async function integrationRoutes(app: FastifyInstance): Promise<v
         send422(reply, "OTX configuration must not include a model");
         return reply;
       }
-      const blob = encryptSecret(JSON.stringify(parsed.data));
-      const row = await app.prisma.integrationConfig.upsert({
-        where: { kind },
-        update: { encryptedKey: blob },
-        create: { kind, encryptedKey: blob },
-      });
-      return toResponse(kind, row);
+      return storeConfig(app, kind, encryptSecret(JSON.stringify(parsed.data)));
     }
     const body = PutIntegrationConfigBodySchema.parse(request.body);
-    const blob = encryptSecret(JSON.stringify(body));
-    const row = await app.prisma.integrationConfig.upsert({
-      where: { kind },
-      update: { encryptedKey: blob },
-      create: { kind, encryptedKey: blob },
-    });
-    return toResponse(kind, row);
+    return storeConfig(app, kind, encryptSecret(JSON.stringify(body)));
   });
 
   // POST /integrations/:kind/test — upstream failures are ok:false, not HTTP errors.
@@ -157,11 +195,27 @@ export default async function integrationRoutes(app: FastifyInstance): Promise<v
     },
   }, async (request) => {
     const { kind } = request.params;
-    const config = await storedKey(app, kind);
+    const startedAt = Date.now();
+    if (kind === "SMTP") {
+      const config = await loadStoredConfig<SmtpStoredConfig>("SMTP");
+      if (config === null) {
+        return { ok: false, detail: "no SMTP configuration stored" };
+      }
+      const outcome = await probeSmtp(config);
+      return { ...outcome, latencyMs: Date.now() - startedAt };
+    }
+    if (kind === "WAHA") {
+      const config = await loadStoredConfig<WahaStoredConfig>("WAHA");
+      if (config === null) {
+        return { ok: false, detail: "no WAHA configuration stored" };
+      }
+      const outcome = await probeWaha(config);
+      return { ...outcome, latencyMs: Date.now() - startedAt };
+    }
+    const config = await loadStoredConfig<AiStoredConfig>(kind);
     if (config === null) {
       return { ok: false, detail: `no key configured for ${kind}` };
     }
-    const startedAt = Date.now();
     if (kind === "OTX") {
       const doFetch: FetchLike = (url, init) => globalThis.fetch(url, init);
       try {
