@@ -205,14 +205,14 @@ describe("TASK-PROMPT prompt template management (fill/enrich)", () => {
       expect(fill?.updatedAt).toBeNull();
 
       // And: the provider payload is the built-in default rendered
-      expect(prompts[0]).toContain("Draft content for ONLY these missing final fields:");
+       expect(prompts[0]).toContain("Never invent IOCs, CVE IDs, product versions");
     } finally {
       await cleanupTicket(ticketId);
       await reseedDefaults();
     }
   });
 
-  it("seeded default templates render byte-identical to the legacy hardcoded prompts (fill)", async () => {
+  it("seeded default FILL template includes the security drafting contract", async () => {
     // Given: the seeded FILL row and a ticket with IOC + source context lines
     const ticketId = await createKnownTicket();
     try {
@@ -225,30 +225,16 @@ describe("TASK-PROMPT prompt template management (fill/enrich)", () => {
         payload: {},
       });
 
-      // Then: the prompt is byte-identical to the legacy hardcoded buildPrompt output
+      // Then: the prompt includes the current security drafting contract
       expect(res.statusCode).toBe(200);
-      const context = [
-        `title: ${FILL_TITLE}`,
-        "summary: Adversaries brute-forcing public SSH endpoints.",
-        "findingType: OTHER",
-        "tlp: AMBER",
-        "iocs: DOMAIN:evil.com",
-        "sources: https://src.example/a",
-      ].join("\n");
-      const expected = [
-        "Ticket context:",
-        context,
-        "",
-        "Draft content for ONLY these missing final fields: overview, description, cveIds, affectedVersions, mitigation.",
-        "Do not include fields that already have content. JSON only.",
-      ].join("\n");
-      expect(prompts[0]).toBe(expected);
+      expect(prompts[0]).toContain("Overview, Description, IOC, Recommendations, References");
+      expect(prompts[0]).toContain("Defang every IOC");
     } finally {
       await cleanupTicket(ticketId);
     }
   });
 
-  it("seeded default templates render byte-identical to the legacy hardcoded prompts (enrich)", async () => {
+  it("seeded default ENRICH template includes the security drafting contract", async () => {
     // Given: the seeded ENRICH row and a bare ticket with a known title
     const ticketId = await createTestTicket();
     await prisma.ticket.update({ where: { id: ticketId }, data: { title: FILL_TITLE } });
@@ -262,29 +248,10 @@ describe("TASK-PROMPT prompt template management (fill/enrich)", () => {
         payload: {},
       });
 
-      // Then: the prompt is byte-identical to the legacy hardcoded buildPrompt output
+      // Then: the prompt includes the current security drafting contract
       expect(res.statusCode).toBe(200);
-      const context = [
-        `title: ${FILL_TITLE}`,
-        "summary: Adversaries brute-forcing public SSH endpoints.",
-        "findingType: OTHER",
-        "tlp: AMBER",
-      ].join("\n");
-      const expected = [
-        "Ticket context:",
-        context,
-        "",
-        "Propose a full rewrite for EVERY final field listed below with its current value:",
-        "overview: <empty>",
-        "description: <empty>",
-        "recommendations: <empty>",
-        "references: <empty>",
-        "cveIds: <empty>",
-        "affectedVersions: <empty>",
-        "mitigation: <empty>",
-        "JSON only.",
-      ].join("\n");
-      expect(prompts[0]).toBe(expected);
+      expect(prompts[0]).toContain("Use these exact sections: Overview, Description, IOC, Recommendations, References");
+      expect(prompts[0]).toContain("Clearly separate enrichment");
     } finally {
       await cleanupTicket(ticketId);
     }

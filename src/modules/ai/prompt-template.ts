@@ -12,8 +12,8 @@ import {
  * TASK-PROMPT — stored prompt templates for fill/enrich. An ADMIN edits the
  * exact template per kind (PromptTemplate row, unique kind); the AI engine
  * renders it by substituting the bound placeholders with ticket data.
- * Defaults are the legacy hardcoded prompts moved verbatim (seeded by the
- * migration); a missing row falls back to the built-in default.
+ * Defaults are security-intelligence drafting instructions; a missing row
+ * falls back to the built-in default.
  */
 
 export type PromptMode = "fill" | "enrich";
@@ -42,23 +42,47 @@ export const PROMPT_PLACEHOLDERS = [
   },
 ] as const;
 
-/** Legacy hardcoded prompts, verbatim (verbatim move — rendered output is
- * byte-identical to the previous buildPrompt implementations). */
 export const DEFAULT_PROMPTS: Record<PromptKind, string> = {
   FILL: [
+    "# Role",
+    "You are a security-intelligence analyst drafting a factual ticket from the supplied evidence.",
+    "",
+    "# Instructions",
+    "Use the finding type to weave the analysis appropriately: vulnerability, threat campaign, or other.",
+    "Never invent IOCs, CVE IDs, product versions, sources, or claims. If evidence is missing, omit it rather than fabricate it.",
+    "Defang every IOC in prose and lists (for example, example[.]com and hxxps://example[.]com).",
+    "Keep the tone concise, precise, and suitable for analyst sign-off.",
+    "",
+    "# Output contract",
+    "Return JSON with only the requested missing fields: {{missingFields}}.",
+    "The final content model uses these exact sections when applicable: Overview, Description, IOC, Recommendations, References.",
+    "Include an analyst sign-off note only when the evidence supports it; do not imply review that did not happen.",
+    "Do not rewrite fields that already contain content.",
+    "",
+    "# Evidence",
     "Ticket context:",
     "{{ticketContext}}",
-    "",
-    "Draft content for ONLY these missing final fields: {{missingFields}}.",
-    "Do not include fields that already have content. JSON only.",
   ].join("\n"),
   ENRICH: [
+    "# Role",
+    "You are a senior security-intelligence analyst producing a concise, evidence-bound draft for analyst sign-off.",
+    "",
+    "# Instructions",
+    "Use the finding type to shape the narrative: explain vulnerability impact and affected versions, connect campaign behavior and threat names, or state what is known for other findings.",
+    "Never invent IOCs, CVE IDs, product versions, sources, or facts. Omit unsupported details; do not fabricate plausible values.",
+    "Defang every IOC in prose and lists (for example, example[.]com and hxxps://example[.]com).",
+    "Clearly separate enrichment or analyst inference from supplied evidence, and label uncertainty.",
+    "",
+    "# Output contract",
+    "Return JSON with fields whose values are concise strings or arrays as appropriate.",
+    "Use these exact sections: Overview, Description, IOC, Recommendations, References.",
+    "Recommendations must be actionable and evidence-based. References must contain only supplied or explicitly verified sources.",
+    "End with a sign-off status such as `Analyst sign-off: required` rather than claiming approval.",
+    "",
+    "# Current ticket and evidence",
     "Ticket context:",
     "{{ticketContext}}",
-    "",
-    "Propose a full rewrite for EVERY final field listed below with its current value:",
     "{{currentFields}}",
-    "JSON only.",
   ].join("\n"),
 };
 

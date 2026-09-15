@@ -31,3 +31,18 @@ export const ListPromptsResponseSchema = z.array(PromptTemplateSchema);
 // PUT /prompts/:kind
 export const PutPromptParamsSchema = z.object({ kind: PromptKindSchema });
 export const PutPromptBodySchema = z.object({ content: z.string().min(1) }).strict();
+
+export const PromptRevisionSchema = z.object({
+  id: z.uuid(),
+  promptKind: PromptKindSchema,
+  content: z.string(),
+  actorId: z.uuid().nullable(),
+  actorName: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export const ListPromptRevisionsResponseSchema = z.object({
+  items: z.array(PromptRevisionSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+});
