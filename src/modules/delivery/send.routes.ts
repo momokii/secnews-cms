@@ -105,10 +105,10 @@ export default async function deliveryRoutes(app: FastifyInstance): Promise<void
       if (ticket === null) {
         throw new AppError("NOT_FOUND", `Ticket ${id} not found`);
       }
-      if (ticket.status !== "READY") {
+      if (ticket.status !== "READY" && ticket.status !== "SENT") {
         throw new AppError(
           "VALIDATION",
-          `Ticket status is ${ticket.status} — only READY tickets can be sent`,
+          `Ticket status is ${ticket.status} — only READY or SENT tickets can be sent`,
           { status: ticket.status },
           422,
         );

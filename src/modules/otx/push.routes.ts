@@ -48,12 +48,13 @@ export default async function otxPushRoutes(app: FastifyInstance): Promise<void>
       if (ticket === null) {
         throw new AppError("NOT_FOUND", `Ticket ${id} not found`);
       }
-      if (ticket.status !== "READY") {
-        throw new AppError("VALIDATION", `Ticket must be READY to push to OTX (currently ${ticket.status})`, undefined, 422);
+       if (ticket.status !== "READY" && ticket.status !== "SENT") {
+         throw new AppError("VALIDATION", `Ticket must be READY or SENT to push to OTX (currently ${ticket.status})`, undefined, 422);
       }
       await assertNoPendingSuggestions(prisma, id);
 
-      // Pre-check (TASK-VALID): the incident row (IPv4 literal stored as IPV6)
+       try {
+       // Pre-check (TASK-VALID): the incident row (IPv4 literal stored as IPV6)
       // made every push answer 400 upstream. Re-validate the included IOCs and
       // refuse the whole push naming the culprits — never push partial silently.
       const culprits = ticket.iocs
@@ -106,12 +107,21 @@ export default async function otxPushRoutes(app: FastifyInstance): Promise<void>
           detail: existingPulseId !== null ? `${pulse.id} (updated)` : pulse.id,
         });
       });
-      return {
+       return {
         pulseId: pulse.id,
         pulseUrl: pulse.url,
         isPublic: publicAllowed(ticket.tlp),
-        tlpMarking: toOtxMarking(ticket.tlp),
-      };
+         tlpMarking: toOtxMarking(ticket.tlp),
+       };
+       } catch (error) {
+         await recordActivity(prisma, {
+           ticketId: id,
+           actorId: request.user.sub,
+           action: "OTX_PUSHED",
+           detail: `failed: ${error instanceof Error ? error.message : "unknown error"}`,
+         });
+         throw error;
+       }
     },
   );
 }
