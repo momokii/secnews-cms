@@ -9,7 +9,6 @@ import { callGemini } from "./providers/gemini.js";
 import { callOpenAi } from "./providers/openai.js";
 import { DEFAULT_MODELS, type ChatCompletionOptions, type ChatProviderFn } from "./providers/types.js";
 import {
-  buildPrompt,
   currentValueOf,
   missingFields,
   parseModelFields,
@@ -19,6 +18,7 @@ import {
   type SuggestibleField,
   type TicketWithRelations,
 } from "./prompts.js";
+import { loadPromptTemplate, modeToKind, promptBindings, renderPromptTemplate } from "./prompt-template.js";
 
 /**
  * AI assist engine for fill/enrich. Provider + model resolve per request:
@@ -115,9 +115,14 @@ export async function generateSuggestions(
 ): Promise<Array<{ model: string; provider: ProviderKind } & SuggestionDraft>> {
   const provider = await resolveProvider(db, explicit);
   const call = PROVIDERS[provider.kind];
+  const template = await loadPromptTemplate(db, modeToKind(mode));
   let raw: string;
   try {
-    raw = await call({ ...provider.options, system: SYSTEM_PROMPT, prompt: buildPrompt(ticket, mode) });
+    raw = await call({
+      ...provider.options,
+      system: SYSTEM_PROMPT,
+      prompt: renderPromptTemplate(template, promptBindings(ticket)),
+    });
   } catch (error) {
     if (isNetworkFailure(error)) {
       throw new AppError(

@@ -62,7 +62,8 @@ export function missingFields(ticket: TicketWithRelations): SuggestibleField[] {
   return AUTO_FILL_FIELDS.filter((field) => currentValueOf(ticket, field) === null);
 }
 
-function ticketContext(ticket: TicketWithRelations): string {
+/** The ticket header block injected as the {{ticketContext}} prompt placeholder. */
+export function ticketContext(ticket: TicketWithRelations): string {
   const iocs = ticket.iocs.map((ioc) => `${ioc.type}:${ioc.value}`).join(", ");
   const sources = ticket.sources
     .map((source) => source.url ?? source.note ?? "")
@@ -87,28 +88,6 @@ export const SYSTEM_PROMPT = [
   "references and cveIds are newline-separated lists (CVE ids look like CVE-2024-12345).",
   "No markdown fences, no commentary, no keys outside the allowed list.",
 ].join(" ");
-
-export function buildPrompt(ticket: TicketWithRelations, mode: "fill" | "enrich"): string {
-  if (mode === "fill") {
-    const missing = missingFields(ticket);
-    return [
-      "Ticket context:",
-      ticketContext(ticket),
-      "",
-      `Draft content for ONLY these missing final fields: ${missing.join(", ")}.`,
-      "Do not include fields that already have content. JSON only.",
-    ].join("\n");
-  }
-  const current = SUGGESTIBLE_FIELDS.map((field) => `${field}: ${currentValueOf(ticket, field) ?? "<empty>"}`);
-  return [
-    "Ticket context:",
-    ticketContext(ticket),
-    "",
-    "Propose a full rewrite for EVERY final field listed below with its current value:",
-    ...current,
-    "JSON only.",
-  ].join("\n");
-}
 
 /** Extract the {"fields": {...}} object from raw model output. */
 export function parseModelFields(raw: string): Map<string, string> {
