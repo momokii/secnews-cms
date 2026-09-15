@@ -33,8 +33,9 @@ interface DeliveryActionsProps {
   onBlocked: () => void;
 }
 
-/** Send + OTX push triggers. Both require READY (else 422) and zero PENDING
- * suggestions (409 PENDING_SUGGESTIONS) — disabled up front when blocked. */
+/** Send + OTX push triggers. Both require READY or SENT (else 422) and zero
+ * PENDING suggestions (409 PENDING_SUGGESTIONS) — disabled up front when
+ * blocked. */
 export function DeliveryActions({
   ticketId,
   status,
@@ -43,8 +44,8 @@ export function DeliveryActions({
 }: DeliveryActionsProps) {
   const [sendOpen, setSendOpen] = useState(false);
   const pushOtx = usePushOtx();
-  const ready = status === "READY";
-  const disabled = blocked || !ready;
+  const deliverable = status === "READY" || status === "SENT";
+  const disabled = blocked || !deliverable;
 
   const push = (): void => {
     pushOtx.mutate(ticketId, {
@@ -62,7 +63,7 @@ export function DeliveryActions({
         type="button"
         onClick={() => setSendOpen(true)}
         disabled={disabled}
-        title={ready ? undefined : "Only READY tickets can be sent"}
+        title={deliverable ? undefined : "Only READY or SENT tickets can be sent"}
         className="rounded-md bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
       >
         Send to channels
@@ -71,7 +72,7 @@ export function DeliveryActions({
         type="button"
         onClick={push}
         disabled={disabled || pushOtx.isPending}
-        title={ready ? undefined : "Only READY tickets can be pushed to OTX"}
+        title={deliverable ? undefined : "Only READY or SENT tickets can be pushed to OTX"}
         className="rounded-md border border-indigo-600 px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
       >
         {pushOtx.isPending ? (

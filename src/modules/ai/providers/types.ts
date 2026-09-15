@@ -32,8 +32,3 @@ export const DEFAULT_MODELS = {
 export function defaultFetch(url: string, init?: RequestInit): Promise<Response> {
   return globalThis.fetch(url, init);
 }
-
-/** Uniform upstream-failure error: carries the status, never the api key. */
-export function upstreamError(provider: string, status: number): Error {
-  return new Error(`${provider} request failed with upstream status ${status}`);
-}

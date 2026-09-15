@@ -89,7 +89,10 @@ export const SYSTEM_PROMPT = [
   "No markdown fences, no commentary, no keys outside the allowed list.",
 ].join(" ");
 
-/** Extract the {"fields": {...}} object from raw model output. */
+/** Extract the field payload from raw model output: the canonical
+ * {"fields": {...}} wrapper, or (TASK-PROMPT) a bare object of allowed keys —
+ * ADMIN prompt edits often drop the wrapper wording, and the flat form must
+ * still yield suggestions instead of a silent 0. Unknown keys drop either way. */
 export function parseModelFields(raw: string): Map<string, string> {
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
@@ -102,13 +105,15 @@ export function parseModelFields(raw: string): Map<string, string> {
   } catch {
     throw unreadable();
   }
-  const fields = (parsed as { fields?: Record<string, unknown> })["fields"];
+  const container: Record<string, unknown> =
+    typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
+  const nested = container["fields"];
+  const source: Record<string, unknown> =
+    typeof nested === "object" && nested !== null ? (nested as Record<string, unknown>) : container;
   const result = new Map<string, string>();
-  if (typeof fields === "object" && fields !== null) {
-    for (const [key, value] of Object.entries(fields)) {
-      if ((SUGGESTIBLE_FIELDS as readonly string[]).includes(key) && typeof value === "string" && value.trim() !== "") {
-        result.set(key, value.trim());
-      }
+  for (const [key, value] of Object.entries(source)) {
+    if ((SUGGESTIBLE_FIELDS as readonly string[]).includes(key) && typeof value === "string" && value.trim() !== "") {
+      result.set(key, value.trim());
     }
   }
   return result;

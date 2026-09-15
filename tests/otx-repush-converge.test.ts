@@ -150,6 +150,39 @@ describe("TASK-OTXDIFF re-push converges the pulse to the ticket's current IOC s
     }
   });
 
+  it("TASK-RESEND: a SENT ticket can be pushed to OTX again — PATCH path, activity audited", async () => {
+    // Given: a ticket pushed once while READY, then marked SENT
+    const ticketId = await pushedTicket([{ type: "DOMAIN", value: "sent.com" }]);
+    await prisma.ticket.update({ where: { id: ticketId }, data: { status: "SENT" } });
+    const { calls } = stubWire([
+      {
+        method: "GET",
+        url: PATCH_URL,
+        status: 200,
+        payload: otxDetail([{ id: 2830007, indicator: "sent.com", type: "hostname" }]),
+      },
+      { method: "PATCH", url: PATCH_URL, status: 200, payload: {} },
+    ]);
+    try {
+      // When: OTX is pushed again from SENT
+      const status = await repush(app, admin, ticketId);
+
+      // Then: 200 via PATCH (converging, not a second create), ticket stays SENT
+      expect(status).toBe(200);
+      expect(calls.some((call) => call.url === CREATE_URL)).toBe(false);
+      expect(calls.some((call) => call.init.method === "PATCH")).toBe(true);
+      expect((await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } })).status).toBe("SENT");
+
+      // And: the second push is in the activity trail
+      const pushes = await prisma.ticketActivity.count({
+        where: { ticketId, action: "OTX_PUSHED" },
+      });
+      expect(pushes).toBeGreaterThanOrEqual(2);
+    } finally {
+      await cleanupTicket(ticketId);
+    }
+  });
+
   it("CONV-B: a stale IP only in the pulse is removed by upstream id, nothing added", async () => {
     // Given: the pulse still carries an IP the ticket dropped
     const ticketId = await pushedTicket([{ type: "DOMAIN", value: "evil.com" }]);

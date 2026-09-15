@@ -177,6 +177,39 @@ it("AI-02: enrich proposes full rewrites including filled fields, carrying curre
     await cleanupTicket(ticketId);
   });
 
+  it("TASK-PROMPT: bare JSON object without the fields wrapper still yields suggestions", async () => {
+    // Given: OPENAI configured (an earlier test in this suite deletes all
+    // provider keys, so this test provisions its own) and a ticket with an
+    // empty overview; the model answers a flat object of allowed keys —
+    // common after an ADMIN prompt edit that drops the {"fields": ...} wrapper
+    await app.inject({
+      method: "PUT",
+      url: "/integrations/OPENAI",
+      headers: { authorization: await bearerFor(app, "ADMIN") },
+      payload: { apiKey: OPENAI_KEY, model: "gpt-4o-mini" },
+    });
+    const ticketId = await createTestTicket();
+    vi.stubGlobal(
+      "fetch",
+      async () => new Response(JSON.stringify({ choices: [{ message: { content: '{"overview": "Flat overview"}' } }] }), { status: 200 }),
+    );
+
+    // When: fill runs
+    const res = await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/ai/fill`,
+      headers: { authorization: editor },
+      payload: {},
+    });
+
+    // Then: the suggestion is extracted, not discarded as unreadable
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { suggestions: Array<{ field: string; suggestedValue: string }> };
+    expect(body.suggestions).toHaveLength(1);
+    expect(body.suggestions[0]).toMatchObject({ field: "overview", suggestedValue: "Flat overview" });
+    await cleanupTicket(ticketId);
+  });
+
   it("unparseable model output is a 422 VALIDATION, never a 500", async () => {
     // Given: an upstream that answers with prose instead of JSON
     const ticketId = await createTestTicket();

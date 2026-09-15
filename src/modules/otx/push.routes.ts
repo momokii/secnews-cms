@@ -13,8 +13,8 @@ import { recordActivity } from "../tickets/activity.js";
 
 /**
  * Route 52 — lives in otx/ but serves the contract's POST /tickets/:id/otx
- * (MGR). Guards mirror send: ticket READY (422 VALIDATION) and zero PENDING
- * suggestions (409 PENDING_SUGGESTIONS, S2). Indicators are the included IOCs
+ * (MGR). Guards mirror send: ticket READY or SENT (422 VALIDATION;
+ * TASK-RESEND) and zero PENDING suggestions (409 PENDING_SUGGESTIONS, S2). Indicators are the included IOCs
  * pushed as typed {indicator,type} objects (client maps IocType → OTX type
  * names); the client maps TLP to the lowercase legacy value and forces
  * public=false for AMBER/RED. Idempotent: a ticket that already carries an

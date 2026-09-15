@@ -20,12 +20,14 @@ import {
 
 /**
  * Surface 7 — delivery (#47 POST /tickets/:id/send, #48 audit trail). Guards
- * in contract order: ticket exists (404) → READY (422 VALIDATION, SND-02) →
+ * in contract order: ticket exists (404) → READY or SENT (422 VALIDATION,
+ * SND-02; TASK-RESEND allows resend from SENT, CLOSED stays blocked) →
  * zero PENDING suggestions (409 PENDING_SUGGESTIONS, S2) → target resolution
  * (`all` = active-only, explicit inactive id → 409 INACTIVE_TARGET, SND-01).
  * Every attempted target gets one DeliveryAudit row with the exact rendered
- * payload, the actor and the timestamp (AUD-01); ≥1 target moves the ticket
- * to SENT. prefixOverride serves the contract path /tickets/:id/send.
+ * payload, the actor and the timestamp (AUD-01) — resend appends fresh rows
+ * per attempt. ≥1 target moves the ticket to SENT. prefixOverride serves the
+ * contract path /tickets/:id/send.
  */
 export const prefixOverride = "/tickets";
 
@@ -167,7 +169,7 @@ export default async function deliveryRoutes(app: FastifyInstance): Promise<void
         ticketId: id,
         actorId: actor.id,
         action: "STATUS_CHANGED",
-        detail: "status READY→SENT",
+        detail: `status ${ticket.status}→SENT`,
       });
       return { ticket: toTicketDto(sent), audit };
     },

@@ -274,6 +274,35 @@ describe("POST /tickets/:id/send (SND-01…03, AUD-01)", () => {
     expect(await prisma.deliveryAudit.count({ where: { ticketId } })).toBe(2);
   });
 
+  it("TASK-RESEND: a SENT ticket can be sent again — every attempt adds its own audit rows", async () => {
+    // Given: a READY ticket already sent once to one active channel
+    const ticketId = await makeReadyTicket();
+    await makeChannel(await makeClient(), "TELEGRAM", true);
+    stubSendersOk();
+    expect((await send(admin, ticketId, { all: true })).statusCode).toBe(200);
+    expect(await prisma.deliveryAudit.count({ where: { ticketId } })).toBe(1);
+
+    // When: the ticket is sent again while still SENT
+    const res = await send(editor, ticketId, { all: true });
+
+    // Then: 200 (not 422), a second audit row from the second actor, status stays SENT
+    expect(res.statusCode).toBe(200);
+    expect(await prisma.deliveryAudit.count({ where: { ticketId } })).toBe(2);
+    const rows = await prisma.deliveryAudit.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(rows[0]?.sentById).toBe(admin.id);
+    expect(rows[1]?.sentById).toBe(editor.id);
+    expect((await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } })).status).toBe("SENT");
+
+    // And: both attempts appear in the activity trail
+    const acts = await prisma.ticketActivity.count({
+      where: { ticketId, action: "SENT" },
+    });
+    expect(acts).toBeGreaterThanOrEqual(2);
+  });
+
   it("gates send to MGR (ADMIN/EDITOR): analyst gets 403", async () => {
     // Given: a READY ticket and an analyst token
     const ticketId = await makeReadyTicket();

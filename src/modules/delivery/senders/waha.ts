@@ -1,9 +1,12 @@
-import { defaultFetch, upstreamError, type FetchLike } from "../../ai/providers/types.js";
+import { defaultFetch, type FetchLike } from "../../ai/providers/types.js";
+import { upstreamFailure } from "../../../common/upstream.js";
 
 /**
  * WAHA gateway adapter (SND-P-01): POST {WAHA_BASE_URL}/api/sendText with
  * X-Api-Key and {session, chatId, text}. Gateway settings come from env;
- * tests inject fetchImpl instead of touching the wire.
+ * tests inject fetchImpl instead of touching the wire. Rejections carry the
+ * truncated upstream body (TASK-RESEND) so the DeliveryAudit error column
+ * names the real reason.
  */
 
 export type WahaSendOptions = {
@@ -34,6 +37,7 @@ export async function sendWhatsApp(options: WahaSendOptions): Promise<void> {
     body: JSON.stringify({ session, chatId: options.chatId, text: options.text }),
   });
   if (!response.ok) {
-    throw upstreamError("WAHA", response.status);
+    const failure = await upstreamFailure("WAHA", response);
+    throw new Error(`${failure.message}: ${failure.bodySnippet}`);
   }
 }

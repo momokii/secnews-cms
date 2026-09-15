@@ -5,23 +5,24 @@ import type { PromptEntry, PromptKind } from "../lib/promptsApi";
 import { usePrompts, useSavePrompt } from "../lib/usePrompts";
 import { PromptHistory } from "./PromptHistory";
 
-/** Mirrors the backend renderer vocabulary (src/modules/ai/prompts.ts):
- * the ticket-context lines plus the suggestible final fields. Unknown
- * placeholders are left literal by the backend renderer. */
+/** Mirrors PROMPT_PLACEHOLDERS in src/modules/ai/prompt-template.ts — the
+ * variables the renderer actually binds. Unknown placeholders are left
+ * literal by the backend renderer. */
 const PROMPT_PLACEHOLDERS = [
-  { token: "{{title}}", gloss: "Ticket title" },
-  { token: "{{summary}}", gloss: "Ticket summary" },
-  { token: "{{findingType}}", gloss: "Finding type" },
-  { token: "{{tlp}}", gloss: "TLP marking" },
-  { token: "{{iocs}}", gloss: "IOC list" },
-  { token: "{{sources}}", gloss: "Source URLs" },
-  { token: "{{overview}}", gloss: "Executive overview" },
-  { token: "{{description}}", gloss: "Detailed description" },
-  { token: "{{recommendations}}", gloss: "Recommended actions" },
-  { token: "{{references}}", gloss: "Reference links" },
-  { token: "{{cveIds}}", gloss: "CVE ids" },
-  { token: "{{affectedVersions}}", gloss: "Affected versions" },
-  { token: "{{mitigation}}", gloss: "Mitigation guidance" },
+  {
+    token: "{{ticketContext}}",
+    gloss:
+      "Ticket header block: title, summary, findingType, tlp, iocs (type:value, comma-joined), sources — lines appear only when non-empty",
+  },
+  {
+    token: "{{missingFields}}",
+    gloss:
+      "Comma-joined final fields with no current value (the strict fill scope: overview, description, cveIds, affectedVersions, mitigation)",
+  },
+  {
+    token: "{{currentFields}}",
+    gloss: "One line per suggestible final field: \"<field>: <current value or <empty>>\"",
+  },
 ] as const;
 
 const CARD_TITLES: Readonly<Record<PromptKind, string>> = {
@@ -168,15 +169,15 @@ export function PromptsPage() {
               Placeholder legend
             </h2>
             <div aria-label="Placeholder legend" className="mt-2">
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+              <ul className="space-y-1 text-xs text-slate-500">
                 {PROMPT_PLACEHOLDERS.map((placeholder) => (
-                  <span key={placeholder.token}>
+                  <li key={placeholder.token}>
                     <code className="text-slate-700">{placeholder.token}</code>
                     {" — "}
                     {placeholder.gloss}
-                  </span>
+                  </li>
                 ))}
-              </div>
+              </ul>
               <p className="mt-2 text-xs text-slate-500">
                 Placeholders are replaced per ticket at render time. Unknown
                 placeholders stay literal in the sent prompt.

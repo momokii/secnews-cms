@@ -77,6 +77,18 @@ describe("WAHA sender (SND-P-01)", () => {
       sendWhatsApp({ chatId: "c", text: "t", baseUrl: "http://waha.test", session: "s", fetchImpl }),
     ).rejects.toThrow(/500/);
   });
+
+  it("TASK-RESEND: a non-2xx rejection names the upstream body so the audit is diagnosable", async () => {
+    // Given: WAHA answers 403 with a session-expired description
+    const fetchImpl = async (): Promise<Response> =>
+      new Response(JSON.stringify({ success: false, message: "session not connected" }), { status: 403 });
+
+    // When: the send is invoked
+    // Then: the error message carries status AND the upstream reason
+    await expect(
+      sendWhatsApp({ chatId: "c", text: "t", baseUrl: "http://waha.test", session: "s", fetchImpl }),
+    ).rejects.toThrow(/403.*session not connected/s);
+  });
 });
 
 describe("Telegram sender (SND-P-02)", () => {
@@ -104,6 +116,41 @@ describe("Telegram sender (SND-P-02)", () => {
     await expect(
       sendTelegram({ token: "t", chatId: "c", text: "x", fetchImpl }),
     ).rejects.toThrow(/401/);
+  });
+
+  it("TASK-RESEND: a non-2xx rejection names the upstream body so the audit is diagnosable", async () => {
+    // Given: Telegram answers 429 with its retry-after description
+    const fetchImpl = async (): Promise<Response> =>
+      new Response(JSON.stringify({ ok: false, error_code: 429, description: "Too Many Requests: retry after 5" }), {
+        status: 429,
+      });
+
+    // When: the send is invoked
+    // Then: the error message carries status AND the upstream reason
+    await expect(
+      sendTelegram({ token: "t", chatId: "c", text: "x", fetchImpl }),
+    ).rejects.toThrow(/429.*Too Many Requests: retry after 5/s);
+  });
+
+  it("TASK-RESEND: second send attempt succeeds when the upstream recovers", async () => {
+    // Given: a gateway that rejects the first call (duplicate/rate limit) and accepts the next
+    let calls = 0;
+    const fetchImpl = async (): Promise<Response> => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response("Too Many Requests", { status: 429 });
+      }
+      return new Response("{}", { status: 200 });
+    };
+
+    // When: the first attempt fails and the ticket is re-sent
+    await expect(
+      sendTelegram({ token: "t", chatId: "c", text: "x", fetchImpl }),
+    ).rejects.toThrow(/429/);
+    await expect(sendTelegram({ token: "t", chatId: "c", text: "x", fetchImpl })).resolves.toBeUndefined();
+
+    // Then: both attempts hit the wire — the sender is stateless per call
+    expect(calls).toBe(2);
   });
 });
 

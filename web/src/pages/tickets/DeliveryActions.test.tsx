@@ -11,7 +11,7 @@ afterEach(() => {
   localStorage.clear();
 });
 
-function renderActions(): void {
+function renderActions(status: "READY" | "SENT" | "OPEN" = "READY"): void {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -20,7 +20,7 @@ function renderActions(): void {
       <MemoryRouter>
         <DeliveryActions
           ticketId={TICKET_ID}
-          status="READY"
+          status={status}
           blocked={false}
           onBlocked={vi.fn()}
         />
@@ -98,5 +98,53 @@ describe("TASK-UIC: OTX push pending state", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Push to OTX" }).textContent).toBe("Push to OTX"),
     );
+  });
+});
+
+describe("TASK-SENT: delivery actions per status", () => {
+  it("enables Send and OTX push for a SENT ticket so delivery can repeat", () => {
+    // Given: a SENT ticket with no pending suggestions
+    setToken("test-token");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        throw new Error("Unexpected fetch: gating is render-only");
+      }),
+    );
+
+    // When: the delivery actions render
+    renderActions("SENT");
+
+    // Then: both delivery buttons are enabled
+    expect(
+      (screen.getByRole("button", { name: "Send to channels" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    expect(
+      (screen.getByRole("button", { name: "Push to OTX" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it("keeps Send and OTX push disabled for an OPEN ticket", () => {
+    // Given: an OPEN ticket
+    setToken("test-token");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        throw new Error("Unexpected fetch: gating is render-only");
+      }),
+    );
+
+    // When: the delivery actions render
+    renderActions("OPEN");
+
+    // Then: both delivery buttons stay disabled
+    expect(
+      (screen.getByRole("button", { name: "Send to channels" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "Push to OTX" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 });
