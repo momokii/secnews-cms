@@ -100,8 +100,8 @@ describe("TASK-UIB: activity detail rendering", () => {
     }]));
   }
 
-  it("lists edited field names with a values-not-recorded note for field edits", async () => {
-    // Given: the backend only logs which fields changed, never their values
+  it("lists edited field names for legacy rows with names-only detail", async () => {
+    // Given: a legacy FIELDS_UPDATED row whose detail predates value capture
     setToken("test-token");
     stubActivity({ action: "FIELDS_UPDATED", detail: "title, overview" });
 
@@ -111,6 +111,51 @@ describe("TASK-UIB: activity detail rendering", () => {
     // Then: the field names are listed with an explicit note, no invented values
     expect(await screen.findByText("Updated fields: title, overview")).toBeTruthy();
     expect(screen.getByText("previous values are not recorded")).toBeTruthy();
+  });
+
+  it("renders per-field old → new rows when values are recorded", async () => {
+    // Given: a FIELDS_UPDATED row whose detail carries recorded values
+    setToken("test-token");
+    stubActivity({
+      action: "FIELDS_UPDATED",
+      detail: JSON.stringify({
+        title: { from: "Old title", to: "New title" },
+        tlp: { from: "AMBER", to: "GREEN" },
+      }),
+    });
+
+    // When: the timeline renders the entry
+    renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
+
+    // Then: each changed field renders old → new, without the fallback note
+    expect(await screen.findByText("title:")).toBeTruthy();
+    expect(screen.getByText("Old title")).toBeTruthy();
+    expect(screen.getByText("New title")).toBeTruthy();
+    expect(screen.getByText("tlp:")).toBeTruthy();
+    expect(screen.getByText("AMBER")).toBeTruthy();
+    expect(screen.getByText("GREEN")).toBeTruthy();
+    expect(screen.queryByText("previous values are not recorded")).toBeNull();
+  });
+
+  it("truncates long recorded values for display with the full text in the title", async () => {
+    // Given: a recorded change from an unset overview to a 200-char value
+    const longTo = "z".repeat(200);
+    const displayed = `${"z".repeat(120)}…`;
+    setToken("test-token");
+    stubActivity({
+      action: "FIELDS_UPDATED",
+      detail: JSON.stringify({ overview: { from: null, to: longTo } }),
+    });
+
+    // When: the timeline renders the entry
+    renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
+
+    // Then: the display shows the 120-char truncation (null → "(empty)") and
+    // the title attribute carries the full value
+    expect(await screen.findByText("(empty)")).toBeTruthy();
+    expect(screen.getByText(displayed)).toBeTruthy();
+    expect(screen.queryByText(longTo)).toBeNull();
+    expect(screen.getByText(displayed).getAttribute("title")).toBe(longTo);
   });
 
   it("expands OTX pushes to the pulse id with a View-on-OTX link", async () => {

@@ -145,7 +145,7 @@ Schemas: `src/modules/tickets/schema.ts`. State machine + role gates:
 | 29 | `POST /tickets/:id/iocs` | WORK | `CreateIocBodySchema` | 201 `IocSchema` | 400 `VALIDATION` when `value` does not parse as its declared `type` (IPv4/IPv6 via `net.isIP`, DOMAIN hostname, http(s) URL, EMAIL, MD5/SHA1/SHA256 hex digests, CIDR `addr/prefix`; `FILEPATH`/`MUTEX`/`OTHER` free-form) — the message names type, problem, and value |
 | 30 | `PATCH /tickets/:id/iocs/:iocId` | WORK | `UpdateIocBodySchema` | 200 `IocSchema` | 400 `VALIDATION` when the new `value` contradicts the STORED `type` (type is not patchable) — same rules as #29 |
 | 31 | `DELETE /tickets/:id/iocs/:iocId` | WORK | — | 204 | |
-| 31a | `GET /tickets/:id/activity` | ANY | `?page&pageSize` | 200 `paginated(TicketActivitySchema)` (newest first, actor name joined) | |
+| 31a | `GET /tickets/:id/activity` | ANY | `?page&pageSize` | 200 `paginated(TicketActivitySchema)` (newest first, actor name joined). `detail` per action: `STATUS_CHANGED` → `status <FROM>→<TO>`; `FIELDS_UPDATED` → JSON string `{"<field>":{"from":<old\|null>,"to":<new>}}` covering only the fields whose value actually changed (text truncated to 500 chars; string arrays joined with `", "` — empty array → `""`; no-op patch → no detail; legacy rows may still hold the old names-only string); `OTX_PUSHED` → `<pulseId>` + optional ` (updated)` | |
 
 Transition role gate (`to` → roles): `RESEARCH`,`READY` → WORK;
 `SENT`,`CLOSED` → MGR. `to=CLOSED` is legal from `OPEN|RESEARCH|READY`

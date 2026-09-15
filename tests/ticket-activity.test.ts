@@ -12,10 +12,7 @@ import {
   type C3User,
 } from "./tickets.fixtures.js";
 
-/**
- * TASK-ACT: every ticket change appends a TicketActivity row readable via
- * GET /tickets/:id/activity (paginated, newest first, actor name joined).
- */
+/** TASK-ACT: every change appends a TicketActivity row; GET /tickets/:id/activity reads them. */
 
 describe("GET /tickets/:id/activity (ACT-01)", () => {
   let app: FastifyInstance;
@@ -37,29 +34,26 @@ describe("GET /tickets/:id/activity (ACT-01)", () => {
     await prisma.$disconnect();
   });
 
+  type ActivityList = {
+    statusCode: number;
+    body: { items: Array<Record<string, unknown>>; total: number; page: number; pageSize: number };
+  };
+
   async function inject(
     method: "GET" | "POST" | "PATCH" | "DELETE",
     url: string,
     payload?: unknown,
   ): Promise<{ statusCode: number; body: Record<string, unknown> }> {
-    const headers = payload === undefined
-      ? { authorization: bearer(admin, app) }
-      : {
-          authorization: bearer(admin, app),
-          "content-type": "application/json",
-        };
-    const options = {
+    const res = await app.inject({
       method,
       url,
-      headers,
-    } as const;
-    const res = payload === undefined
-      ? await app.inject(options)
-      : await app.inject({ ...options, payload: JSON.stringify(payload) });
-    return {
-      statusCode: res.statusCode,
-      body: res.body === "" ? {} : (res.json() as Record<string, unknown>),
-    };
+      headers: payload === undefined
+        ? { authorization: bearer(admin, app) }
+        : { authorization: bearer(admin, app), "content-type": "application/json" },
+      ...(payload === undefined ? {} : { payload: JSON.stringify(payload) }),
+    });
+    const body = res.body === "" ? {} : (res.json() as Record<string, unknown>);
+    return { statusCode: res.statusCode, body };
   }
 
   function first(items: Array<Record<string, unknown>>): Record<string, unknown> {
@@ -70,15 +64,26 @@ describe("GET /tickets/:id/activity (ACT-01)", () => {
     return entry;
   }
 
-  async function activity(ticketId: string, query = ""): Promise<{
-    statusCode: number;
-    body: { items: Array<Record<string, unknown>>; total: number; page: number; pageSize: number };
-  }> {
+  /** PATCH /:id/fields, then return the newest FIELDS_UPDATED detail parsed. */
+  async function patchFields(
+    ticketId: string,
+    payload: Record<string, unknown>,
+  ): Promise<unknown> {
+    const patched = await inject("PATCH", `/tickets/${ticketId}/fields`, payload);
+    expect(patched.statusCode).toBe(200);
+    const list = await activity(ticketId);
+    const entry = first(list.body.items);
+    expect(entry["action"]).toBe("FIELDS_UPDATED");
+    const detail = entry["detail"];
+    if (typeof detail !== "string") {
+      throw new Error("expected a JSON-string detail");
+    }
+    return JSON.parse(detail);
+  }
+
+  async function activity(ticketId: string, query = ""): Promise<ActivityList> {
     const res = await inject("GET", `/tickets/${ticketId}/activity${query}`);
-    return {
-      statusCode: res.statusCode,
-      body: res.body as { items: Array<Record<string, unknown>>; total: number; page: number; pageSize: number },
-    };
+    return { statusCode: res.statusCode, body: res.body as ActivityList["body"] };
   }
 
   it("ACT-01: a transition writes a STATUS_CHANGED entry with actor name", async () => {
@@ -87,11 +92,9 @@ describe("GET /tickets/:id/activity (ACT-01)", () => {
     ticketIds.push(ticket.id);
 
     // When: OPEN → RESEARCH is transitioned, then the activity list is read
-    const transitioned = await inject(
-      "POST",
-      `/tickets/${ticket.id}/transition`,
-      { to: "RESEARCH" },
-    );
+    const transitioned = await inject("POST", `/tickets/${ticket.id}/transition`, {
+      to: "RESEARCH",
+    });
     const list = await activity(ticket.id);
 
     // Then: the newest entry records the status change and the actor
@@ -105,23 +108,52 @@ describe("GET /tickets/:id/activity (ACT-01)", () => {
     expect(entry["actorName"]).toBe(`C3 ADMIN`);
   });
 
-  it("ACT-01: a final-fields PATCH lists the changed field names", async () => {
-    // Given: an OPEN ticket
+  it("ACT-01: a final-fields PATCH records per-field from→to values", async () => {
+    // Given: an OPEN ticket (overview null, tlp at its AMBER default)
     const ticket = await c3Ticket();
     ticketIds.push(ticket.id);
 
     // When: overview + tlp are patched
-    const patched = await inject("PATCH", `/tickets/${ticket.id}/fields`, {
+    const changes = await patchFields(ticket.id, {
       overview: "Malicious campaign overview",
       tlp: "GREEN",
     });
-    const list = await activity(ticket.id);
 
-    // Then: one FIELDS_UPDATED entry names exactly the changed fields
-    expect(patched.statusCode).toBe(200);
-    const entry = first(list.body.items);
-    expect(entry["action"]).toBe("FIELDS_UPDATED");
-    expect(entry["detail"]).toBe("overview, tlp");
+    // Then: the detail parses to a per-field {from,to} map with old values
+    expect(changes).toEqual({
+      overview: { from: null, to: "Malicious campaign overview" },
+      tlp: { from: "AMBER", to: "GREEN" },
+    });
+  });
+
+  it("ACT-01: unchanged fields are absent from the FIELDS_UPDATED detail", async () => {
+    // Given: an OPEN ticket with tlp at its AMBER default
+    const ticket = await c3Ticket();
+    ticketIds.push(ticket.id);
+
+    // When: title changes but tlp is patched to its current value
+    const changes = await patchFields(ticket.id, { title: `${ticket.title} v2`, tlp: "AMBER" });
+
+    // Then: only the actually-changed title carries a from→to pair
+    expect(changes).toEqual({ title: { from: ticket.title, to: `${ticket.title} v2` } });
+  });
+
+  it("ACT-01: detail values are truncated to 500 chars and arrays joined", async () => {
+    // Given: an OPEN ticket
+    const ticket = await c3Ticket();
+    ticketIds.push(ticket.id);
+
+    // When: a 600-char overview and a two-element references list are patched
+    const changes = await patchFields(ticket.id, {
+      overview: "x".repeat(600),
+      references: ["https://example.com/a", "https://example.com/b"],
+    });
+
+    // Then: text is capped at 500 chars; arrays are joined with ", "
+    expect(changes).toEqual({
+      overview: { from: null, to: "x".repeat(500) },
+      references: { from: "", to: "https://example.com/a, https://example.com/b" },
+    });
   });
 
   it("ACT-02: the activity list is paginated and ordered newest first", async () => {
@@ -129,16 +161,14 @@ describe("GET /tickets/:id/activity (ACT-01)", () => {
     const ticket = await c3Ticket();
     ticketIds.push(ticket.id);
     const base = Date.now();
-    for (let index = 0; index < 3; index += 1) {
-      await prisma.ticketActivity.create({
-        data: {
-          ticketId: ticket.id,
-          action: "FIELDS_UPDATED",
-          detail: `seed ${index}`,
-          createdAt: new Date(base + index * 1000),
-        },
-      });
-    }
+    await prisma.ticketActivity.createMany({
+      data: [0, 1, 2].map((index) => ({
+        ticketId: ticket.id,
+        action: "FIELDS_UPDATED",
+        detail: `seed ${index}`,
+        createdAt: new Date(base + index * 1000),
+      })),
+    });
 
     // When: the second page of size 2 is requested
     const page1 = await activity(ticket.id, "?page=1&pageSize=2");
@@ -239,14 +269,9 @@ describe("GET /tickets/:id/activity (ACT-01)", () => {
     const ticket = await c3Ticket();
     ticketIds.push(ticket.id);
     const content = JSON.stringify({ field: "overview", suggestedValue: "AI text" });
-    const toAccept = await prisma.aiSuggestion.create({
-      data: { ticketId: ticket.id, status: "PENDING", content },
-      select: { id: true },
-    });
-    const toReject = await prisma.aiSuggestion.create({
-      data: { ticketId: ticket.id, status: "PENDING", content },
-      select: { id: true },
-    });
+    const suggestion = { ticketId: ticket.id, status: "PENDING" as const, content };
+    const toAccept = await prisma.aiSuggestion.create({ data: suggestion, select: { id: true } });
+    const toReject = await prisma.aiSuggestion.create({ data: suggestion, select: { id: true } });
 
     // When: one is accepted and the other rejected
     await inject("POST", `/tickets/${ticket.id}/suggestions/${toAccept.id}/accept`);

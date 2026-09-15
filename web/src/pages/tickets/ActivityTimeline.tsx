@@ -16,6 +16,76 @@ const DEFAULT_PAGE_SIZE = 5;
 
 const UPDATED_SUFFIX = " (updated)";
 
+const FIELD_VALUE_DISPLAY_LIMIT = 120;
+const EMPTY_VALUE_LABEL = "(empty)";
+
+type FieldChange = { from: string | null; to: string | null };
+
+/** Wire detail is JSON `{"field":{"from":<old|null>,"to":<new>}}`; any other
+ * shape (legacy names-only rows) fails the parse and falls back verbatim. */
+function parseFieldChanges(detail: string): Record<string, FieldChange> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(detail);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return null;
+  }
+  const changes: Record<string, FieldChange> = {};
+  for (const [field, value] of Object.entries(parsed)) {
+    const change = fieldChange(value);
+    if (change === null) {
+      return null;
+    }
+    changes[field] = change;
+  }
+  return Object.keys(changes).length > 0 ? changes : null;
+}
+
+function fieldChange(value: unknown): FieldChange | null {
+  if (typeof value !== "object" || value === null || !("from" in value && "to" in value)) {
+    return null;
+  }
+  const { from, to } = value;
+  if (!(from === null || typeof from === "string") || !(to === null || typeof to === "string")) {
+    return null;
+  }
+  return { from, to };
+}
+
+function displayFieldValue(value: string | null): string {
+  return value === null || value === "" ? EMPTY_VALUE_LABEL : value;
+}
+
+function truncateForDisplay(text: string): string {
+  return text.length > FIELD_VALUE_DISPLAY_LIMIT
+    ? `${text.slice(0, FIELD_VALUE_DISPLAY_LIMIT)}…`
+    : text;
+}
+
+/** One "field: old → new" row per changed field; the full untruncated values
+ * live in each span's title attribute. */
+function FieldChangeList({ changes }: { changes: Record<string, FieldChange> }) {
+  return (
+    <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
+      {Object.entries(changes).map(([field, change]) => (
+        <li key={field}>
+          <span className="font-medium text-slate-700">{field}: </span>
+          <span title={displayFieldValue(change.from)}>
+            {truncateForDisplay(displayFieldValue(change.from))}
+          </span>
+          {" → "}
+          <span title={displayFieldValue(change.to)}>
+            {truncateForDisplay(displayFieldValue(change.to))}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Wire detail is "status <FROM>→<TO>"; unparseable shapes render verbatim. */
 function statusChangeDetail(detail: string): string {
   const match = /^status (\S+)→(\S+)$/.exec(detail);
@@ -31,8 +101,9 @@ function splitOtxDetail(detail: string): { pulseId: string; updated: boolean } {
   };
 }
 
-/** Detail line per action. The backend logs field-edit names only and pulse
- * ids only — both rendered honestly, never with invented values. */
+/** Detail line per action. FIELDS_UPDATED carries recorded per-field values
+ * when available; legacy names-only rows and pulse ids render honestly,
+ * never with invented values. */
 function ActivityDetail({
   entry,
   pulseId,
@@ -51,6 +122,10 @@ function ActivityDetail({
     );
   }
   if (entry.action === "FIELDS_UPDATED") {
+    const changes = parseFieldChanges(entry.detail);
+    if (changes !== null) {
+      return <FieldChangeList changes={changes} />;
+    }
     const names = entry.detail
       .split(",")
       .map((name) => name.trim())
