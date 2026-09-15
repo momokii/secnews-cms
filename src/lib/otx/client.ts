@@ -1,6 +1,7 @@
 import type { FetchLike } from "../../modules/ai/providers/types.js";
 import type { IocType } from "../../generated/prisma/enums.js";
 import { upstreamFailure } from "../../common/upstream.js";
+import { diffIndicators } from "./diff.js";
 import { getPulse } from "./read.js";
 
 /**
@@ -161,16 +162,13 @@ export async function updatePulse(pulseId: string, input: CreatePulseInput): Pro
     ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
   });
 
-  const desired = toOtxIndicators(input.indicators);
-  const currentKeys = new Set(current.indicators.map((row) => `${row.value}\u0000${row.type}`));
-  const desiredKeys = new Set(desired.map((row) => `${row.indicator}\u0000${row.type}`));
-  const addIndicators = desired.filter((row) => !currentKeys.has(`${row.indicator}\u0000${row.type}`));
-  // Remove ops name OTX's own row ids verbatim (OTX sends numbers).
-  // Rows without an upstream id cannot be named upstream, so they are skipped
-  // rather than sent as {id: null} — OTX silently ignores those.
-  const removeIndicators = current.indicators
-    .filter((row) => row.id !== null && !desiredKeys.has(`${row.value}\u0000${row.type}`))
-    .map((row) => ({ id: row.id }));
+  // TASK-OTXDIFF: diffIndicators collapses BOTH sides through one canonical
+  // key — OTX stores pushed rows under renamed types ("hostname") and FQDN
+  // forms ("whatsapp.com."), so exact matching re-added them on every re-push.
+  const { add: addIndicators, remove: removeIndicators } = diffIndicators(
+    toOtxIndicators(input.indicators),
+    current.indicators,
+  );
 
   const doFetch = input.fetchImpl ?? ((url: string, init?: RequestInit) => globalThis.fetch(url, init));
   const response = await doFetch(`${base}/api/v1/pulses/${pulseId}`, {

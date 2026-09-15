@@ -153,12 +153,16 @@ Transition role gate (`to` → roles): `RESEARCH`,`READY` → WORK;
 
 ## 5. Surface 4 — AI assist + suggestions (HARD BLOCK source)
 
-Schemas: `src/modules/ai/schema.ts`. Provider/model resolution per request:
-an explicit `{provider?, model?}` body wins; otherwise the first configured
-provider (OPENAI → ANTHROPIC → GEMINI → DEEPSEEK) with its configured (or
-default) model. An explicit provider without a configured key is
-`422 VALIDATION` — never a silent fallback. Every stored suggestion records
-the resolved `provider` + `model` that produced it.
+Schemas: `src/modules/ai/schema.ts`, `src/modules/prompts/schema.ts`.
+Provider/model resolution per request: an explicit `{provider?, model?}` body
+wins; otherwise the first configured provider (OPENAI → ANTHROPIC → GEMINI →
+DEEPSEEK) with its configured (or default) model. An explicit provider without
+a configured key is `422 VALIDATION` — never a silent fallback. Every stored
+suggestion records the resolved `provider` + `model` that produced it. The
+fill/enrich prompt text comes from the ADMIN-managed template per kind (#55/#56,
+default = the legacy hardcoded prompts verbatim); the engine substitutes
+`{{ticketContext}}` / `{{missingFields}}` / `{{currentFields}}` with the
+ticket's actual data.
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
@@ -267,8 +271,18 @@ semantics answer 500 to plain list arrays): the current pulse is read
 first via `GET /api/v1/pulses/{id}`; the scalar literals `name`,
 `description`, `public`, `TLP` are always sent as-is, while the list
 fields arrive as `{add:[...]}` / `{remove:[...]}` dicts computed against
-the live pulse — `indicators` diffed by `(indicator,type)` (add the
-missing typed objects, remove the `[{id}]` of stale rows where each `id`
+the live pulse — `indicators` diffed through ONE canonical comparison
+applied to BOTH sides (TASK-OTXDIFF): indicator types are lowercased and
+aliased to their OTX sibling family (`hostname`→`domain`, `uri`→`url`,
+`path`→`filepath`; case drift like `ipv4`/`IPv4` collapses), and values
+are trimmed + lowercased with a single trailing dot stripped from
+hostnames — OTX stores a pushed `domain` under the sibling type name
+`hostname` (and normalizes to FQDN forms like `whatsapp.com.`), so exact
+matching once re-added the same indicator on every re-push (whatsapp.com
+accumulated 5 duplicate rows) while stale rows survived. Duplicate ticket
+rows collapse to a single add. The result converges the pulse to exactly
+the ticket's current IOC set: add the missing typed objects, remove the
+`[{id}]` of stale rows where each `id`
 is the per-indicator upstream id read from `GET /api/v1/pulses/{id}`,
 passed through verbatim — OTX sends those ids as NUMBERS, and coercing
 them to strings once turned every remove into a silent no-op that left
