@@ -20,10 +20,14 @@ import {
 } from "./prompts.js";
 
 /**
- * AI assist engine for fill/enrich. Provider + model come exclusively from
- * central integration config (never from the request). Model output is parsed
- * into per-field suggestions that land as PENDING AiSuggestion rows — the
- * ticket's final fields are only touched later, by suggestion accept.
+ * AI assist engine for fill/enrich. Provider + model resolve per request:
+ * an explicit {provider, model} body choice wins; otherwise the first
+ * configured provider (OPENAI → ANTHROPIC → GEMINI) with its configured
+ * (or default) model. An explicit provider without a key is a semantic
+ * rejection — never a silent fallback. Model output is parsed into
+ * per-field suggestions that land as PENDING AiSuggestion rows carrying
+ * the resolved provider + model — the ticket's final fields are only
+ * touched later, by suggestion accept.
  *
  * Semantic rejections (no provider configured, unreadable model output) throw
  * SemanticError; routes render it as the 422 VALIDATION envelope.
@@ -40,6 +44,11 @@ export type SuggestionDraft = {
 
 type StoredProviderConfig = { apiKey: string; model?: string };
 
+type ProviderChoice = {
+  provider?: "OPENAI" | "ANTHROPIC" | "GEMINI";
+  model?: string;
+};
+
 const PROVIDERS: Record<"OPENAI" | "ANTHROPIC" | "GEMINI", ChatProviderFn> = {
   OPENAI: callOpenAi,
   ANTHROPIC: callAnthropic,
@@ -47,6 +56,8 @@ const PROVIDERS: Record<"OPENAI" | "ANTHROPIC" | "GEMINI", ChatProviderFn> = {
 };
 
 const PROVIDER_ORDER = [IntegrationKind.OPENAI, IntegrationKind.ANTHROPIC, IntegrationKind.GEMINI] as const;
+
+type ProviderKind = (typeof PROVIDER_ORDER)[number];
 
 /** Fetch-level failure: undici rejects with TypeError("fetch failed"), the
  * real cause (ENOTFOUND/ECONNREFUSED/UND_ERR_CONNECT_TIMEOUT/…) chained. */
@@ -65,15 +76,18 @@ function isNetworkFailure(error: unknown): boolean {
   return false;
 }
 
-/** First AI provider kind (OPENAI → ANTHROPIC → GEMINI) that holds a key. */
+/** First AI provider kind (OPENAI → ANTHROPIC → GEMINI) that holds a key —
+ * or exactly the explicit choice, which must hold a key (422 otherwise). */
 export async function resolveProvider(
   db: PrismaClient,
-): Promise<{ kind: (typeof PROVIDER_ORDER)[number]; options: Pick<ChatCompletionOptions, "apiKey" | "model"> }> {
+  explicit: ProviderChoice = {},
+): Promise<{ kind: ProviderKind; options: Pick<ChatCompletionOptions, "apiKey" | "model"> }> {
   const rows = await db.integrationConfig.findMany({
     where: { kind: { in: [...PROVIDER_ORDER] } },
   });
   const byKind = new Map(rows.map((row) => [row.kind, row] as const));
-  for (const kind of PROVIDER_ORDER) {
+  const order = explicit.provider === undefined ? [...PROVIDER_ORDER] : [explicit.provider];
+  for (const kind of order) {
     const row = byKind.get(kind);
     if (row === undefined) {
       continue;
@@ -81,8 +95,11 @@ export async function resolveProvider(
     const config = JSON.parse(decryptSecret(row.encryptedKey)) as StoredProviderConfig;
     return {
       kind,
-      options: { apiKey: config.apiKey, model: config.model ?? DEFAULT_MODELS[kind] },
+      options: { apiKey: config.apiKey, model: explicit.model ?? config.model ?? DEFAULT_MODELS[kind] },
     };
+  }
+  if (explicit.provider !== undefined) {
+    throw new SemanticError(`${explicit.provider} has no configured key — set it under integrations first or omit provider`);
   }
   throw new SemanticError("No AI provider configured — set a key under integrations first");
 }
@@ -92,8 +109,9 @@ export async function generateSuggestions(
   db: PrismaClient,
   ticket: TicketWithRelations,
   mode: "fill" | "enrich",
-): Promise<Array<{ model: string } & SuggestionDraft>> {
-  const provider = await resolveProvider(db);
+  explicit: ProviderChoice = {},
+): Promise<Array<{ model: string; provider: ProviderKind } & SuggestionDraft>> {
+  const provider = await resolveProvider(db, explicit);
   const call = PROVIDERS[provider.kind];
   let raw: string;
   try {
@@ -115,7 +133,7 @@ export async function generateSuggestions(
   const fields = parseModelFields(raw);
 
   const scope = mode === "fill" ? missingFields(ticket) : [...SUGGESTIBLE_FIELDS];
-  const drafts: Array<{ model: string } & SuggestionDraft> = [];
+  const drafts: Array<{ model: string; provider: ProviderKind } & SuggestionDraft> = [];
   for (const field of scope) {
     const suggested = fields.get(field);
     if (suggested === undefined) {
@@ -126,6 +144,7 @@ export async function generateSuggestions(
       currentValue: currentValueOf(ticket, field),
       suggestedValue: suggested,
       model: provider.options.model,
+      provider: provider.kind,
     });
   }
   return drafts;
@@ -136,6 +155,7 @@ export type SuggestionRow = {
   ticketId: string;
   status: "PENDING" | "ACCEPTED" | "REJECTED";
   model: string | null;
+  provider: string | null;
   content: string;
   createdAt: Date;
   updatedAt: Date;
@@ -145,7 +165,7 @@ export type SuggestionRow = {
 export async function storeSuggestions(
   db: PrismaClient,
   ticketId: string,
-  drafts: Array<{ model: string } & SuggestionDraft>,
+  drafts: Array<{ model: string; provider: ProviderKind } & SuggestionDraft>,
 ): Promise<SuggestionRow[]> {
   return db.$transaction(
     drafts.map((draft) =>
@@ -154,6 +174,7 @@ export async function storeSuggestions(
           ticketId,
           status: SuggestionStatus.PENDING,
           model: draft.model,
+          provider: draft.provider,
           content: JSON.stringify({
             field: draft.field,
             currentValue: draft.currentValue,
@@ -174,6 +195,7 @@ export function toSuggestion(row: SuggestionRow): {
   suggestedValue: string;
   status: "PENDING" | "ACCEPTED" | "REJECTED";
   model: string | null;
+  provider: string | null;
   createdAt: string;
   updatedAt: string;
 } {
@@ -186,6 +208,7 @@ export function toSuggestion(row: SuggestionRow): {
     suggestedValue: payload.suggestedValue ?? "",
     status: row.status,
     model: row.model,
+    provider: row.provider,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

@@ -279,9 +279,18 @@ describe("GET /tickets/:id/activity (ACT-01)", () => {
     const list = await activity(ticket.id);
     const actions = list.body.items.map((entry) => entry["action"]);
 
-    // Then: both decisions are recorded, accept naming the merged field
+    // Then: both decisions are recorded, detail a JSON {field, value, decision}
     expect(actions).toEqual(["SUGGESTION_REJECTED", "SUGGESTION_ACCEPTED"]);
-    expect(list.body.items[1]?.["detail"]).toBe("overview");
+    expect(JSON.parse(String(list.body.items[1]?.["detail"]))).toEqual({
+      field: "overview",
+      value: "AI text",
+      decision: "ACCEPTED",
+    });
+    expect(JSON.parse(String(list.body.items[0]?.["detail"]))).toEqual({
+      field: "overview",
+      value: "AI text",
+      decision: "REJECTED",
+    });
   });
 
   it("returns 401 without a token", async () => {

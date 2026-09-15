@@ -1002,3 +1002,108 @@ describe("TASK-PUSHFIX push correctness", () => {
     }
   });
 });
+
+describe("TASK-AIB OTX description truncation (OTX caps description at 1024)", () => {
+  let app: FastifyInstance;
+  let admin = "";
+
+  beforeAll(async () => {
+    app = await buildApp();
+    admin = await bearerFor(app, "ADMIN");
+    await prisma.integrationConfig.deleteMany({ where: { kind: "OTX" } });
+    const put = await app.inject({
+      method: "PUT",
+      url: "/integrations/OTX",
+      headers: { authorization: admin },
+      payload: { apiKey: OTX_KEY },
+    });
+    expect(put.statusCode).toBe(200);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterAll(async () => {
+    await prisma.integrationConfig.deleteMany({ where: { kind: "OTX" } });
+    await cleanupUsers();
+    await prisma.$disconnect();
+    await app.close();
+  });
+
+  /** READY ticket whose joined overview+description is exactly 1882 chars —
+   * the live-failure fixture ("description Must be 0-1024 chars (actual 1882)"). */
+  async function longDescriptionTicket(): Promise<{ ticketId: string; joined: string }> {
+    const overview = "O".repeat(500);
+    const description = "D".repeat(1380); // 500 + "\n\n" + 1380 = 1882
+    const ticketId = await createTestTicket({
+      overview,
+      description,
+      references: ["https://example.com/advisory"],
+    });
+    await prisma.ticket.update({ where: { id: ticketId }, data: { status: "READY" } });
+    return { ticketId, joined: `${overview}\n\n${description}` };
+  }
+
+  it("AIB-OTX-01: a 1882-char description truncates to 1024 chars with an ellipsis on create", async () => {
+    // Given: a READY ticket whose joined description exceeds OTX's 1024 cap
+    const { ticketId, joined } = await longDescriptionTicket();
+    const { calls } = stubFetch(200, { id: "pulse-long" });
+    try {
+      // When: it is pushed
+      const res = await app.inject({
+        method: "POST",
+        url: `/tickets/${ticketId}/otx`,
+        headers: { authorization: admin },
+        payload: {},
+      });
+
+      // Then: the push succeeds where it previously answered 400 upstream…
+      expect(res.statusCode).toBe(200);
+
+      // …and the wire description is capped at 1024 chars ending with '…',
+      // the name untouched (truncation is description-only)
+      expect(calls).toHaveLength(1);
+      const sent = JSON.parse(String(calls[0]?.init.body)) as { name: string; description: string };
+      expect(sent.description).toHaveLength(1024);
+      expect(sent.description.endsWith("…")).toBe(true);
+      expect(sent.description).toBe(`${joined.slice(0, 1023)}…`);
+      expect(sent.name).toContain("C4 fixture");
+    } finally {
+      await cleanupTicket(ticketId);
+    }
+  });
+
+  it("AIB-OTX-02: the documented PATCH edit path truncates the same way", async () => {
+    // Given: a READY long-description ticket pushed once (pulse exists)
+    const { ticketId } = await longDescriptionTicket();
+    stubFetch(200, { id: "pulse-long" });
+    const first = await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/otx`,
+      headers: { authorization: admin },
+      payload: {},
+    });
+    expect(first.statusCode).toBe(200);
+    const { calls } = stubFetch(200, { id: "pulse-long" });
+    try {
+      // When: it is re-pushed (idempotent PATCH edit)
+      const res = await app.inject({
+        method: "POST",
+        url: `/tickets/${ticketId}/otx`,
+        headers: { authorization: admin },
+        payload: {},
+      });
+
+      // Then: the PATCH body carries the same 1024-char capped description
+      expect(res.statusCode).toBe(200);
+      const patches = calls.filter((call) => call.init.method === "PATCH");
+      expect(patches).toHaveLength(1);
+      const patchBody = JSON.parse(String(patches[0]?.init.body)) as { description: string };
+      expect(patchBody.description).toHaveLength(1024);
+      expect(patchBody.description.endsWith("…")).toBe(true);
+    } finally {
+      await cleanupTicket(ticketId);
+    }
+  });
+});

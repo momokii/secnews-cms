@@ -8,13 +8,21 @@ import { recordActivity } from "./activity.js";
 import { generateSuggestions, SemanticError, storeSuggestions, toSuggestion } from "../ai/service.js";
 
 /**
- * AI assist endpoints (Surface 4, #32/#33). Both accept empty bodies: every
- * input comes from the ticket, provider/model from central config. Results
- * land ONLY as PENDING AiSuggestion rows — final fields are touched later by
- * suggestion accept (SUG-01), never here.
+ * AI assist endpoints (Surface 4, #32/#33). Ticket content is the only
+ * mandatory input; the body may optionally pick a provider and/or model —
+ * omitted values fall back to the first configured provider (OPENAI →
+ * ANTHROPIC → GEMINI) and its configured/default model. An explicit provider
+ * without a key is a 422, never a silent fallback. Results land ONLY as
+ * PENDING AiSuggestion rows (carrying provider + model) — final fields are
+ * touched later by suggestion accept (SUG-01), never here.
  */
 
-const emptyBody = z.object({}).strict();
+const fillBody = z
+  .object({
+    provider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI"]).optional(),
+    model: z.string().min(1).optional(),
+  })
+  .strict();
 
 function semantic422(reply: FastifyReply, error: SemanticError): void {
   void reply.code(422).send({
@@ -25,12 +33,14 @@ function semantic422(reply: FastifyReply, error: SemanticError): void {
 export default async function fillRoutes(app: FastifyInstance): Promise<void> {
   const f = app.withTypeProvider<ZodTypeProvider>();
 
-  const run = async (
-    ticketId: string,
-    mode: "fill" | "enrich",
-    actorId: string,
-    reply: FastifyReply,
-  ) => {
+  const run = async (input: {
+    ticketId: string;
+    mode: "fill" | "enrich";
+    actorId: string;
+    reply: FastifyReply;
+    body: { provider?: "OPENAI" | "ANTHROPIC" | "GEMINI" | undefined; model?: string | undefined };
+  }) => {
+    const { ticketId, mode, actorId, reply, body } = input;
     const ticket = await app.prisma.ticket.findUnique({
       where: { id: ticketId },
       include: { iocs: true, sources: true },
@@ -38,9 +48,13 @@ export default async function fillRoutes(app: FastifyInstance): Promise<void> {
     if (ticket === null) {
       throw new AppError("NOT_FOUND", "Ticket not found");
     }
+    const explicit = {
+      ...(body.provider === undefined ? {} : { provider: body.provider }),
+      ...(body.model === undefined ? {} : { model: body.model }),
+    };
     let rows;
     try {
-      const drafts = await generateSuggestions(app.prisma, ticket, mode);
+      const drafts = await generateSuggestions(app.prisma, ticket, mode, explicit);
       rows = drafts.length > 0 ? await storeSuggestions(app.prisma, ticketId, drafts) : [];
     } catch (error) {
       if (error instanceof SemanticError) {
@@ -62,17 +76,33 @@ export default async function fillRoutes(app: FastifyInstance): Promise<void> {
     onRequest: [app.requireRole("ADMIN", "EDITOR", "ANALYST")],
     schema: {
       params: idParam,
-      body: emptyBody,
+      body: fillBody,
       response: { 200: AiFillResponseSchema },
     },
-  }, async (request, reply) => run(request.params.id, "fill", request.user.sub, reply));
+  }, async (request, reply) =>
+    run({
+      ticketId: request.params.id,
+      mode: "fill",
+      actorId: request.user.sub,
+      reply,
+      body: request.body,
+    }),
+  );
 
   f.post("/:id/ai/enrich", {
     onRequest: [app.requireRole("ADMIN", "EDITOR", "ANALYST")],
     schema: {
       params: idParam,
-      body: emptyBody,
+      body: fillBody,
       response: { 200: AiFillResponseSchema },
     },
-  }, async (request, reply) => run(request.params.id, "enrich", request.user.sub, reply));
+  }, async (request, reply) =>
+    run({
+      ticketId: request.params.id,
+      mode: "enrich",
+      actorId: request.user.sub,
+      reply,
+      body: request.body,
+    }),
+  );
 }

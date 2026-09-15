@@ -213,3 +213,163 @@ it("AI-02: enrich proposes full rewrites including filled fields, carrying curre
     expect((res.json() as { error: { code: string } }).error.code).toBe("NOT_FOUND");
   });
 });
+
+describe("TASK-AIB provider/model selection (explicit > first-configured, stored on rows)", () => {
+  let app: FastifyInstance;
+  let editor = "";
+  let admin = "";
+
+  /** Capture wire calls and answer with the OpenAI-shaped payload. */
+  function stubOpenAi(fields: Record<string, string>): { calls: Array<{ url: string; body: { model: string } }> } {
+    const calls: Array<{ url: string; body: { model: string } }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL, init?: RequestInit) => {
+        calls.push({ url: String(url), body: JSON.parse(String(init?.body)) as { model: string } });
+        return new Response(JSON.stringify(openAiReply(fields)), { status: 200 });
+      }),
+    );
+    return { calls };
+  }
+
+  beforeAll(async () => {
+    app = await buildApp();
+    editor = await bearerFor(app, "EDITOR");
+    admin = await bearerFor(app, "ADMIN");
+    await prisma.integrationConfig.deleteMany({ where: { kind: { in: ["OPENAI", "ANTHROPIC", "GEMINI"] } } });
+    // OPENAI holds a key AND is first in PROVIDER_ORDER; ANTHROPIC holds a key but no model.
+    await app.inject({
+      method: "PUT",
+      url: "/integrations/OPENAI",
+      headers: { authorization: admin },
+      payload: { apiKey: OPENAI_KEY, model: "gpt-4o-mini" },
+    });
+    await app.inject({
+      method: "PUT",
+      url: "/integrations/ANTHROPIC",
+      headers: { authorization: admin },
+      payload: { apiKey: "sk-ant-aib-suite-key" },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterAll(async () => {
+    await prisma.aiSuggestion.deleteMany({});
+    await prisma.integrationConfig.deleteMany({ where: { kind: { in: ["OPENAI", "ANTHROPIC", "GEMINI", "OTX"] } } });
+    await cleanupUsers();
+    await prisma.$disconnect();
+    await app.close();
+  });
+
+  it("AIB-01: explicit provider+model override the first-configured provider and are stored on every suggestion", async () => {
+    // Given: OPENAI (first) and ANTHROPIC both configured; the caller picks ANTHROPIC
+    const ticketId = await createTestTicket();
+    const calls: Array<{ url: string; body: { model: string } }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL, init?: RequestInit) => {
+        calls.push({ url: String(url), body: JSON.parse(String(init?.body)) as { model: string } });
+        return new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: JSON.stringify({ fields: { overview: "Anthropic overview" } }) }],
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    // When: fill runs with an explicit provider and model
+    const res = await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/ai/fill`,
+      headers: { authorization: editor },
+      payload: { provider: "ANTHROPIC", model: "claude-aib-test" },
+    });
+
+    // Then: the ANTHROPIC endpoint is called with the overridden model — not OPENAI
+    expect(res.statusCode).toBe(200);
+    expect(calls[0]?.url).toBe("https://api.anthropic.com/v1/messages");
+    expect(calls[0]?.body.model).toBe("claude-aib-test");
+
+    // And: both the wire response and the stored rows record provider + model
+    const body = res.json() as { suggestions: Array<{ provider: string | null; model: string | null }> };
+    for (const suggestion of body.suggestions) {
+      expect(suggestion.provider).toBe("ANTHROPIC");
+      expect(suggestion.model).toBe("claude-aib-test");
+    }
+    const stored = await prisma.aiSuggestion.findMany({ where: { ticketId } });
+    expect(stored.length).toBeGreaterThan(0);
+    for (const row of stored) {
+      expect(row.provider).toBe("ANTHROPIC");
+      expect(row.model).toBe("claude-aib-test");
+    }
+    await cleanupTicket(ticketId);
+  });
+
+  it("AIB-02: no explicit provider → first-configured (OPENAI) wins with its configured model", async () => {
+    // Given: both providers configured, request body empty
+    const ticketId = await createTestTicket();
+    const { calls } = stubOpenAi({ overview: "OpenAI overview" });
+
+    // When: fill runs without a provider choice
+    const res = await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/ai/fill`,
+      headers: { authorization: editor },
+      payload: {},
+    });
+
+    // Then: OPENAI is the provider actually used
+    expect(res.statusCode).toBe(200);
+    expect(calls[0]?.url).toBe("https://api.openai.com/v1/chat/completions");
+    expect(calls[0]?.body.model).toBe("gpt-4o-mini");
+    const body = res.json() as { suggestions: Array<{ provider: string | null; model: string | null }> };
+    expect(body.suggestions[0]?.provider).toBe("OPENAI");
+    expect(body.suggestions[0]?.model).toBe("gpt-4o-mini");
+    await cleanupTicket(ticketId);
+  });
+
+  it("AIB-03: enrich accepts a model override without a provider and applies it to the resolved provider", async () => {
+    // Given: the default OPENAI resolution, request carries only a model
+    const ticketId = await createTestTicket();
+    const { calls } = stubOpenAi({ overview: "OpenAI overview" });
+
+    // When: enrich runs with just a model override
+    const res = await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/ai/enrich`,
+      headers: { authorization: editor },
+      payload: { model: "custom-override-model" },
+    });
+
+    // Then: the resolved provider (OPENAI) is called with the override model
+    expect(res.statusCode).toBe(200);
+    expect(calls[0]?.url).toBe("https://api.openai.com/v1/chat/completions");
+    expect(calls[0]?.body.model).toBe("custom-override-model");
+    const body = res.json() as { suggestions: Array<{ provider: string | null; model: string | null }> };
+    expect(body.suggestions[0]?.provider).toBe("OPENAI");
+    expect(body.suggestions[0]?.model).toBe("custom-override-model");
+    await cleanupTicket(ticketId);
+  });
+
+  it("AIB-04: an explicit provider without a configured key is 422 VALIDATION, never a silent fallback", async () => {
+    // Given: GEMINI holds no key
+    const ticketId = await createTestTicket();
+
+    // When: fill explicitly requests GEMINI
+    const res = await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/ai/fill`,
+      headers: { authorization: editor },
+      payload: { provider: "GEMINI" },
+    });
+
+    // Then: semantic rejection — the caller's choice is honored or refused, not ignored
+    expect(res.statusCode).toBe(422);
+    expect((res.json() as { error: { code: string } }).error.code).toBe("VALIDATION");
+    await cleanupTicket(ticketId);
+  });
+});

@@ -63,6 +63,12 @@ function parseSuggestion(row: { content: string }): { field: SuggestibleField; s
   return { field, suggestedValue: payload.suggestedValue };
 }
 
+/** Activity detail JSON {field, value≤500, decision} — the value is capped
+ * so the audit trail never balloons on long rewrites. */
+function decisionDetail(field: string, value: string, decision: "ACCEPTED" | "REJECTED"): string {
+  return JSON.stringify({ field, value: value.slice(0, 500), decision });
+}
+
 export default async function suggestionRoutes(app: FastifyInstance): Promise<void> {
   const f = app.withTypeProvider<ZodTypeProvider>();
   const work = app.requireRole("ADMIN", "EDITOR", "ANALYST");
@@ -134,7 +140,7 @@ export default async function suggestionRoutes(app: FastifyInstance): Promise<vo
         ticketId: id,
         actorId,
         action: "SUGGESTION_ACCEPTED",
-        detail: field,
+        detail: decisionDetail(field, suggestedValue, "ACCEPTED"),
       });
       return updated;
     });
@@ -157,6 +163,11 @@ export default async function suggestionRoutes(app: FastifyInstance): Promise<vo
     if (row.status !== SuggestionStatus.PENDING) {
       throw new AppError("CONFLICT", `Suggestion already ${row.status.toLowerCase()}`);
     }
+    // Lenient read: reject must always work, even on rows whose payload the
+    // stricter accept-side parser would refuse.
+    const payload = JSON.parse(row.content) as { field?: unknown; suggestedValue?: unknown };
+    const field = typeof payload.field === "string" ? payload.field : "";
+    const suggestedValue = typeof payload.suggestedValue === "string" ? payload.suggestedValue : "";
     const actorId = request.user.sub;
     const updated = await app.prisma.$transaction(async (tx) => {
       const updated = await tx.aiSuggestion.update({
@@ -167,6 +178,7 @@ export default async function suggestionRoutes(app: FastifyInstance): Promise<vo
         ticketId: id,
         actorId,
         action: "SUGGESTION_REJECTED",
+        detail: decisionDetail(field, suggestedValue, "REJECTED"),
       });
       return updated;
     });

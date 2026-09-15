@@ -145,7 +145,7 @@ Schemas: `src/modules/tickets/schema.ts`. State machine + role gates:
 | 29 | `POST /tickets/:id/iocs` | WORK | `CreateIocBodySchema` | 201 `IocSchema` | 400 `VALIDATION` when `value` does not parse as its declared `type` (IPv4/IPv6 via `net.isIP`, DOMAIN hostname, http(s) URL, EMAIL, MD5/SHA1/SHA256 hex digests, CIDR `addr/prefix`; `FILEPATH`/`MUTEX`/`OTHER` free-form) — the message names type, problem, and value |
 | 30 | `PATCH /tickets/:id/iocs/:iocId` | WORK | `UpdateIocBodySchema` | 200 `IocSchema` | 400 `VALIDATION` when the new `value` contradicts the STORED `type` (type is not patchable) — same rules as #29 |
 | 31 | `DELETE /tickets/:id/iocs/:iocId` | WORK | — | 204 | |
-| 31a | `GET /tickets/:id/activity` | ANY | `?page&pageSize` | 200 `paginated(TicketActivitySchema)` (newest first, actor name joined). `detail` per action: `STATUS_CHANGED` → `status <FROM>→<TO>`; `FIELDS_UPDATED` → JSON string `{"<field>":{"from":<old\|null>,"to":<new>}}` covering only the fields whose value actually changed (text truncated to 500 chars; string arrays joined with `", "` — empty array → `""`; no-op patch → no detail; legacy rows may still hold the old names-only string); `OTX_PUSHED` → `<pulseId>` + optional ` (updated)` | |
+| 31a | `GET /tickets/:id/activity` | ANY | `?page&pageSize` | 200 `paginated(TicketActivitySchema)` (newest first, actor name joined). `detail` per action: `STATUS_CHANGED` → `status <FROM>→<TO>`; `FIELDS_UPDATED` → JSON string `{"<field>":{"from":<old\|null>,"to":<new>}}` covering only the fields whose value actually changed (text truncated to 500 chars; string arrays joined with `", "` — empty array → `""`; no-op patch → no detail; legacy rows may still hold the old names-only string); `SUGGESTION_ACCEPTED`/`SUGGESTION_REJECTED` → JSON string `{"field":"<field>","value":"<suggestedValue, truncated to 500 chars>","decision":"ACCEPTED\|REJECTED"}` (legacy rows may hold the old bare-field string); `OTX_PUSHED` → `<pulseId>` + optional ` (updated)` | |
 
 Transition role gate (`to` → roles): `RESEARCH`,`READY` → WORK;
 `SENT`,`CLOSED` → MGR. `to=CLOSED` is legal from `OPEN|RESEARCH|READY`
@@ -153,15 +153,19 @@ Transition role gate (`to` → roles): `RESEARCH`,`READY` → WORK;
 
 ## 5. Surface 4 — AI assist + suggestions (HARD BLOCK source)
 
-Schemas: `src/modules/ai/schema.ts`. Provider/model come from central
-integration config — never from the request.
+Schemas: `src/modules/ai/schema.ts`. Provider/model resolution per request:
+an explicit `{provider?, model?}` body wins; otherwise the first configured
+provider (OPENAI → ANTHROPIC → GEMINI) with its configured (or default)
+model. An explicit provider without a configured key is `422 VALIDATION` —
+never a silent fallback. Every stored suggestion records the resolved
+`provider` + `model` that produced it.
 
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
-| 32 | `POST /tickets/:id/ai/fill` | WORK | `{}` | 200 `AiFillResponseSchema` (strict: only missing final fields; never drafts the §10-optional `recommendations`/`references`) | 502 `INTERNAL` envelope when the configured provider is unreachable from the server (network/DNS timeout) — message names the provider and suggests checking server egress or switching providers; upstream non-2xx → 502 `INTERNAL` with `details.upstreamStatus` + `details.upstreamBody` (≤300 chars of the upstream response body — keys travel in headers and never appear in the detail) |
-| 33 | `POST /tickets/:id/ai/enrich` | WORK | `{}` | 200 `AiFillResponseSchema` (full rewrite proposals) | 502 `INTERNAL` envelope as #32 for an unreachable provider or upstream non-2xx |
-| 34 | `GET /tickets/:id/suggestions` | WORK | `ListSuggestionsQuerySchema` `?status&page&pageSize` | 200 `ListSuggestionsResponseSchema` | |
-| 35 | `POST /tickets/:id/suggestions/:suggestionId/accept` | WORK | — | 200 `SuggestionActionResponseSchema` (value merged into final fields) | 422 `VALIDATION` when accepting a `cveIds` suggestion whose entries don't match `^CVE-\d{4}-\d{4,}$` — the merge is refused, the suggestion STAYS `PENDING`, and the message explains edit-the-fields-or-reject |
+| 32 | `POST /tickets/:id/ai/fill` | WORK | `{provider?, model?}` (both optional) | 200 `AiFillResponseSchema` (strict: only missing final fields; never drafts the §10-optional `recommendations`/`references`) | 422 `VALIDATION` explicit provider without a configured key, or no provider configured at all; 502 `INTERNAL` envelope when the resolved provider is unreachable from the server (network/DNS timeout) — message names the provider and suggests checking server egress or switching providers; upstream non-2xx → 502 `INTERNAL` with `details.upstreamStatus` + `details.upstreamBody` (≤300 chars of the upstream response body — keys travel in headers and never appear in the detail) |
+| 33 | `POST /tickets/:id/ai/enrich` | WORK | `{provider?, model?}` (both optional) | 200 `AiFillResponseSchema` (full rewrite proposals) | 422/502 as #32 |
+| 34 | `GET /tickets/:id/suggestions` | WORK | `ListSuggestionsQuerySchema` `?status&page&pageSize` | 200 `ListSuggestionsResponseSchema` (each item carries `provider` + `model`) | |
+| 35 | `POST /tickets/:id/suggestions/:suggestionId/accept` | WORK | — | 200 `SuggestionActionResponseSchema`. **Accept AUTO-MERGES** the `suggestedValue` into the ticket's matching final field (`overview`/`description`/`recommendations`/`mitigation`/`affectedVersions` as text; `references`/`cveIds` split on newlines/commas) — clients never copy values manually | 422 `VALIDATION` when accepting a `cveIds` suggestion whose entries don't match `^CVE-\d{4}-\d{4,}$` — the merge is refused, the suggestion STAYS `PENDING`, and the message explains edit-the-fields-or-reject |
 | 36 | `POST /tickets/:id/suggestions/:suggestionId/reject` | WORK | — | 200 `SuggestionActionResponseSchema` | |
 
 S2 contract: Send (#46) and OTX push (#51) MUST fail with `409
@@ -176,6 +180,7 @@ encrypted at rest; never serialized in a response (INT-01) — masked only.
 | # | Method + Path | Role | Request | Success | Errors |
 |---|---|---|---|---|---|
 | 37 | `GET /integrations/:kind` | ADMIN | `:kind ∈ OPENAI\|ANTHROPIC\|GEMINI\|OTX` | 200 `IntegrationConfigResponseSchema` `{kind, model, hasKey, maskedKey, updatedAt}` | |
+| 37a | `GET /integrations/available` | WORK | — | 200 `[{kind, model, hasKey}]` for ALL four kinds (unconfigured → `model: null, hasKey: false`) — dropdown info for the fill/enrich provider picker; carries NO key material of any kind (no `maskedKey`, no blobs) | |
 | 38 | `PUT /integrations/:kind` | ADMIN | `PutIntegrationConfigBodySchema`; OTX uses `PutOtxConfigBodySchema` (no model) | 200 `IntegrationConfigResponseSchema` | |
 | 39 | `POST /integrations/:kind/test` | ADMIN | `{}` | 200 `TestConnectionResponseSchema` `{ok, detail?, latencyMs?}` | upstream failure reported in `ok:false`, not HTTP error |
 
@@ -239,7 +244,11 @@ malformed indicator set (a stored IPv4-literal-as-IPV6 once answered 400
 upstream on every push). The pulse body's `TLP`
 field carries the LOWERCASE legacy value (official external API schema
 enum: `white|green|amber|red`); internal CLEAR maps to legacy WHITE.
-`AMBER`/`RED` force `public=false`. Stores
+`AMBER`/`RED` force `public=false`. The pulse `description` (joined
+`overview` + `description`) is truncated to OTX's documented 0-1024 cap
+before the wire call: 1023 content chars + a trailing `…` (a 1882-char
+bulletin once failed every push with upstream 400 "description Must be
+0-1024 chars"); the pulse `name` is never truncated. Stores
 `otxPulseId`/`otxPulseUrl` on the ticket. Push is idempotent per ticket:
 a ticket that already has `otxPulseId` is updated upstream via the
 documented `PATCH /api/v1/pulses/{id}` ("any fields that can be used to

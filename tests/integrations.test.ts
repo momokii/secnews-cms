@@ -185,6 +185,47 @@ describe("TASK-C4 integrations surface (encrypted at rest, masked out)", () => {
     expect((res.json() as { error: { code: string } }).error.code).toBe("FORBIDDEN");
   });
 
+  it("TASK-AIB: GET /integrations/available lists every kind with model+hasKey, no key material, WORK-readable", async () => {
+    // Given: only OPENAI configured (earlier tests in this suite stored an OTX key)
+    await prisma.integrationConfig.deleteMany({ where: { kind: { in: [...KINDS] } } });
+    await app.inject({
+      method: "PUT",
+      url: "/integrations/OPENAI",
+      headers: { authorization: admin },
+      payload: { apiKey: KEY, model: "gpt-4o-mini" },
+    });
+
+    // When: ADMIN, EDITOR and ANALYST read the available list
+    const byAdmin = await app.inject({ method: "GET", url: "/integrations/available", headers: { authorization: admin } });
+    const byEditor = await app.inject({
+      method: "GET",
+      url: "/integrations/available",
+      headers: { authorization: await bearerFor(app, "EDITOR") },
+    });
+    const byAnalyst = await app.inject({
+      method: "GET",
+      url: "/integrations/available",
+      headers: { authorization: await bearerFor(app, "ANALYST") },
+    });
+
+    // Then: every WORK role may read it and all four kinds appear
+    expect(byAdmin.statusCode).toBe(200);
+    expect(byEditor.statusCode).toBe(200);
+    expect(byAnalyst.statusCode).toBe(200);
+    const body = byAdmin.json() as Array<{ kind: string; model: string | null; hasKey: boolean }>;
+    expect(body).toHaveLength(4);
+    const byKind = new Map(body.map((entry) => [entry.kind, entry]));
+    expect(byKind.get("OPENAI")).toEqual({ kind: "OPENAI", model: "gpt-4o-mini", hasKey: true });
+    expect(byKind.get("ANTHROPIC")).toEqual({ kind: "ANTHROPIC", model: null, hasKey: false });
+    expect(byKind.get("GEMINI")).toEqual({ kind: "GEMINI", model: null, hasKey: false });
+    expect(byKind.get("OTX")).toEqual({ kind: "OTX", model: null, hasKey: false });
+
+    // And: the wire carries neither plaintext keys, nor masks, nor config blobs
+    expect(byAdmin.body).not.toContain(KEY);
+    expect(byAdmin.body).not.toContain("maskedKey");
+    expect(byAdmin.body).not.toContain("encryptedKey");
+  });
+
   it("OTX test-connection probes the real subscribed-pulses endpoint, not a guessed path", async () => {
     // Given: an OTX key is configured
     await app.inject({

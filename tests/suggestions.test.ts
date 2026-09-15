@@ -159,4 +159,70 @@ describe("TASK-C4 suggestion lifecycle (accept merges, reject discards)", () => 
     expect(pendingBody.items[0]?.status).toBe("PENDING");
     await cleanupTicket(ticketId);
   });
+
+  it("TASK-AIB: accept activity detail carries the decision value, truncated to 500 chars", async () => {
+    // Given: a PENDING overview suggestion whose value is 800 chars
+    const ticketId = await createTestTicket({ overview: null });
+    const suggestionId = await createTestSuggestion(ticketId, {
+      field: "overview",
+      currentValue: null,
+      suggestedValue: "V".repeat(800),
+    });
+
+    // When: it is accepted and the activity trail is read
+    await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/suggestions/${suggestionId}/accept`,
+      headers: { authorization: analyst },
+    });
+    const activity = await app.inject({
+      method: "GET",
+      url: `/tickets/${ticketId}/activity`,
+      headers: { authorization: analyst },
+    });
+
+    // Then: the entry's detail is JSON with the value capped at 500 chars
+    expect(activity.statusCode).toBe(200);
+    const items = (activity.json() as { items: Array<{ action: string; detail: string }> }).items;
+    const accepted = items.find((entry) => entry.action === "SUGGESTION_ACCEPTED");
+    expect(JSON.parse(accepted?.detail ?? "")).toEqual({
+      field: "overview",
+      value: "V".repeat(500),
+      decision: "ACCEPTED",
+    });
+    await cleanupTicket(ticketId);
+  });
+
+  it("TASK-AIB: reject activity detail carries the value and REJECTED decision", async () => {
+    // Given: a PENDING overview suggestion
+    const ticketId = await createTestTicket({ overview: "Original overview" });
+    const suggestionId = await createTestSuggestion(ticketId, {
+      field: "overview",
+      currentValue: "Original overview",
+      suggestedValue: "Rewrite nobody wanted",
+    });
+
+    // When: it is rejected and the activity trail is read
+    await app.inject({
+      method: "POST",
+      url: `/tickets/${ticketId}/suggestions/${suggestionId}/reject`,
+      headers: { authorization: analyst },
+    });
+    const activity = await app.inject({
+      method: "GET",
+      url: `/tickets/${ticketId}/activity`,
+      headers: { authorization: analyst },
+    });
+
+    // Then: the REJECTED entry still records what was turned down
+    expect(activity.statusCode).toBe(200);
+    const items = (activity.json() as { items: Array<{ action: string; detail: string }> }).items;
+    const rejected = items.find((entry) => entry.action === "SUGGESTION_REJECTED");
+    expect(JSON.parse(rejected?.detail ?? "")).toEqual({
+      field: "overview",
+      value: "Rewrite nobody wanted",
+      decision: "REJECTED",
+    });
+    await cleanupTicket(ticketId);
+  });
 });

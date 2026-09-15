@@ -96,11 +96,18 @@ type OtxPulseBody = {
   indicators: Array<{ indicator: string; type: string }>;
 };
 
+/** OTX rejects descriptions over 1024 chars ("description Must be 0-1024
+ * chars"); a 1882-char bulletin once failed every push with upstream 400.
+ * Cap at 1023 content chars + '…'. Name is NOT truncated (uniqueness hint). */
+export function truncateOtxDescription(description: string): string {
+  return description.length <= 1024 ? description : `${description.slice(0, 1023)}…`;
+}
+
 /** The create-shaped body, identical for create and documented PATCH edits. */
 function pulseBody(input: CreatePulseInput): OtxPulseBody {
   return {
     name: input.name,
-    description: input.description,
+    description: truncateOtxDescription(input.description),
     public: input.isPublic !== false && publicAllowed(input.tlp),
     TLP: toOtxMarking(input.tlp).toLowerCase(),
     tags: input.tags,

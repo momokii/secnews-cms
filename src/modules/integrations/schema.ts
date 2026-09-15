@@ -8,6 +8,15 @@ import { IntegrationKind as PrismaIntegrationKind } from "../../generated/prisma
 export const IntegrationKindEnum = z.enum(PrismaIntegrationKind);
 export type IntegrationKind = z.infer<typeof IntegrationKindEnum>;
 
+// GET /integrations/available — per-kind dropdown info for the fill/enrich
+// client (WORK-readable). Model + hasKey only; never any key material.
+export const AvailableIntegrationSchema = z.object({
+  kind: IntegrationKindEnum,
+  model: z.string().nullable(),
+  hasKey: z.boolean(),
+});
+export type AvailableIntegration = z.infer<typeof AvailableIntegrationSchema>;
+
 // GET /integrations/:kind
 export const IntegrationConfigResponseSchema = z.object({
   kind: IntegrationKindEnum,

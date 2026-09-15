@@ -8,6 +8,7 @@ import { callGemini } from "../ai/providers/gemini.js";
 import { callOpenAi } from "../ai/providers/openai.js";
 import { DEFAULT_MODELS, type ChatCompletionOptions, type ChatProviderFn, type FetchLike } from "../ai/providers/types.js";
 import {
+  AvailableIntegrationSchema,
   IntegrationConfigResponseSchema,
   IntegrationKindEnum,
   PutIntegrationConfigBodySchema,
@@ -67,6 +68,29 @@ async function storedKey(app: FastifyInstance, kind: "OPENAI" | "ANTHROPIC" | "G
 
 export default async function integrationRoutes(app: FastifyInstance): Promise<void> {
   const f = app.withTypeProvider<ZodTypeProvider>();
+
+  // GET /integrations/available — WORK-readable dropdown info (kind, model,
+  // hasKey) for every kind. Masked surface: no maskedKey, no key material.
+  f.get("/available", {
+    onRequest: [app.requireRole("ADMIN", "EDITOR", "ANALYST")],
+    schema: {
+      response: { 200: z.array(AvailableIntegrationSchema) },
+    },
+  }, async () => {
+    const kinds = IntegrationKindEnum.options;
+    const rows = await app.prisma.integrationConfig.findMany({
+      where: { kind: { in: [...kinds] } },
+    });
+    const byKind = new Map(rows.map((row) => [row.kind, row] as const));
+    return kinds.map((kind) => {
+      const row = byKind.get(kind);
+      if (row === undefined) {
+        return { kind, model: null, hasKey: false };
+      }
+      const config = JSON.parse(decryptSecret(row.encryptedKey)) as StoredConfig;
+      return { kind, model: config.model ?? null, hasKey: true };
+    });
+  });
 
   // GET /integrations/:kind — masked view, never the plaintext key.
   f.get("/:kind", {
