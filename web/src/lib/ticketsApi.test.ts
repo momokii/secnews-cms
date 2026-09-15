@@ -6,10 +6,12 @@ import {
   aiEnrich,
   aiFill,
   deleteIoc,
+  deleteSuggestion,
   deleteTicketSource,
   getTicket,
   listDeliveryAudit,
   listSuggestions,
+  listTicketActivity,
   listTickets,
   patchTicketFields,
   pushOtx,
@@ -191,6 +193,39 @@ describe("ticketsApi: AI suggestions", () => {
       url: `/api/tickets/${TICKET_ID}/suggestions/${SUGGESTION_ID}/reject`,
       init: expect.objectContaining({ method: "POST" }),
     });
+  });
+
+  it("DELETEs /tickets/:id/suggestions/:suggestionId", async () => {
+    const fetchMock = stubFetch();
+    const SUGGESTION_ID = "44444444-4444-4444-8444-444444444444";
+    await deleteSuggestion(TICKET_ID, SUGGESTION_ID);
+    expect(lastCall(fetchMock)).toMatchObject({
+      url: `/api/tickets/${TICKET_ID}/suggestions/${SUGGESTION_ID}`,
+      init: expect.objectContaining({ method: "DELETE" }),
+    });
+  });
+});
+
+describe("ticketsApi: activity", () => {
+  it("GETs /tickets/:id/activity with page and pageSize", async () => {
+    const fetchMock = stubFetch();
+    await listTicketActivity(TICKET_ID, 2, 10);
+    expect(lastCall(fetchMock)).toMatchObject({
+      url: `/api/tickets/${TICKET_ID}/activity?page=2&pageSize=10`,
+      init: expect.objectContaining({ method: "GET" }),
+    });
+  });
+
+  it("passes the action filter as ?action= and omits it when unset", async () => {
+    const fetchMock = stubFetch();
+    await listTicketActivity(TICKET_ID, 1, 5, "IOC_ADDED");
+    expect(lastCall(fetchMock).url).toBe(
+      `/api/tickets/${TICKET_ID}/activity?page=1&pageSize=5&action=IOC_ADDED`,
+    );
+    await listTicketActivity(TICKET_ID, 1, 5);
+    expect(lastCall(fetchMock).url).toBe(
+      `/api/tickets/${TICKET_ID}/activity?page=1&pageSize=5`,
+    );
   });
 });
 

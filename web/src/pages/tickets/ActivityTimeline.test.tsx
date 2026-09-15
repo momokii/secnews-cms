@@ -1,4 +1,4 @@
-import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setToken } from "../../lib/tokenStore";
 import { activityFixture, jsonResponse, paginated, renderWithProviders, routeFetch, TICKET_ID } from "./testUtils";
@@ -18,8 +18,10 @@ describe("FE-ACT-01: ticket activity timeline", () => {
     }]));
     renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
 
-    expect(await screen.findByText("STATUS_CHANGED")).toBeTruthy();
-    expect(screen.getByText(/by Editor/)).toBeTruthy();
+    // The action filter select also carries the raw action names as options,
+    // so entry assertions scope away from option elements.
+    expect(await screen.findByText(/by Editor/)).toBeTruthy();
+    expect(screen.getByText("STATUS_CHANGED", { ignore: "option" })).toBeTruthy();
     expect(screen.getByText("2026-09-14 16:00 WIB")).toBeTruthy();
     expect(screen.getByText("Status: OPEN → RESEARCH")).toBeTruthy();
   });
@@ -32,7 +34,7 @@ describe("FE-ACT-01: ticket activity timeline", () => {
     }]);
     vi.stubGlobal("fetch", fetchMock);
     renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
-    await screen.findByText("STATUS_CHANGED");
+    await screen.findByText(/by Editor/);
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/activity?page=2"),
@@ -50,7 +52,7 @@ describe("TASK-UIC: activity page size", () => {
     }]);
     vi.stubGlobal("fetch", fetchMock);
     renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
-    await screen.findByText("STATUS_CHANGED");
+    await screen.findByText(/by Editor/);
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/activity?page=1&pageSize=5"),
@@ -73,7 +75,7 @@ describe("TASK-UIC: activity page size", () => {
     }]);
     vi.stubGlobal("fetch", fetchMock);
     renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
-    await screen.findByText("STATUS_CHANGED");
+    await screen.findByText(/by Editor/);
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
@@ -239,5 +241,87 @@ describe("TASK-UIB: activity detail rendering", () => {
     renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
 
     expect(await screen.findByText("legacy freeform note")).toBeTruthy();
+  });
+});
+
+describe("TASK-UIF: activity action filter", () => {
+  function stubFilteredActivity(total = 41): ReturnType<typeof vi.fn> {
+    const fetchMock = routeFetch([{
+      match: (url, method) => method === "GET" && url.includes("/activity"),
+      respond: () =>
+        jsonResponse({ ...paginated([activityFixture()]), total }),
+    }]);
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("offers All actions plus every activity action, defaulting to unfiltered", async () => {
+    // Given: the timeline is rendered with no action filter chosen
+    setToken("test-token");
+    const fetchMock = stubFilteredActivity();
+
+    // When: the filter select renders
+    renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
+    const select = (await screen.findByLabelText(
+      "Filter by action",
+    )) as HTMLSelectElement;
+    await screen.findByText("STATUS_CHANGED");
+
+    // Then: All actions is first/default and IOC_ADDED is among the options,
+    // and the initial request carries no action param
+    const names = within(select)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(names[0]).toBe("All actions");
+    expect(names).toContain("IOC_ADDED");
+    expect(names).toContain("SUGGESTION_ACCEPTED");
+    expect(select.value).toBe("");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/activity?page=1&pageSize=5"),
+      expect.anything(),
+    );
+  });
+
+  it("requests the selected action server-side via ?action=", async () => {
+    // Given: the timeline shows unfiltered activity
+    setToken("test-token");
+    const fetchMock = stubFilteredActivity();
+    renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
+    await screen.findByText(/by Editor/);
+
+    // When: IOC_ADDED is chosen in the action filter
+    fireEvent.change(screen.getByLabelText("Filter by action"), {
+      target: { value: "IOC_ADDED" },
+    });
+
+    // Then: the refetch URL carries action=IOC_ADDED
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/activity?page=1&pageSize=5&action=IOC_ADDED"),
+      expect.anything(),
+    ));
+  });
+
+  it("resets to page 1 when the action filter changes", async () => {
+    // Given: the timeline is paged to page 2
+    setToken("test-token");
+    const fetchMock = stubFilteredActivity();
+    renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
+    await screen.findByText(/by Editor/);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/activity?page=2"),
+      expect.anything(),
+    ));
+
+    // When: a different action filter is picked
+    fireEvent.change(screen.getByLabelText("Filter by action"), {
+      target: { value: "OTX_PUSHED" },
+    });
+
+    // Then: the refetch starts over at page 1 with the action applied
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/activity?page=1&pageSize=5&action=OTX_PUSHED"),
+      expect.anything(),
+    ));
   });
 });

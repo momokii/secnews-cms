@@ -13,6 +13,7 @@ import {
   type SuggestionStatus,
   type Ticket,
   type TicketActivity,
+  type TicketActivityAction,
   type TicketDetail,
   type TicketSource,
   type TicketStatus,
@@ -27,6 +28,7 @@ export {
   SUGGESTION_STATUSES,
   AI_PROVIDERS,
   CHANNEL_TYPES,
+  TICKET_ACTIVITY_ACTIONS,
   TICKET_ORIGINS,
   TICKET_STATUSES,
   TLP_LEVELS,
@@ -50,6 +52,7 @@ export type {
   SuggestionStatus,
   Ticket,
   TicketActivity,
+  TicketActivityAction,
   TicketDetail,
   TicketOrigin,
   TicketSource,
@@ -227,6 +230,12 @@ export async function rejectSuggestion(
   return readJson(response);
 }
 
+/** DELETE /tickets/:id/suggestions/:suggestionId — answers 204; the server
+ * rejects deletes of ACCEPTED rows with 422. */
+export async function deleteSuggestion(id: string, suggestionId: string): Promise<void> {
+  await apiFetch(`/tickets/${id}/suggestions/${suggestionId}`, { method: "DELETE" });
+}
+
 // ---- Delivery (#47-48) ----
 
 /** Send — `all` resolves to currently-ACTIVE channels only (S3). */
@@ -249,13 +258,15 @@ export async function listDeliveryAudit(
   return readJson<Paginated<DeliveryAudit>>(response);
 }
 
+/** GET /tickets/:id/activity — server-side action filter; undefined = all. */
 export async function listTicketActivity(
   id: string,
   page = 1,
   pageSize = 5,
+  action?: TicketActivityAction,
 ): Promise<Paginated<TicketActivity>> {
   const response = await apiFetch(
-    `/tickets/${id}/activity${buildQuery({ page, pageSize })}`,
+    `/tickets/${id}/activity${buildQuery({ page, pageSize, action })}`,
     { method: "GET" },
   );
   return readJson<Paginated<TicketActivity>>(response);

@@ -12,6 +12,7 @@ import {
   aiFill,
   createTicket,
   deleteIoc,
+  deleteSuggestion,
   deleteTicketSource,
   getTicket,
   listDeliveryAudit,
@@ -31,6 +32,7 @@ import {
   type PatchTicketFieldsBody,
   type SendResponse,
   type SuggestionStatus,
+  type TicketActivityAction,
   type TicketsQuery,
   type TicketStatus,
   type UpdateIocBody,
@@ -175,6 +177,20 @@ export function useRejectSuggestion() {
   return useSuggestionAction("reject");
 }
 
+export function useDeleteSuggestion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, suggestionId }: { id: string; suggestionId: string }) =>
+      deleteSuggestion(id, suggestionId),
+    onSuccess: (_data, { id }) => {
+      // A delete changes pendingSuggestions exactly like accept/reject do.
+      void queryClient.invalidateQueries({ queryKey: ["ticket", id] });
+      void queryClient.invalidateQueries({ queryKey: ["suggestions", id] });
+      void queryClient.invalidateQueries({ queryKey: ["ticket-activity", id] });
+    },
+  });
+}
+
 function useAiRun(path: "ai/fill" | "ai/enrich") {
   const queryClient = useQueryClient();
   return useMutation({
@@ -225,10 +241,15 @@ export function useDeliveryAudit(id: string, page: number) {
   });
 }
 
-export function useTicketActivity(id: string, page: number, pageSize: number) {
+export function useTicketActivity(
+  id: string,
+  page: number,
+  pageSize: number,
+  action: TicketActivityAction | null = null,
+) {
   return useQuery({
-    queryKey: ["ticket-activity", id, page, pageSize],
-    queryFn: () => listTicketActivity(id, page, pageSize),
+    queryKey: ["ticket-activity", id, page, pageSize, action],
+    queryFn: () => listTicketActivity(id, page, pageSize, action ?? undefined),
     placeholderData: keepPreviousData,
   });
 }

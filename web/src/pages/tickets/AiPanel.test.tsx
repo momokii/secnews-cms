@@ -469,3 +469,115 @@ describe("TASK-UIC2: AI loading states, picker, provenance, help", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });
+
+describe("TASK-UIF: suggestion delete", () => {
+  const REJECTED_ID = "66666666-6666-4666-8666-666666666666";
+
+  function deleteRoutes(): Array<{
+    match: (url: string, method: string) => boolean;
+    respond: () => Response;
+  }> {
+    return [
+      {
+        match: (url, method) =>
+          method === "GET" && url.startsWith(`/api/tickets/${TICKET_ID}/suggestions`),
+        respond: () =>
+          jsonResponse(
+            paginated([
+              suggestionFixture({ status: "PENDING" }),
+              suggestionFixture({
+                id: REJECTED_ID,
+                field: "description",
+                status: "REJECTED",
+              }),
+              suggestionFixture({
+                id: "77777777-7777-4777-8777-777777777777",
+                field: "recommendations",
+                status: "ACCEPTED",
+              }),
+            ]),
+          ),
+      },
+      availableResponder(),
+      {
+        match: (url, method) =>
+          method === "DELETE" && url.includes("/suggestions/"),
+        respond: () => new Response(null, { status: 204 }),
+      },
+    ];
+  }
+
+  it("shows Delete on PENDING and REJECTED rows but never on ACCEPTED", async () => {
+    // Given: one suggestion in each of PENDING, REJECTED and ACCEPTED
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch(deleteRoutes()));
+
+    // When: the suggestion list renders
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={1} blocked={false} />,
+    );
+
+    // Then: exactly the two non-accepted rows carry a Delete button
+    await screen.findByText("recommendations");
+    const deleteButtons = screen.getAllByRole("button", { name: /^Delete / });
+    expect(deleteButtons).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Delete overview suggestion" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Delete description suggestion" }),
+    ).toBeTruthy();
+  });
+
+  it("asks for confirmation, DELETEs the row, and refetches suggestions", async () => {
+    // Given: the user confirms the delete prompt
+    setToken("test-token");
+    const confirmMock = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmMock);
+    const fetchMock = routeFetch(deleteRoutes());
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={1} blocked={false} />,
+    );
+
+    // When: Delete is clicked on the pending row
+    fireEvent.click(await screen.findByRole("button", { name: "Delete overview suggestion" }));
+
+    // Then: confirm ran, the DELETE hit the suggestion URL, and the list refetched
+    expect(confirmMock).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/tickets/${TICKET_ID}/suggestions/${suggestionFixture().id}`,
+        expect.objectContaining({ method: "DELETE" }),
+      ),
+    );
+    await waitFor(() => {
+      const suggestionGets = fetchMock.mock.calls.filter(
+        ([url, init]) =>
+          String(url).startsWith(`/api/tickets/${TICKET_ID}/suggestions`) &&
+          ((init as RequestInit | undefined)?.method ?? "GET") === "GET",
+      );
+      expect(suggestionGets.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it("keeps the row when confirmation is dismissed", async () => {
+    // Given: the user cancels the delete prompt
+    setToken("test-token");
+    const confirmMock = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirmMock);
+    const fetchMock = routeFetch(deleteRoutes());
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={1} blocked={false} />,
+    );
+
+    // When: Delete is clicked on the pending row
+    fireEvent.click(await screen.findByRole("button", { name: "Delete overview suggestion" }));
+
+    // Then: confirm ran but no DELETE request left the page
+    expect(confirmMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("/suggestions/"),
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+});

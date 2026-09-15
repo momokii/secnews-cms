@@ -12,6 +12,7 @@ import {
   useAcceptSuggestion,
   useAiEnrich,
   useAiFill,
+  useDeleteSuggestion,
   useRejectSuggestion,
   useSuggestions,
 } from "../../lib/useTickets";
@@ -109,6 +110,7 @@ export function AiPanel({ ticketId, pendingSuggestions, blocked }: AiPanelProps)
   const suggestionsQuery = useSuggestions(ticketId);
   const accept = useAcceptSuggestion();
   const reject = useRejectSuggestion();
+  const remove = useDeleteSuggestion();
   const availableQuery = useAvailableIntegrations();
   const [provider, setProvider] = useState<PickerValue>(AUTO_PROVIDER);
   const [model, setModel] = useState("");
@@ -252,27 +254,47 @@ export function AiPanel({ ticketId, pendingSuggestions, blocked }: AiPanelProps)
                   Current: {suggestion.currentValue}
                 </p>
               ) : null}
-              {suggestion.status === "PENDING" ? (
+              {suggestion.status !== "ACCEPTED" ? (
                 <span className="mt-2 flex gap-2">
+                  {suggestion.status === "PENDING" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          accept.mutate({ id: ticketId, suggestionId: suggestion.id })
+                        }
+                        disabled={accept.isPending || reject.isPending || remove.isPending}
+                        className="rounded-md bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          reject.mutate({ id: ticketId, suggestionId: suggestion.id })
+                        }
+                        disabled={accept.isPending || reject.isPending || remove.isPending}
+                        className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() =>
-                      accept.mutate({ id: ticketId, suggestionId: suggestion.id })
-                    }
-                    disabled={accept.isPending || reject.isPending}
-                    className="rounded-md bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Delete this ${suggestion.status.toLowerCase()} ${suggestion.field} suggestion? This cannot be undone.`,
+                        )
+                      ) {
+                        remove.mutate({ id: ticketId, suggestionId: suggestion.id });
+                      }
+                    }}
+                    disabled={accept.isPending || reject.isPending || remove.isPending}
+                    className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
                   >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      reject.mutate({ id: ticketId, suggestionId: suggestion.id })
-                    }
-                    disabled={accept.isPending || reject.isPending}
-                    className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    Reject
+                    Delete {suggestion.field} suggestion
                   </button>
                 </span>
               ) : null}
