@@ -11,6 +11,7 @@ import { FeedSourcesPage } from "./pages/feeds/FeedSourcesPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OtxPulsesPage } from "./pages/otx/OtxPulsesPage";
+import { PromptsPage } from "./pages/PromptsPage";
 import { TicketDetailPage } from "./pages/tickets/TicketDetailPage";
 import { TicketsListPage } from "./pages/tickets/TicketsListPage";
 import { UsersPage } from "./pages/UsersPage";
@@ -61,6 +62,14 @@ export function App() {
             element={
               <RoleGate roles={["admin", "editor", "analyst"]}>
                 <OtxPulsesPage />
+              </RoleGate>
+            }
+          />
+          <Route
+            path="/prompts"
+            element={
+              <RoleGate roles={["admin"]}>
+                <PromptsPage />
               </RoleGate>
             }
           />
