@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
@@ -290,5 +290,87 @@ describe("TASK-UIB: unified sidebar user block", () => {
 
     // Then: the rail has no user block at all
     expect(screen.queryByRole("group", { name: "Signed-in user" })).toBeNull();
+  });
+});
+
+describe("TASK-UIC2: session countdown", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    stubTicketListFetch();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    clearToken();
+  });
+
+  /** Unsigned 3-segment JWT lookalike expiring at the given instant. */
+  function tokenExpiringAt(expiresAtMs: number): string {
+    const payload = btoa(JSON.stringify({ exp: Math.floor(expiresAtMs / 1000) }));
+    return `h.${payload}.sig`;
+  }
+
+  it("shows minutes left from the token exp", () => {
+    // Given: an authenticated session whose token expires in 15 minutes
+    setToken(tokenExpiringAt(Date.now() + 15 * 60_000));
+    setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" });
+
+    // When: the app renders at a member route
+    renderApp("/feeds/items");
+
+    // Then: the user block shows the remaining session time
+    const block = screen.getByRole("group", { name: "Signed-in user" });
+    expect(within(block).getByText("Session 15m left")).toBeTruthy();
+  });
+
+  it("goes red under two minutes", () => {
+    setToken(tokenExpiringAt(Date.now() + 60_000));
+    setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" });
+    renderApp("/feeds/items");
+
+    const oneMinute = screen.getByText("Session 1m left");
+    expect(oneMinute.className).toContain("text-red-400");
+  });
+
+  it("reports an expired session once exp has passed", () => {
+    setToken(tokenExpiringAt(Date.now() - 1_000));
+    setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" });
+    renderApp("/feeds/items");
+
+    expect(screen.getByText("Session expired")).toBeTruthy();
+  });
+
+  it("refreshes on the 30-second interval until it expires", () => {
+    // Given: a token with 50 seconds left
+    vi.useFakeTimers();
+    setToken(tokenExpiringAt(Date.now() + 50_000));
+    setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" });
+    renderApp("/feeds/items");
+    expect(screen.getByText("Session 1m left")).toBeTruthy();
+
+    // When: 30 seconds pass (20s left), then another 30 (expired)
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(screen.getByText("Session 1m left")).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+
+    // Then: the countdown updated without a remount
+    expect(screen.getByText("Session expired")).toBeTruthy();
+  });
+
+  it("renders nothing for opaque (non-JWT) tokens", () => {
+    // Given: a legacy opaque token with no decodable payload
+    signInAsAdmin();
+
+    // When: the app renders
+    renderApp("/feeds/items");
+
+    // Then: no countdown is rendered
+    expect(screen.queryByText(/Session/)).toBeNull();
   });
 });

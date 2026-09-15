@@ -148,18 +148,28 @@ describe("ticketsApi: iocs", () => {
 });
 
 describe("ticketsApi: AI suggestions", () => {
-  it("POSTs empty bodies to ai/fill and ai/enrich", async () => {
+  it("POSTs empty bodies to ai/fill and ai/enrich by default", async () => {
     const fetchMock = stubFetch();
     await aiFill(TICKET_ID);
     expect(lastCall(fetchMock)).toMatchObject({
       url: `/api/tickets/${TICKET_ID}/ai/fill`,
-      init: expect.objectContaining({ method: "POST" }),
+      init: expect.objectContaining({ method: "POST", body: JSON.stringify({}) }),
     });
     await aiEnrich(TICKET_ID);
     expect(lastCall(fetchMock)).toMatchObject({
       url: `/api/tickets/${TICKET_ID}/ai/enrich`,
-      init: expect.objectContaining({ method: "POST" }),
+      init: expect.objectContaining({ method: "POST", body: JSON.stringify({}) }),
     });
+  });
+
+  it("POSTs the selected provider and model overrides", async () => {
+    const fetchMock = stubFetch();
+    await aiFill(TICKET_ID, { provider: "OPENAI", model: "gpt-4o" });
+    expect(lastCall(fetchMock).init.body).toBe(
+      JSON.stringify({ provider: "OPENAI", model: "gpt-4o" }),
+    );
+    await aiEnrich(TICKET_ID, { provider: "GEMINI" });
+    expect(lastCall(fetchMock).init.body).toBe(JSON.stringify({ provider: "GEMINI" }));
   });
 
   it("GETs suggestions and POSTs accept/reject", async () => {

@@ -45,6 +45,16 @@ export type IocType = (typeof IOC_TYPES)[number];
 export const SUGGESTION_STATUSES = ["PENDING", "ACCEPTED", "REJECTED"] as const;
 export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
 
+/** AI providers that accept per-run overrides on ai/fill and ai/enrich. */
+export const AI_PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI"] as const;
+export type AiProviderKind = (typeof AI_PROVIDERS)[number];
+
+/** Optional provider/model overrides for the AI run endpoints. */
+export interface AiRunBody {
+  provider?: AiProviderKind;
+  model?: string;
+}
+
 export const CHANNEL_TYPES = ["WHATSAPP", "TELEGRAM", "EMAIL"] as const;
 export type ChannelType = (typeof CHANNEL_TYPES)[number];
 
@@ -131,6 +141,8 @@ export interface AiSuggestion {
   currentValue: string | null;
   suggestedValue: string;
   status: SuggestionStatus;
+  /** Provider that produced the suggestion; null = server default ("Auto"). */
+  provider: string | null;
   model: string | null;
   createdAt: string;
   updatedAt: string;

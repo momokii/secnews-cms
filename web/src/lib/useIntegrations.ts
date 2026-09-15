@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getIntegrationConfig,
+  listAvailableIntegrations,
   putIntegrationConfig,
   testIntegration,
   type IntegrationKind,
@@ -13,6 +14,13 @@ export function integrationQueryKey(
   kind: IntegrationKind,
 ): readonly ["integrations", IntegrationKind] {
   return ["integrations", kind];
+}
+
+export function useAvailableIntegrations() {
+  return useQuery({
+    queryKey: ["integrations", "available"] as const,
+    queryFn: listAvailableIntegrations,
+  });
 }
 
 export function useIntegrationConfig(kind: IntegrationKind) {

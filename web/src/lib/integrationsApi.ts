@@ -15,6 +15,13 @@ export interface IntegrationConfigResponse {
   updatedAt: string;
 }
 
+/** Row of GET /integrations/available — configured kinds with default model. */
+export interface AvailableIntegration {
+  kind: IntegrationKind;
+  model: string | null;
+  hasKey: boolean;
+}
+
 /** Body for PUT /integrations/:kind — apiKey required (contract #38); OTX
  * callers must omit model (route 422s otherwise). */
 export interface PutIntegrationConfigBody {
@@ -33,6 +40,11 @@ export async function getIntegrationConfig(
 ): Promise<IntegrationConfigResponse> {
   const response = await apiFetch(`/integrations/${kind}`, { method: "GET" });
   return (await response.json()) as IntegrationConfigResponse;
+}
+
+export async function listAvailableIntegrations(): Promise<AvailableIntegration[]> {
+  const response = await apiFetch("/integrations/available", { method: "GET" });
+  return (await response.json()) as AvailableIntegration[];
 }
 
 export async function putIntegrationConfig(

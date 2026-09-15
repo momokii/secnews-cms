@@ -52,6 +52,11 @@ function detailRoutes(detail = ticketDetailFixture()) {
     },
     {
       match: (url: string, method: string) =>
+        method === "GET" && url.endsWith("/integrations/available"),
+      respond: () => jsonResponse([]),
+    },
+    {
+      match: (url: string, method: string) =>
         method === "GET" && url.includes("/delivery-audit"),
       respond: () => jsonResponse(paginated([auditFixture()])),
     },

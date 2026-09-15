@@ -59,6 +59,42 @@ function displayFieldValue(value: string | null): string {
   return value === null || value === "" ? EMPTY_VALUE_LABEL : value;
 }
 
+interface SuggestionDecision {
+  field: string;
+  value: string;
+  decision: string;
+}
+
+/** Wire detail for SUGGESTION_ACCEPTED/REJECTED is JSON
+ * `{"field":…,"value":…,"decision":…}`; any other shape fails the parse and
+ * falls back verbatim. */
+function parseSuggestionDecision(detail: string): SuggestionDecision | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(detail);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return null;
+  }
+  const record = parsed as Record<string, unknown>;
+  if (
+    typeof record.field !== "string" ||
+    typeof record.value !== "string" ||
+    typeof record.decision !== "string"
+  ) {
+    return null;
+  }
+  return { field: record.field, value: record.value, decision: record.decision };
+}
+
+function decisionLabel(decision: string): string {
+  if (decision === "ACCEPTED") return "accepted";
+  if (decision === "REJECTED") return "rejected";
+  return decision.toLowerCase();
+}
+
 function truncateForDisplay(text: string): string {
   return text.length > FIELD_VALUE_DISPLAY_LIMIT
     ? `${text.slice(0, FIELD_VALUE_DISPLAY_LIMIT)}…`
@@ -137,6 +173,20 @@ function ActivityDetail({
         <span className="text-slate-500">previous values are not recorded</span>
       </p>
     );
+  }
+  if (entry.action === "SUGGESTION_ACCEPTED" || entry.action === "SUGGESTION_REJECTED") {
+    const decision = parseSuggestionDecision(entry.detail);
+    if (decision !== null) {
+      return (
+        <p className="mt-1 text-xs text-slate-600">
+          <span className="font-medium text-slate-700">{decision.field}: </span>
+          <span title={decision.value}>{truncateForDisplay(decision.value)}</span>
+          {" — "}
+          <span>{decisionLabel(decision.decision)}</span>
+        </p>
+      );
+    }
+    return <p className="mt-1 text-xs text-slate-600">{entry.detail}</p>;
   }
   if (entry.action === "OTX_PUSHED") {
     const { pulseId: entryPulseId, updated } = splitOtxDetail(entry.detail);

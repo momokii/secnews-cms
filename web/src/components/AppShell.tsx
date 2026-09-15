@@ -1,8 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
+import {
+  decodeTokenExp,
+  formatSessionCountdown,
+} from "../lib/sessionCountdown";
 import { clearToken, useSession } from "../lib/tokenStore";
 
 const NAV_COLLAPSED_KEY = "secnews_nav_collapsed";
+const SESSION_REFRESH_MS = 30_000;
 
 const GUEST_ITEMS = [
   { to: "/login", label: "Login" },
@@ -85,6 +90,31 @@ function initialsOf(name: string): string {
 const avatarClass =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold uppercase text-white";
 
+function useTicker(intervalMs: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => window.clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
+/** "Session <Mm> left" from the token's exp claim, refreshed every 30s; red
+ * under two minutes, "expired" at zero (the next API call 401-logs out). */
+function SessionCountdown({ token }: { token: string }) {
+  const now = useTicker(SESSION_REFRESH_MS);
+  const exp = decodeTokenExp(token);
+  if (exp === null) return null;
+  const countdown = formatSessionCountdown(exp, now);
+  return (
+    <p
+      className={`mt-1 text-xs ${countdown.warning ? "text-red-400" : "text-slate-400"}`}
+    >
+      {countdown.text}
+    </p>
+  );
+}
+
 /** App layout: dark sidebar rail whose user block and nav follow the live
  * session; the rail collapses to an icon-only strip persisted in localStorage. */
 export function AppShell() {
@@ -166,6 +196,7 @@ export function AppShell() {
                   <span className="mt-0.5 inline-block rounded-md bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">
                     {user.role}
                   </span>
+                  {token !== null ? <SessionCountdown token={token} /> : null}
                 </div>
               )}
             </div>

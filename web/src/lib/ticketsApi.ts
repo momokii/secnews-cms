@@ -1,5 +1,6 @@
 import { apiFetch } from "./api";
 import {
+  type AiRunBody,
   type AiSuggestion,
   type CreateIocBody,
   type CreateTicketBody,
@@ -24,12 +25,15 @@ export {
   FINDING_TYPES,
   IOC_TYPES,
   SUGGESTION_STATUSES,
+  AI_PROVIDERS,
   CHANNEL_TYPES,
   TICKET_ORIGINS,
   TICKET_STATUSES,
   TLP_LEVELS,
 } from "./ticketsTypes";
 export type {
+  AiProviderKind,
+  AiRunBody,
   AiSuggestion,
   ChannelType,
   CreateIocBody,
@@ -166,15 +170,22 @@ export async function deleteIoc(id: string, iocId: string): Promise<void> {
 
 // ---- AI assist (#32-36) ----
 
-/** Strict fill: suggests ONLY missing final fields. */
-export async function aiFill(id: string): Promise<{ suggestions: AiSuggestion[] }> {
-  const response = await apiFetch(`/tickets/${id}/ai/fill`, jsonInit("POST", {}));
+/** Strict fill: suggests ONLY missing final fields. Body carries optional
+ * provider/model overrides (TASK-UIC2); empty object = server default. */
+export async function aiFill(
+  id: string,
+  body: AiRunBody = {},
+): Promise<{ suggestions: AiSuggestion[] }> {
+  const response = await apiFetch(`/tickets/${id}/ai/fill`, jsonInit("POST", body));
   return readJson(response);
 }
 
-/** Enrich: full rewrite proposals. */
-export async function aiEnrich(id: string): Promise<{ suggestions: AiSuggestion[] }> {
-  const response = await apiFetch(`/tickets/${id}/ai/enrich`, jsonInit("POST", {}));
+/** Enrich: full rewrite proposals. Same optional provider/model overrides. */
+export async function aiEnrich(
+  id: string,
+  body: AiRunBody = {},
+): Promise<{ suggestions: AiSuggestion[] }> {
+  const response = await apiFetch(`/tickets/${id}/ai/enrich`, jsonInit("POST", body));
   return readJson(response);
 }
 

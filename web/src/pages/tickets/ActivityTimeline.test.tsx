@@ -193,4 +193,51 @@ describe("TASK-UIB: activity detail rendering", () => {
     expect(screen.getByText(OTX_PULSE_ID)).toBeTruthy();
     expect(screen.queryByRole("link", { name: "View on OTX" })).toBeNull();
   });
+
+  it("renders suggestion accept/reject decisions from the detail JSON", async () => {
+    // Given: a SUGGESTION_ACCEPTED row whose detail is {field, value, decision}
+    setToken("test-token");
+    stubActivity({
+      action: "SUGGESTION_ACCEPTED",
+      detail: JSON.stringify({
+        field: "overview",
+        value: "Attackers exploit CVE-2026-1234.",
+        decision: "ACCEPTED",
+      }),
+    });
+
+    // When: the timeline renders the entry
+    renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
+
+    // Then: field, merged value and decision render without raw JSON
+    expect(await screen.findByText("overview:")).toBeTruthy();
+    expect(screen.getByText("Attackers exploit CVE-2026-1234.")).toBeTruthy();
+    expect(screen.getByText("accepted")).toBeTruthy();
+    expect(screen.queryByText(/\{"field"/)).toBeNull();
+  });
+
+  it("renders a rejected decision with the rejected value", async () => {
+    setToken("test-token");
+    stubActivity({
+      action: "SUGGESTION_REJECTED",
+      detail: JSON.stringify({
+        field: "description",
+        value: "Speculative vendor blame.",
+        decision: "REJECTED",
+      }),
+    });
+    renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
+
+    expect(await screen.findByText("description:")).toBeTruthy();
+    expect(screen.getByText("Speculative vendor blame.")).toBeTruthy();
+    expect(screen.getByText("rejected")).toBeTruthy();
+  });
+
+  it("renders suggestion rows with unparseable details verbatim", async () => {
+    setToken("test-token");
+    stubActivity({ action: "SUGGESTION_ACCEPTED", detail: "legacy freeform note" });
+    renderWithProviders(<ActivityTimeline ticketId={TICKET_ID} />);
+
+    expect(await screen.findByText("legacy freeform note")).toBeTruthy();
+  });
 });

@@ -65,6 +65,7 @@ export function suggestionFixture(
     currentValue: null,
     suggestedValue: "Attackers exploit CVE-2026-1234 via crafted certs.",
     status: "PENDING",
+    provider: null,
     model: "gemini",
     createdAt: "2026-09-14T08:00:00.000Z",
     updatedAt: "2026-09-14T08:00:00.000Z",
@@ -125,7 +126,7 @@ export function activityFixture(
 export function routeFetch(
   routes: Array<{
     match: (url: string, method: string) => boolean;
-    respond: () => Response;
+    respond: () => Response | Promise<Response>;
   }>,
 ): ReturnType<typeof vi.fn> {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

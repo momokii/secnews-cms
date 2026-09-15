@@ -24,6 +24,7 @@ import {
   sendTicket,
   transitionTicket,
   updateIoc,
+  type AiRunBody,
   type CreateIocBody,
   type CreateTicketBody,
   type OtxPushResponse,
@@ -177,9 +178,9 @@ export function useRejectSuggestion() {
 function useAiRun(path: "ai/fill" | "ai/enrich") {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      path === "ai/fill" ? aiFill(id) : aiEnrich(id),
-    onSuccess: (_data, id) => {
+    mutationFn: ({ id, body }: { id: string; body: AiRunBody }) =>
+      path === "ai/fill" ? aiFill(id, body) : aiEnrich(id, body),
+    onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ["ticket", id] });
       void queryClient.invalidateQueries({ queryKey: ["suggestions", id] });
       void queryClient.invalidateQueries({ queryKey: ["ticket-activity", id] });
