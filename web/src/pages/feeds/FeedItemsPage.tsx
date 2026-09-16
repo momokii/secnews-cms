@@ -10,6 +10,7 @@ import {
   useTakeFeedItem,
   useViewFeedItem,
 } from "../../lib/useFeeds";
+import { ExportButton } from "../../components/ExportButton";
 import { FeedItemDetailModal } from "./FeedItemDetailModal";
 
 const STATUS_TABS = ["UNREVIEWED", "VIEWED", "TAKEN"] as const satisfies readonly FeedItemStatus[];
@@ -71,14 +72,17 @@ export function FeedItemsPage() {
     <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-lg font-semibold text-slate-900">Feed items</h1>
-        <input
-          aria-label="Search"
-          type="search"
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          placeholder="Search title / URL"
-          className="w-64 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
-        />
+        <div className="flex items-center gap-2">
+          <ExportButton type="feed" />
+          <input
+            aria-label="Search"
+            type="search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search title / URL"
+            className="w-64 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
+          />
+        </div>
       </div>
 
       <DateFilter

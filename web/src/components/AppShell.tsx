@@ -20,6 +20,8 @@ const MGR_ITEMS = [
 ] as const;
 
 const MEMBER_ITEMS = [
+  { to: "/dashboard", label: "Dashboard" },
+  { to: "/reports", label: "Reports" },
   { to: "/feeds/items", label: "Feed items" },
   { to: "/tickets", label: "Tickets" },
   { to: "/clients", label: "Clients" },
@@ -42,6 +44,8 @@ const NAV_ICONS: Readonly<Record<string, string>> = {
   "/feeds": "M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16M6 20a2 2 0 1 0-4 0 2 2 0 0 0 4 0",
   "/feeds/items": "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
   "/tickets": "M2 9a3 3 0 0 1 0 6v3a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-3a3 3 0 0 1 0-6V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2ZM13 5v2M13 17v2M13 11v2",
+  "/dashboard": "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
+  "/reports": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8ZM14 2v6h6M10 13H8M16 17H8M10 9H8",
   "/clients": "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
   "/bulletin": "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7ZM14 2v5h5M16 13H8M16 17H8M10 9H8",
   "/otx": "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10",

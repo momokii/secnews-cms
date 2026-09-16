@@ -12,6 +12,7 @@ import {
 } from "../../lib/ticketsApi";
 import { useTickets } from "../../lib/useTickets";
 import { formatTimestamp, type DateRange } from "../../lib/datetime";
+import { ExportButton } from "../../components/ExportButton";
 import { CreateTicketDialog } from "./CreateTicketDialog";
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -68,6 +69,7 @@ export function TicketsListPage() {
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-lg font-semibold text-slate-900">Tickets</h1>
         <div className="flex items-center gap-2">
+          <ExportButton type="ticket" />
           <input
             aria-label="Search tickets"
             type="search"

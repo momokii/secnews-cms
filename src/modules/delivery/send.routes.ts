@@ -36,7 +36,9 @@ type TargetChannel = Channel & { client: { name: string } };
 
 type AuditRow = DeliveryAudit & { channel: TargetChannel };
 
-function toDeliveryAuditWire(row: AuditRow): DeliveryAuditWire {
+/** Shared with the export data layer so exports serialize the exact
+ * compliance shape the delivery-audit endpoint returns. */
+export function toDeliveryAuditWire(row: AuditRow): DeliveryAuditWire {
   return {
     id: row.id,
     ticketId: row.ticketId,

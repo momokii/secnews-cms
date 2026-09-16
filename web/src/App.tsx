@@ -6,6 +6,7 @@ import { RoleGate } from "./components/RoleGate";
 import { BootstrapPage } from "./pages/BootstrapPage";
 import { BulletinPage } from "./pages/BulletinPage";
 import { ClientsPage } from "./pages/ClientsPage";
+import { DashboardPage } from "./pages/DashboardPage";
 import { EmailTemplatePage } from "./pages/EmailTemplatePage";
 import { FeedItemsPage } from "./pages/feeds/FeedItemsPage";
 import { FeedSourcesPage } from "./pages/feeds/FeedSourcesPage";
@@ -13,6 +14,7 @@ import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OtxPulsesPage } from "./pages/otx/OtxPulsesPage";
 import { PromptsPage } from "./pages/PromptsPage";
+import { ReportsPage } from "./pages/ReportsPage";
 import { TicketDetailPage } from "./pages/tickets/TicketDetailPage";
 import { TicketsListPage } from "./pages/tickets/TicketsListPage";
 import { UsersPage } from "./pages/UsersPage";
@@ -53,6 +55,22 @@ export function App() {
             element={
               <RoleGate roles={["admin"]}>
                 <IntegrationsPage />
+              </RoleGate>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <RoleGate roles={["admin", "editor", "analyst"]}>
+                <DashboardPage />
+              </RoleGate>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <RoleGate roles={["admin", "editor", "analyst"]}>
+                <ReportsPage />
               </RoleGate>
             }
           />
