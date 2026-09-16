@@ -84,11 +84,11 @@ export function SourceModal({ open, mode, initial, busy, error, onClose, onSave 
           <span className="text-xs text-slate-500">Notes</span>
           <textarea
             aria-label="Notes"
-            rows={5}
+            rows={8}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             placeholder="What did you learn from this source?"
-            className={inputClass}
+            className={`${inputClass} resize-y min-h-44`}
           />
         </label>
         {error !== null ? (

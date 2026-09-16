@@ -296,6 +296,19 @@ model BulletinTemplate {
   updatedAt DateTime @updatedAt
 }
 
+// HTML email template for EMAIL-channel deliveries. Single org-wide row pinned
+// to name "default" (same pattern as BulletinTemplate); until an ADMIN stores
+// one, senders fall back to the built-in default in
+// src/modules/email-template/render.ts.
+model EmailTemplate {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  subject   String
+  htmlBody  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // TASK-PROMPT: ADMIN-managed AI prompt template per flow. `kind` is unique —
 // exactly one row per FILL/ENRICH. Seeded by migration with security-intelligence
 // drafting defaults; a missing row falls back to the built-in

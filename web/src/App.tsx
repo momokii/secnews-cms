@@ -6,6 +6,7 @@ import { RoleGate } from "./components/RoleGate";
 import { BootstrapPage } from "./pages/BootstrapPage";
 import { BulletinPage } from "./pages/BulletinPage";
 import { ClientsPage } from "./pages/ClientsPage";
+import { EmailTemplatePage } from "./pages/EmailTemplatePage";
 import { FeedItemsPage } from "./pages/feeds/FeedItemsPage";
 import { FeedSourcesPage } from "./pages/feeds/FeedSourcesPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
@@ -62,6 +63,14 @@ export function App() {
             element={
               <RoleGate roles={["admin", "editor", "analyst"]}>
                 <OtxPulsesPage />
+              </RoleGate>
+            }
+          />
+          <Route
+            path="/email-template"
+            element={
+              <RoleGate roles={["admin"]}>
+                <EmailTemplatePage />
               </RoleGate>
             }
           />

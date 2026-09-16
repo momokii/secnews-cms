@@ -9,6 +9,15 @@ import { sendWhatsApp } from "./senders/waha.js";
  * the env-configured WAHA gateway, Telegram the stored decrypted bot token,
  * EMAIL the central SMTP relay with the channel's BCC list. */
 
+/** One message routed to its targets. `email` overrides subject/html for
+ * EMAIL channels only (rendered org-wide HTML template); chat channels and
+ * the plain-text alternative always use subject/text. */
+export type OutgoingMessage = {
+  subject: string;
+  text: string;
+  email?: { subject: string; html: string };
+};
+
 /** Human-audit destination summary: chatId, or the BCC list joined. */
 export function channelTargetSummary(row: Channel): string {
   const decoded = decodeChannelTarget(row);
@@ -21,18 +30,21 @@ export function channelTargetSummary(row: Channel): string {
   }
 }
 
-export async function deliverToChannel(
-  row: Channel,
-  subject: string,
-  payload: string,
-): Promise<void> {
+export async function deliverToChannel(row: Channel, message: OutgoingMessage): Promise<void> {
   const decoded = decodeChannelTarget(row);
   switch (decoded.type) {
     case "WHATSAPP":
-      return sendWhatsApp({ chatId: decoded.chatId, text: payload });
+      return sendWhatsApp({ chatId: decoded.chatId, text: message.text });
     case "TELEGRAM":
-      return sendTelegram({ token: decoded.token, chatId: decoded.chatId, text: payload });
-    case "EMAIL":
-      return sendEmail({ bcc: decoded.bcc, subject, text: payload });
+      return sendTelegram({ token: decoded.token, chatId: decoded.chatId, text: message.text });
+    case "EMAIL": {
+      const email = message.email;
+      return sendEmail({
+        bcc: decoded.bcc,
+        subject: email?.subject ?? message.subject,
+        text: message.text,
+        ...(email === undefined ? {} : { html: email.html }),
+      });
+    }
   }
 }

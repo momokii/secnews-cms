@@ -156,10 +156,11 @@ export function useDeleteIoc() {
 
 // ---- AI assist ----
 
-export function useSuggestions(id: string, status?: SuggestionStatus) {
+export function useSuggestions(id: string, status?: SuggestionStatus, page = 1, pageSize = 5) {
   return useQuery({
-    queryKey: ["suggestions", id, status ?? null],
-    queryFn: () => listSuggestions(id, status),
+    queryKey: ["suggestions", id, status ?? null, page, pageSize],
+    queryFn: () => listSuggestions(id, status, page, pageSize),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -243,10 +244,10 @@ export function useSendTicket() {
   });
 }
 
-export function useDeliveryAudit(id: string, page: number) {
+export function useDeliveryAudit(id: string, page: number, pageSize: number) {
   return useQuery({
-    queryKey: ["delivery-audit", id, page],
-    queryFn: () => listDeliveryAudit(id, page),
+    queryKey: ["delivery-audit", id, page, pageSize],
+    queryFn: () => listDeliveryAudit(id, page, pageSize),
     placeholderData: keepPreviousData,
   });
 }

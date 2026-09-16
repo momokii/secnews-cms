@@ -98,7 +98,7 @@ export function missingPreviewFields(data: BulletinData): RequiredPreviewField[]
 }
 
 /** "- TYPE defanged-value" lines for the included IOCs, in input order. */
-function renderIocBlock(iocs: BulletinIoc[]): string {
+export function renderIocBlock(iocs: BulletinIoc[]): string {
   return iocs
     .filter((ioc) => ioc.includeInBulletin)
     .map((ioc) => `- ${ioc.type} ${defangIoc(ioc.type, ioc.value)}`)

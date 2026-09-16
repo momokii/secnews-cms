@@ -685,3 +685,125 @@ describe("TASK-UIFE: DeepSeek picker option", () => {
     expect(names).toEqual(["Auto (first configured)", "DEEPSEEK"]);
   });
 });
+
+describe("TASK-UXT: suggestion pagination", () => {
+  function suggestionListRoutes(total = 12): Array<{
+    match: (url: string, method: string) => boolean;
+    respond: () => Response;
+  }> {
+    return [
+      {
+        match: (url, method) =>
+          method === "GET" && url.startsWith(`/api/tickets/${TICKET_ID}/suggestions`),
+        respond: () => jsonResponse({ ...paginated([suggestionFixture()]), total }),
+      },
+      availableResponder(),
+    ];
+  }
+
+  it("fetches suggestions server-paginated at 5 per page by default", async () => {
+    // Given: a ticket with 12 suggestions on the server
+    setToken("test-token");
+    const fetchMock = routeFetch(suggestionListRoutes());
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={0} blocked={false} />,
+    );
+
+    // When: the suggestion list loads
+    await screen.findByText("overview", { ignore: "option" });
+
+    // Then: the first request asks for page 1 at pageSize 5
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/tickets/${TICKET_ID}/suggestions?page=1&pageSize=5`),
+      expect.anything(),
+    );
+    expect(screen.getByText("Page 1 of 3 — 12 suggestions")).toBeTruthy();
+  });
+
+  it("requests the next server page when Next is clicked", async () => {
+    setToken("test-token");
+    const fetchMock = routeFetch(suggestionListRoutes());
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={0} blocked={false} />,
+    );
+    await screen.findByText("overview", { ignore: "option" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining(`/tickets/${TICKET_ID}/suggestions?page=2`),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("honors the per-page selector and restarts at page 1", async () => {
+    // Given: the list is paged to page 2 at 5 per page
+    setToken("test-token");
+    const fetchMock = routeFetch(suggestionListRoutes());
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={0} blocked={false} />,
+    );
+    await screen.findByText("overview", { ignore: "option" });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/suggestions?page=2&pageSize=5"),
+        expect.anything(),
+      ),
+    );
+
+    // When: the page size changes to 10
+    fireEvent.change(screen.getByLabelText("Items per page"), {
+      target: { value: "10" },
+    });
+
+    // Then: the refetch restarts at page 1 with pageSize 10
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/suggestions?page=1&pageSize=10"),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("keeps Accept working on rows from any page", async () => {
+    // Given: the list shows a pending suggestion on page 2
+    setToken("test-token");
+    const fetchMock = routeFetch([
+      ...suggestionListRoutes(),
+      {
+        match: (url, method) =>
+          method === "POST" && url.endsWith("/accept"),
+        respond: () => jsonResponse({ suggestion: suggestionFixture({ status: "ACCEPTED" }) }),
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(
+      <AiPanel ticketId={TICKET_ID} pendingSuggestions={1} blocked={false} />,
+    );
+    await screen.findByText("overview", { ignore: "option" });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/suggestions?page=2&pageSize=5"),
+        expect.anything(),
+      ),
+    );
+
+    // When: Accept is clicked on the page-2 row
+    fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
+
+    // Then: the accept POST fires for that suggestion
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/tickets/${TICKET_ID}/suggestions/${suggestionFixture().id}/accept`,
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+  });
+});

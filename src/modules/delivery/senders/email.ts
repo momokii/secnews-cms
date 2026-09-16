@@ -15,6 +15,7 @@ export type MailMessage = {
   bcc: string[];
   subject: string;
   text: string;
+  html?: string;
 };
 
 export type MailTransport = {
@@ -25,6 +26,7 @@ export type EmailSendOptions = {
   bcc: string[];
   subject: string;
   text: string;
+  html?: string;
   from?: string;
   transport?: MailTransport;
 };
@@ -79,5 +81,6 @@ export async function sendEmail(options: EmailSendOptions): Promise<void> {
     bcc: options.bcc,
     subject: options.subject,
     text: options.text,
+    ...(options.html === undefined ? {} : { html: options.html }),
   });
 }

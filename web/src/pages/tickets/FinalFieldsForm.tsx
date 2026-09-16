@@ -70,30 +70,30 @@ export function FinalFieldsForm({ ticket }: FinalFieldsFormProps) {
           <span className="text-xs text-slate-500">Overview</span>
           <textarea
             aria-label="Overview"
-            rows={3}
+            rows={8}
             value={overview}
             onChange={(event) => setOverview(event.target.value)}
-            className={inputClass}
+            className={`${inputClass} resize-y min-h-44`}
           />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs text-slate-500">Description</span>
           <textarea
             aria-label="Description"
-            rows={4}
+            rows={12}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            className={inputClass}
+            className={`${inputClass} resize-y min-h-64`}
           />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs text-slate-500">Recommendations</span>
           <textarea
             aria-label="Recommendations"
-            rows={3}
+            rows={8}
             value={recommendations}
             onChange={(event) => setRecommendations(event.target.value)}
-            className={inputClass}
+            className={`${inputClass} resize-y min-h-44`}
           />
         </label>
         <label className="flex flex-col gap-1">

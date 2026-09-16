@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { Pagination } from "../../components/Pagination";
 import {
   useAddTicketSource,
   useDeleteTicketSource,
@@ -7,10 +8,29 @@ import {
 } from "../../lib/useTickets";
 import type { TicketSource } from "../../lib/ticketsApi";
 import { SourceModal, type SourceFormValues } from "./SourceModal";
+import { SourceRowContent } from "./SourceRow";
 
 const SOURCES_TOOLTIP =
   "Working materials — links, docs, or references the analyst used; add what you learned from each source in Notes";
-const NOTES_PREVIEW_LIMIT = 120;
+const SOURCES_PAGE_SIZES = [5, 10, 20] as const;
+const DEFAULT_PAGE_SIZE = 5;
+const SEARCH_DEBOUNCE_MS = 300;
+
+/** Delays propagating value until it has settled for delayMs. */
+function useDebouncedValue(value: string, delayMs: number): string {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
+
+function matchesSearch(source: TicketSource, needle: string): boolean {
+  const title = (source.title ?? "").toLowerCase();
+  const url = (source.url ?? "").toLowerCase();
+  return title.includes(needle) || url.includes(needle);
+}
 
 interface SourcesEditorProps {
   ticketId: string;
@@ -21,13 +41,33 @@ type ModalState = { mode: "add" } | { mode: "edit"; source: TicketSource } | nul
 
 /** Research-notebook view of a ticket's working sources: each row is a card
  * with an optional title label, optional URL link, and expandable analyst
- * notes. Add/Edit share one modal; delete asks for confirmation. */
+ * notes. Client-side search (title or url, debounced) and pagination at 5
+ * per page over the fetched source list. Add/Edit share one modal; delete
+ * asks for confirmation. */
 export function SourcesEditor({ ticketId, sources }: SourcesEditorProps) {
   const [modal, setModal] = useState<ModalState>(null);
   const [pendingDelete, setPendingDelete] = useState<TicketSource | null>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
   const addSource = useAddTicketSource();
   const updateSource = useUpdateTicketSource();
   const deleteSource = useDeleteTicketSource();
+
+  const needle = debouncedSearch.trim().toLowerCase();
+  const filtered =
+    needle === ""
+      ? sources
+      : sources.filter((source) => matchesSearch(source, needle));
+  const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  // A new search term always restarts at page 1 (adjust state during render).
+  const [prevNeedle, setPrevNeedle] = useState(needle);
+  if (needle !== prevNeedle) {
+    setPrevNeedle(needle);
+    setPage(1);
+  }
 
   const editing = modal?.mode === "edit" ? modal.source : null;
 
@@ -109,34 +149,68 @@ export function SourcesEditor({ ticketId, sources }: SourcesEditorProps) {
       {sources.length === 0 ? (
         <p className="mt-2 text-sm text-slate-500">No sources yet.</p>
       ) : (
-        <ul className="mt-3 flex flex-col gap-3">
-          {sources.map((source) => (
-            <li
-              key={source.id}
-              className="flex items-start justify-between gap-4 rounded-lg border border-slate-200 p-3"
-            >
-              <SourceRowContent source={source} />
-              <span className="flex shrink-0 gap-2">
-                <button
-                  type="button"
-                  aria-label="Edit source"
-                  onClick={() => setModal({ mode: "edit", source })}
-                  className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  aria-label="Delete source"
-                  onClick={() => setPendingDelete(source)}
-                  className="rounded-md border border-slate-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                >
-                  Delete
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <label className="mt-3 flex flex-col gap-1 text-xs text-slate-500">
+            Search
+            <input
+              aria-label="Search sources"
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Filter by title or url"
+              className="max-w-xs rounded-md border border-slate-200 px-2 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
+            />
+          </label>
+          {filtered.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-500">
+              No sources match “{debouncedSearch.trim()}”.
+            </p>
+          ) : (
+            <>
+              <ul className="mt-3 flex flex-col gap-3">
+                {pageItems.map((source) => (
+                  <li
+                    key={source.id}
+                    className="flex items-start justify-between gap-4 rounded-lg border border-slate-200 p-3"
+                  >
+                    <SourceRowContent source={source} />
+                    <span className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        aria-label="Edit source"
+                        onClick={() => setModal({ mode: "edit", source })}
+                        className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Delete source"
+                        onClick={() => setPendingDelete(source)}
+                        className="rounded-md border border-slate-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Pagination
+                page={page}
+                pageSize={pageSize}
+                total={filtered.length}
+                itemLabel="sources"
+                itemLabelOne="source"
+                options={SOURCES_PAGE_SIZES}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+              />
+            </>
+          )}
+        </>
       )}
 
       <SourceModal
@@ -164,67 +238,6 @@ export function SourcesEditor({ ticketId, sources }: SourcesEditorProps) {
         busy={deleteSource.isPending}
       />
     </section>
-  );
-}
-
-/** Card body: title label (or url, or an untitled fallback), optional link,
- * and the notes preview with expand/collapse. */
-function SourceRowContent({ source }: { source: TicketSource }) {
-  const notes = source.notes ?? source.note;
-  return (
-    <span className="flex min-w-0 flex-col gap-1">
-      {source.title !== null ? (
-        <span className="text-sm font-medium text-slate-900">{source.title}</span>
-      ) : source.url === null ? (
-        <span className="text-sm italic text-slate-500">Untitled source</span>
-      ) : null}
-      {source.url !== null ? (
-        <a
-          href={source.url}
-          target="_blank"
-          rel="noreferrer"
-          className="break-all text-sm text-indigo-600 hover:text-indigo-500"
-        >
-          {source.url}
-        </a>
-      ) : null}
-      {notes !== null && notes !== "" ? <NotesPreview text={notes} /> : null}
-    </span>
-  );
-}
-
-function NotesPreview({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
-  if (text.length <= NOTES_PREVIEW_LIMIT) {
-    return <span className="whitespace-pre-wrap text-sm text-slate-700">{text}</span>;
-  }
-  if (expanded) {
-    return (
-      <>
-        <span className="whitespace-pre-wrap text-sm text-slate-700">{text}</span>
-        <button
-          type="button"
-          onClick={() => setExpanded(false)}
-          className="self-start text-xs text-indigo-600 hover:text-indigo-500"
-        >
-          Show less
-        </button>
-      </>
-    );
-  }
-  return (
-    <>
-      <span className="whitespace-pre-wrap text-sm text-slate-700">
-        {text.slice(0, NOTES_PREVIEW_LIMIT)}
-      </span>
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        className="self-start text-xs text-indigo-600 hover:text-indigo-500"
-      >
-        Show more
-      </button>
-    </>
   );
 }
 

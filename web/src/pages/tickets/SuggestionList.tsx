@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { Pagination } from "../../components/Pagination";
 import { formatTimestamp } from "../../lib/datetime";
 import type { AiSuggestion } from "../../lib/ticketsApi";
 import {
@@ -8,6 +9,9 @@ import {
   useRejectSuggestion,
   useSuggestions,
 } from "../../lib/useTickets";
+
+const SUGGESTION_PAGE_SIZES = [5, 10, 20] as const;
+const DEFAULT_PAGE_SIZE = 5;
 
 const DELETE_TOOLTIP =
   "The merged field values remain on the ticket; only the suggestion record is removed.";
@@ -55,15 +59,19 @@ function deleteMessage(suggestion: AiSuggestion): string {
 }
 
 /** Suggestion review list: PENDING badges, accept/reject, and delete on any
- * status via the shared ConfirmDialog. Owns its suggestions query. */
+ * status via the shared ConfirmDialog. Server-paginated at 5 per page
+ * (5/10/20 selectable). Owns its suggestions query. */
 export function SuggestionList({ ticketId }: { ticketId: string }) {
-  const suggestionsQuery = useSuggestions(ticketId);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const suggestionsQuery = useSuggestions(ticketId, undefined, page, pageSize);
   const accept = useAcceptSuggestion();
   const reject = useRejectSuggestion();
   const remove = useDeleteSuggestion();
   const [deleteTarget, setDeleteTarget] = useState<AiSuggestion | null>(null);
 
   const suggestions = suggestionsQuery.data?.items ?? [];
+  const total = suggestionsQuery.data?.total ?? 0;
   const busy = accept.isPending || reject.isPending || remove.isPending;
 
   return (
@@ -136,6 +144,21 @@ export function SuggestionList({ ticketId }: { ticketId: string }) {
           ))}
         </ul>
       )}
+      {suggestions.length > 0 ? (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          disabled={suggestionsQuery.isPlaceholderData}
+          itemLabel="suggestions"
+          options={SUGGESTION_PAGE_SIZES}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={deleteTarget !== null}

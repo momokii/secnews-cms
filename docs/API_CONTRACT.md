@@ -321,6 +321,31 @@ envelope. All datetimes normalize timezone-less upstream values to ISO.
 
 ---
 
+## 9b. Surface 8b — HTML email template
+
+Schemas: `src/modules/email-template/schema.ts`. Placeholders: `{{title}}
+{{overview}} {{description}} {{recommendations}} {{references}} {{iocs}}
+{{tlp}} {{findingType}}` — `{{iocs}}` renders the defanged IOC block
+(`- TYPE defanged-value` lines, `includeInBulletin = true` only).
+Substituted values are HTML-escaped (newlines become `<br />`); unknown
+`{{...}}` text passes through untouched. The subject substitutes raw values
+(plain-text header). Single row `name="default"`, same pattern as the
+bulletin template; until an ADMIN stores one, GET serves the built-in
+default and EMAIL deliveries fall back to the plain bulletin payload.
+
+| # | Method + Path | Role | Request | Success | Errors |
+|---|---|---|---|---|---|
+| 57 | `GET /email-template` | ANY | — | 200 `EmailTemplateSchema` `{subject, htmlBody, updatedAt}` (built-in default when no row) | |
+| 58 | `PUT /email-template` | ADMIN | `{subject, htmlBody}` — subject 5-200 chars, htmlBody 10-20000 chars, htmlBody must contain ≥1 supported placeholder | 200 `EmailTemplateSchema` (upserted row) | 403 non-ADMIN; 400 `VALIDATION` length/placeholder violations |
+
+Delivery (#47) renders this template for EMAIL channels when the row
+exists: the mail carries the rendered `subject` + `html` with the rendered
+plain-text bulletin as the `text` alternative. No row → prior behavior
+(subject = ticket title, text-only). Audit payload (#48) stays the
+plain-text bulletin.
+
+---
+
 ## 10. Scenario error-path index
 
 | Scenario | Route | Expected |

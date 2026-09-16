@@ -122,3 +122,27 @@ describe("FE-FLD-01: final-fields form", () => {
     expect(await screen.findByText("Saved.")).toBeTruthy();
   });
 });
+
+describe("TASK-UXT: taller final-field editors", () => {
+  it("starts Overview, Description and Recommendations tall but resizable", () => {
+    // Given: the final-fields form renders with empty ticket fields
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch([]));
+    renderWithProviders(<FinalFieldsForm ticket={ticketDetailFixture()} />);
+
+    // When: the long-form textareas render
+    const overview = screen.getByLabelText("Overview") as HTMLTextAreaElement;
+    const description = screen.getByLabelText("Description") as HTMLTextAreaElement;
+    const recommendations = screen.getByLabelText(
+      "Recommendations",
+    ) as HTMLTextAreaElement;
+
+    // Then: rows are 8/12/8 and every editor is vertically resizable
+    expect(overview.rows).toBe(8);
+    expect(description.rows).toBe(12);
+    expect(recommendations.rows).toBe(8);
+    expect(overview.className).toContain("resize-y");
+    expect(description.className).toContain("resize-y");
+    expect(recommendations.className).toContain("resize-y");
+  });
+});

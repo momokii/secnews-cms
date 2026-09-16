@@ -8,6 +8,8 @@ interface PaginationProps {
   disabled?: boolean;
   /** Plural noun for the count line, e.g. "items", "tickets". */
   itemLabel: string;
+  /** Singular noun for the count line when total === 1; defaults to itemLabel. */
+  itemLabelOne?: string;
   /** Page-size choices; defaults to every shared option. */
   options?: readonly number[];
   onPageChange: (page: number) => void;
@@ -23,16 +25,18 @@ export function Pagination({
   total,
   disabled = false,
   itemLabel,
+  itemLabelOne,
   options = PAGE_SIZE_OPTIONS,
   onPageChange,
   onPageSizeChange,
 }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const label = total === 1 && itemLabelOne !== undefined ? itemLabelOne : itemLabel;
   return (
     <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
       <span className="flex items-center gap-3">
         <span>
-          Page {page} of {totalPages} — {total} {itemLabel}
+          Page {page} of {totalPages} — {total} {label}
         </span>
         <label className="flex items-center gap-1">
           <span>Per page</span>

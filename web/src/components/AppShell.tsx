@@ -29,6 +29,7 @@ const MEMBER_ITEMS = [
 
 const ADMIN_ITEMS = [
   { to: "/integrations", label: "Integrations" },
+  { to: "/email-template", label: "Email template" },
   { to: "/prompts", label: "Prompts" },
   { to: "/users", label: "Users" },
 ] as const;
@@ -45,6 +46,7 @@ const NAV_ICONS: Readonly<Record<string, string>> = {
   "/bulletin": "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7ZM14 2v5h5M16 13H8M16 17H8M10 9H8",
   "/otx": "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10",
   "/integrations": "M13 2 3 14h9l-1 8 10-12h-9l1-8z",
+  "/email-template": "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM22 6l-10 7L2 6",
   "/prompts": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8ZM14 2v6h6M10 13l-2 2 2 2M14 13l2 2-2 2",
   "/users": "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8",
   "/account": "M18 20a6 6 0 0 0-12 0M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",

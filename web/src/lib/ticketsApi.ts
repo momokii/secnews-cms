@@ -209,12 +209,13 @@ export async function listSuggestions(
   id: string,
   status?: SuggestionStatus,
   page = 1,
+  pageSize = 5,
 ): Promise<Paginated<AiSuggestion>> {
   const response = await apiFetch(
     `/tickets/${id}/suggestions${buildQuery({
       status,
       page,
-      pageSize: DEFAULT_PAGE_SIZE,
+      pageSize,
     })}`,
     { method: "GET" },
   );
@@ -263,9 +264,10 @@ export async function sendTicket(
 export async function listDeliveryAudit(
   id: string,
   page = 1,
+  pageSize = 5,
 ): Promise<Paginated<DeliveryAudit>> {
   const response = await apiFetch(
-    `/tickets/${id}/delivery-audit${buildQuery({ page, pageSize: DEFAULT_PAGE_SIZE })}`,
+    `/tickets/${id}/delivery-audit${buildQuery({ page, pageSize })}`,
     { method: "GET" },
   );
   return readJson<Paginated<DeliveryAudit>>(response);

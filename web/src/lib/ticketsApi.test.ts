@@ -177,10 +177,10 @@ describe("ticketsApi: AI suggestions", () => {
   it("GETs suggestions and POSTs accept/reject", async () => {
     const fetchMock = stubFetch();
     await listSuggestions(TICKET_ID);
-    expect(lastCall(fetchMock).url).toBe(`/api/tickets/${TICKET_ID}/suggestions?page=1&pageSize=20`);
+    expect(lastCall(fetchMock).url).toBe(`/api/tickets/${TICKET_ID}/suggestions?page=1&pageSize=5`);
     await listSuggestions(TICKET_ID, "PENDING");
     expect(lastCall(fetchMock).url).toBe(
-      `/api/tickets/${TICKET_ID}/suggestions?status=PENDING&page=1&pageSize=20`,
+      `/api/tickets/${TICKET_ID}/suggestions?status=PENDING&page=1&pageSize=5`,
     );
     const SUGGESTION_ID = "44444444-4444-4444-8444-444444444444";
     await acceptSuggestion(TICKET_ID, SUGGESTION_ID);
@@ -253,7 +253,7 @@ describe("ticketsApi: delivery", () => {
     const fetchMock = stubFetch();
     await listDeliveryAudit(TICKET_ID, 2);
     const { url, init } = lastCall(fetchMock);
-    expect(url).toBe(`/api/tickets/${TICKET_ID}/delivery-audit?page=2&pageSize=20`);
+    expect(url).toBe(`/api/tickets/${TICKET_ID}/delivery-audit?page=2&pageSize=5`);
     expect(init.method).toBe("GET");
   });
 });

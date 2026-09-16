@@ -4,6 +4,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { AppError } from "../../common/errors.js";
 import { pageQuery } from "../../common/pagination.js";
 import { DEFAULT_TEMPLATE, renderBulletin } from "../bulletin/render.js";
+import { DEFAULT_EMAIL_TEMPLATE_NAME, renderEmailTemplate } from "../email-template/render.js";
 import { assertNoPendingSuggestions } from "../../lib/guards/pending.js";
 import { prisma } from "../../lib/db.js";
 import { getAuthUser } from "../../plugins/auth.js";
@@ -140,12 +141,38 @@ export default async function deliveryRoutes(app: FastifyInstance): Promise<void
         iocs: ticket.iocs,
       });
 
+      // EMAIL channels get the org-wide HTML template when stored; everything
+      // else (and the plain-text alternative) always uses the bulletin payload.
+      const emailTemplateRow = await prisma.emailTemplate.findUnique({
+        where: { name: DEFAULT_EMAIL_TEMPLATE_NAME },
+      });
+      const email =
+        emailTemplateRow === null
+          ? undefined
+          : renderEmailTemplate(
+              { subject: emailTemplateRow.subject, htmlBody: emailTemplateRow.htmlBody },
+              {
+                title: ticket.title,
+                findingType: ticket.findingType,
+                tlp: ticket.tlp,
+                overview: ticket.overview,
+                description: ticket.description,
+                recommendations: ticket.recommendations,
+                references: ticket.references,
+                iocs: ticket.iocs,
+              },
+            );
+
       const audit: DeliveryAuditWire[] = [];
       for (const channel of targets) {
         let status: "SENT" | "FAILED";
         let error: string | null = null;
         try {
-          await deliverToChannel(channel, ticket.title, payload);
+          await deliverToChannel(channel, {
+            subject: ticket.title,
+            text: payload,
+            ...(email === undefined ? {} : { email }),
+          });
           status = "SENT";
         } catch (err) {
           status = "FAILED";

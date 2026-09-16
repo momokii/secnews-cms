@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setToken } from "../../lib/tokenStore";
 import {
@@ -184,5 +184,140 @@ describe("Sources editor", () => {
         expect.objectContaining({ method: "DELETE" }),
       ),
     );
+  });
+});
+
+describe("TASK-UXT: sources taller notes editor", () => {
+  it("opens the notes textarea at 8 rows and vertically resizable", () => {
+    // Given: the add-source modal is open
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch([]));
+    renderWithProviders(<SourcesEditor ticketId={TICKET_ID} sources={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+
+    // When: the notes textarea renders
+    const notes = screen.getByLabelText("Notes") as HTMLTextAreaElement;
+
+    // Then: it starts at 8 rows and can be resized vertically
+    expect(notes.rows).toBe(8);
+    expect(notes.className).toContain("resize-y");
+  });
+});
+
+describe("TASK-UXT: sources pagination and search", () => {
+  function sevenSources(): TicketSource[] {
+    return Array.from({ length: 7 }, (_, index) =>
+      sourceFixture({
+        id: `33333333-3333-4333-8333-${String(index).padStart(12, "0")}`,
+        title: `Source ${index + 1}`,
+      }),
+    );
+  }
+
+  function editCount(): number {
+    return screen.getAllByRole("button", { name: "Edit source" }).length;
+  }
+
+  it("pages long source lists at 5 per page via the shared Pagination", () => {
+    // Given: seven sources exist on the ticket
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch([]));
+    renderWithProviders(
+      <SourcesEditor ticketId={TICKET_ID} sources={sevenSources()} />,
+    );
+
+    // Then: only the first five rows show and the footer reports 2 pages
+    expect(editCount()).toBe(5);
+    expect(screen.getByText("Page 1 of 2 — 7 sources")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(editCount()).toBe(2);
+    expect(screen.getByText("Source 6")).toBeTruthy();
+    expect(screen.getByText("Source 7")).toBeTruthy();
+  });
+
+  it("filters sources by title case-insensitively after a 300ms debounce", () => {
+    // Given: seven sources with one titled "Vendor PDF"
+    vi.useFakeTimers();
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch([]));
+    const sources = sevenSources();
+    sources[2] = sourceFixture({
+      id: sources[2].id,
+      title: "Vendor PDF: advisory",
+    });
+    renderWithProviders(<SourcesEditor ticketId={TICKET_ID} sources={sources} />);
+
+    // When: a title fragment is typed into the search box
+    fireEvent.change(screen.getByLabelText("Search sources"), {
+      target: { value: "vendor pdf" },
+    });
+
+    // Then: before the debounce elapses the unfiltered page still shows
+    expect(editCount()).toBe(5);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(editCount()).toBe(1);
+    expect(screen.getByText("Vendor PDF: advisory")).toBeTruthy();
+    expect(screen.queryByText("Source 1")).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("matches search against the url when the source has no title", () => {
+    // Given: one url-only source among titled ones
+    vi.useFakeTimers();
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch([]));
+    const sources = sevenSources();
+    sources[0] = sourceFixture({
+      id: sources[0].id,
+      title: null,
+      url: "https://openssl.org/advisory",
+    });
+    renderWithProviders(<SourcesEditor ticketId={TICKET_ID} sources={sources} />);
+
+    // When: a url fragment is searched
+    fireEvent.change(screen.getByLabelText("Search sources"), {
+      target: { value: "OPENSSL.ORG" },
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    // Then: the url-only source matches case-insensitively
+    expect(
+      screen.getByRole("link", { name: "https://openssl.org/advisory" }),
+    ).toBeTruthy();
+    expect(editCount()).toBe(1);
+    vi.useRealTimers();
+  });
+
+  it("resets to page 1 when the search narrows the list", () => {
+    // Given: seven sources paged to page 2
+    vi.useFakeTimers();
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch([]));
+    const sources = sevenSources();
+    sources[2] = sourceFixture({
+      id: sources[2].id,
+      title: "Needle in haystack",
+    });
+    renderWithProviders(<SourcesEditor ticketId={TICKET_ID} sources={sources} />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Source 6")).toBeTruthy();
+
+    // When: a search matching one source on page 1 is applied
+    fireEvent.change(screen.getByLabelText("Search sources"), {
+      target: { value: "needle" },
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    // Then: the view restarts at page 1 and shows the match
+    expect(screen.getByText("Page 1 of 1 — 1 source")).toBeTruthy();
+    expect(screen.getByText("Needle in haystack")).toBeTruthy();
+    vi.useRealTimers();
   });
 });
