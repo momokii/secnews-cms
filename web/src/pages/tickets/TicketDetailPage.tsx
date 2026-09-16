@@ -4,7 +4,7 @@ import type { TicketStatus } from "../../lib/ticketsApi";
 import { type TransitionRole } from "../../lib/ticketState";
 import { getUser } from "../../lib/tokenStore";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTicket, useTransitionTicket } from "../../lib/useTickets";
+import { useSuggestions, useTicket, useTransitionTicket } from "../../lib/useTickets";
 import { AiPanel } from "./AiPanel";
 import { AuditTimeline } from "./AuditTimeline";
 import { ActivityTimeline } from "./ActivityTimeline";
@@ -36,6 +36,23 @@ export function TicketDetailPage() {
   // 409 PENDING_SUGGESTIONS from any delivery action keeps the banner + gates
   // up until the ticket refetch reports zero pending suggestions.
   const [blockedByError, setBlockedByError] = useState(false);
+
+  const aiPending = useSuggestions(id, "PENDING", 1, 1, ["FILL", "ENRICH"]);
+  const sourcePending = useSuggestions(id, "PENDING", 1, 1, ["SOURCE_DRAFT"]);
+  const aiCount = aiPending.data?.total ?? 0;
+  const sourceCount = sourcePending.data?.total ?? 0;
+  const totalPending = aiCount + sourceCount;
+  const showUnifiedBanner = blockedByError || totalPending > 0;
+  const unifiedBannerText = (() => {
+    if (blockedByError && totalPending === 0) {
+      return "Send and OTX push are blocked: unresolved suggestions remain. Review them below.";
+    }
+    const parts: string[] = [];
+    if (aiCount > 0) parts.push(`AI Assist: ${aiCount}`);
+    if (sourceCount > 0) parts.push(`Source Draft Assist: ${sourceCount}`);
+    const breakdown = parts.join(", ");
+    return `${totalPending} unresolved suggestion${totalPending === 1 ? "" : "s"} — ${breakdown} — review below. Send/OTX blocked.`;
+  })();
 
   const ticket = ticketQuery.data;
   const role: TransitionRole | null = getUser()?.role ?? null;
@@ -123,6 +140,23 @@ export function TicketDetailPage() {
             pending={transition.isPending}
           />
         </div>
+
+        {showUnifiedBanner ? (
+          <div
+            role="alert"
+            className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+          >
+            <span>{unifiedBannerText}</span>
+            <span className="ml-2 inline-flex gap-2">
+              <a href="#ai-assist" className="font-medium text-amber-900 underline hover:text-amber-700">
+                AI Assist
+              </a>
+              <a href="#source-draft-assist" className="font-medium text-amber-900 underline hover:text-amber-700">
+                Source Draft Assist
+              </a>
+            </span>
+          </div>
+        ) : null}
 
         <div className="mt-4">
           <DeliveryActions

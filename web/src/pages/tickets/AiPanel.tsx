@@ -86,10 +86,14 @@ export function AiPanel({ ticketId, pendingSuggestions, blocked }: AiPanelProps)
     return trimmed === "" ? { provider } : { provider, model: trimmed };
   };
 
-  const deliveryBlocked = blocked || pendingSuggestions > 0;
+  void blocked;
+  void pendingSuggestions;
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+    <section
+      id="ai-assist"
+      className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+    >
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-lg font-semibold text-slate-900">AI assist</h2>
         <button
@@ -155,17 +159,6 @@ export function AiPanel({ ticketId, pendingSuggestions, blocked }: AiPanelProps)
           </button>
         </span>
       </div>
-
-      {deliveryBlocked ? (
-        <p
-          role="alert"
-          className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800"
-        >
-          {blocked
-            ? "Send and OTX push are blocked: unresolved AI suggestions remain. Review them below."
-            : `${pendingSuggestions} unresolved AI suggestion${pendingSuggestions === 1 ? "" : "s"} block Send and OTX push. Review them below.`}
-        </p>
-      ) : null}
 
       {fill.isError || enrich.isError ? (
         <p role="alert" className="mt-3 text-sm text-red-600">

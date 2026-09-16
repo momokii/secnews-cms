@@ -152,26 +152,25 @@ describe("FE-AI-01: AI panel", () => {
     );
   });
 
-  it("shows the hard-block banner when pendingSuggestions > 0", async () => {
+  it("no longer shows the hard-block banner inside AiPanel when pendingSuggestions > 0 (moved to TicketDetailPage unified banner)", async () => {
     setToken("test-token");
     vi.stubGlobal("fetch", routeFetch(routes()));
     renderWithProviders(
       <AiPanel ticketId={TICKET_ID} pendingSuggestions={2} blocked={false} />,
     );
 
-    const banner = await screen.findByRole("alert");
-    expect(banner.textContent).toContain("2 unresolved AI suggestion");
-    expect(banner.textContent).toContain("Send");
-    expect(banner.textContent).toContain("OTX");
+    await screen.findByText("overview");
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("shows the banner on a 409 block flag even with zero pending suggestions", () => {
+  it("no longer shows a banner on a 409 block flag inside AiPanel (unified banner owns delivery block)", async () => {
     setToken("test-token");
     vi.stubGlobal("fetch", routeFetch(routes()));
     renderWithProviders(
       <AiPanel ticketId={TICKET_ID} pendingSuggestions={0} blocked={true} />,
     );
-    expect(screen.getByRole("alert")).toBeTruthy();
+    await screen.findByText("overview");
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("hides the banner when nothing blocks delivery", () => {

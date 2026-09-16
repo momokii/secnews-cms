@@ -62,6 +62,8 @@ function deleteMessage(suggestion: AiSuggestion): string {
  * status via the shared ConfirmDialog. Server-paginated at 5 per page
  * (5/10/20 selectable). Owns its suggestions query, scoped to the given
  * origins so each panel lists only its own rows. */
+const SUGGESTION_PREVIEW_LIMIT = 160;
+
 export function SuggestionList({
   ticketId,
   origin,
@@ -76,6 +78,16 @@ export function SuggestionList({
   const reject = useRejectSuggestion();
   const remove = useDeleteSuggestion();
   const [deleteTarget, setDeleteTarget] = useState<AiSuggestion | null>(null);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+
+  const toggleExpanded = (id: string): void => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const suggestions = suggestionsQuery.data?.items ?? [];
   const total = suggestionsQuery.data?.total ?? 0;
@@ -106,9 +118,31 @@ export function SuggestionList({
                 <ClockIcon />
                 <span>{suggestionMetaLine(suggestion)}</span>
               </p>
-              <p className="mt-1 text-slate-700">{suggestion.suggestedValue}</p>
+              {(() => {
+                const value = suggestion.suggestedValue;
+                const isLong = value.length > SUGGESTION_PREVIEW_LIMIT;
+                const isExpanded = expanded.has(suggestion.id);
+                const display =
+                  isLong && !isExpanded
+                    ? `${value.slice(0, SUGGESTION_PREVIEW_LIMIT)}…`
+                    : value;
+                return (
+                  <>
+                    <p className="mt-1 break-words text-slate-700">{display}</p>
+                    {isLong ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(suggestion.id)}
+                        className="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                      >
+                        {isExpanded ? "Show less" : "Show more"}
+                      </button>
+                    ) : null}
+                  </>
+                );
+              })()}
               {suggestion.currentValue !== null ? (
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 break-words text-xs text-slate-500">
                   Current: {suggestion.currentValue}
                 </p>
               ) : null}

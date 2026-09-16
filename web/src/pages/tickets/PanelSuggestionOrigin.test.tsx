@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TicketSource } from "../../lib/ticketsApi";
 import { setToken } from "../../lib/tokenStore";
@@ -83,24 +83,30 @@ describe("FE-ORIGIN: each ticket detail panel lists only its own suggestions", (
     expect(calledUrls(fetchMock).some((url) => url.includes("origin=SOURCE_DRAFT"))).toBe(true);
   });
 
-  it("wraps long source titles and notes instead of truncating them", async () => {
-    // Given: a source whose title and notes are long enough to need wrapping
+  it("wraps long source titles and truncates notes preview to 100 chars with toggle", async () => {
     setToken("test-token");
     vi.stubGlobal("fetch", routeFetch(suggestionRoutes()));
     const longTitle =
       "judul 1 dengan penjelasan sangat panjang mengenai kerentanan yang ditemukan pada sistem autentikasi internal";
     const longNotes =
       "Catatan lengkap: analisis mendalam, langkah mitigasi sementara, daftar versi yang terdampak, dan tautan referensi tambahan yang harus diverifikasi ulang";
-    renderWithProviders(<SourceDraftPanel ticketId={TICKET_ID} sources={[{ ...sourceA(), title: longTitle, notes: longNotes }]} />);
+    renderWithProviders(
+      <SourceDraftPanel ticketId={TICKET_ID} sources={[{ ...sourceA(), title: longTitle, notes: longNotes }]} />,
+    );
 
-    // When: the source list renders
     const titleEl = await screen.findByText(longTitle);
-    const notesEl = screen.getByText(longNotes);
-
-    // Then: the text wraps (break-words) and is no longer clipped (truncate)
     expect(titleEl.className).toContain("break-words");
     expect(titleEl.className).not.toContain("truncate");
-    expect(notesEl.className).toContain("break-words");
-    expect(notesEl.className).not.toContain("truncate");
+
+    const preview = longNotes.slice(0, 100);
+    expect(screen.getByText((c) => c.includes(preview))).toBeTruthy();
+    expect(screen.queryByText(longNotes)).toBeNull();
+    const toggle = screen.getByRole("button", { name: /Show more/i });
+    expect(toggle).toBeTruthy();
+
+    fireEvent.click(toggle);
+    const expandedEl = await screen.findByText(longNotes);
+    expect(expandedEl.className).toContain("break-words");
+    expect(expandedEl.className).not.toContain("truncate");
   });
 });
