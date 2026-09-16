@@ -67,10 +67,10 @@ export function iocValues(ticket: TicketWithRelations): string {
   return ticket.iocs.map((ioc) => `${ioc.type}:${ioc.value}`).join(", ");
 }
 
-/** Comma-joined source urls/notes — empty string when the ticket has none. */
+/** Comma-joined source titles/urls/notes — empty string when the ticket has none. */
 export function sourceValues(ticket: TicketWithRelations): string {
   return ticket.sources
-    .map((source) => source.url ?? source.note ?? "")
+    .map((source) => source.title ?? source.url ?? source.note ?? "")
     .filter((entry) => entry !== "")
     .join(", ");
 }

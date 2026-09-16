@@ -75,6 +75,10 @@ export const TicketSourceSchema = z.object({
   ticketId: z.uuid(),
   url: z.url().nullable(),
   note: z.string().nullable(),
+  /** Non-URL label (PDF name, Slack thread, …) — a source needs no link. */
+  title: z.string().nullable(),
+  /** Long-form analyst notes; API cap 5000 chars. */
+  notes: z.string().nullable(),
   createdById: z.uuid().nullable(),
   createdAt: z.iso.datetime(),
 });
@@ -161,14 +165,31 @@ export type PatchTicketFieldsBody = z.infer<typeof PatchTicketFieldsBodySchema>;
 
 // ---- Sources ----
 
+/** At least one identifying element required — url, title, note, or notes. */
 export const CreateTicketSourceBodySchema = z
   .object({
     url: z.url().optional(),
     note: z.string().min(1).optional(),
+    title: z.string().min(1).max(500).optional(),
+    notes: z.string().min(1).max(5000).optional(),
   })
-  .refine((body) => body.url !== undefined || body.note !== undefined, {
-    message: "url or note required",
-  });
+  .refine(
+    (body) =>
+      body.url !== undefined ||
+      body.title !== undefined ||
+      body.note !== undefined ||
+      body.notes !== undefined,
+    { message: "url, title, note, or notes required" },
+  );
+
+export const UpdateTicketSourceBodySchema = z
+  .object({
+    url: z.url().nullable().optional(),
+    note: z.string().min(1).nullable().optional(),
+    title: z.string().min(1).max(500).nullable().optional(),
+    notes: z.string().min(1).max(5000).nullable().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, { message: "At least one field required" });
 
 // ---- IOCs ----
 

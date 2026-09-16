@@ -8,6 +8,24 @@ import {
   routeFetch,
 } from "./testUtils";
 import { SourcesEditor } from "./SourcesEditor";
+import type { TicketSource } from "../../lib/ticketsApi";
+
+const TOOLTIP =
+  "Working materials — links, docs, or references the analyst used; add what you learned from each source in Notes";
+
+function sourceFixture(overrides: Partial<TicketSource> = {}): TicketSource {
+  return {
+    id: "22222222-2222-4222-8222-222222222222",
+    ticketId: TICKET_ID,
+    url: null,
+    note: null,
+    title: null,
+    notes: null,
+    createdById: null,
+    createdAt: "2026-09-14T08:00:00.000Z",
+    ...overrides,
+  };
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -15,63 +33,44 @@ afterEach(() => {
 });
 
 describe("Sources editor", () => {
-  it("renders existing sources as links and notes", () => {
+  it("shows the section tooltip explaining what Sources are for", () => {
+    setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch([]));
+    renderWithProviders(<SourcesEditor ticketId={TICKET_ID} sources={[]} />);
+    expect(screen.getByTitle(TOOLTIP)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "About sources" })).toBeTruthy();
+  });
+
+  it("renders a url source as a link with no title text", () => {
     setToken("test-token");
     vi.stubGlobal("fetch", routeFetch([]));
     renderWithProviders(
       <SourcesEditor
         ticketId={TICKET_ID}
-        sources={[
-          {
-            id: "22222222-2222-4222-8222-222222222222",
-            ticketId: TICKET_ID,
-            url: "https://openssl.org/advisory",
-            note: "Vendor advisory",
-            createdById: null,
-            createdAt: "2026-09-14T08:00:00.000Z",
-          },
-        ]}
+        sources={[sourceFixture({ url: "https://openssl.org/advisory" })]}
       />,
     );
     const link = screen.getByRole("link", { name: "https://openssl.org/advisory" });
     expect(link.getAttribute("href")).toBe("https://openssl.org/advisory");
-    const note = screen.getByText("Vendor advisory");
-    expect(link.textContent).toBe("https://openssl.org/advisory");
-    expect(link.contains(note)).toBe(false);
   });
 
-  it("stacks the url link and note as separate lines in one row column", () => {
-    // Given: a source row carrying both a url and a note
+  it("renders a non-URL source by its title with persisted notes", () => {
     setToken("test-token");
     vi.stubGlobal("fetch", routeFetch([]));
     renderWithProviders(
       <SourcesEditor
         ticketId={TICKET_ID}
         sources={[
-          {
-            id: "22222222-2222-4222-8222-222222222222",
-            ticketId: TICKET_ID,
-            url: "https://openssl.org/advisory",
-            note: "Vendor advisory",
-            createdById: null,
-            createdAt: "2026-09-14T08:00:00.000Z",
-          },
+          sourceFixture({ title: "Vendor PDF: openssl-advisory.pdf", notes: "Confirmed the CVE affects 3.2.1." }),
         ]}
       />,
     );
-
-    // When: the row renders
-    const link = screen.getByRole("link", { name: "https://openssl.org/advisory" });
-    const note = screen.getByText("Vendor advisory");
-
-    // Then: link and note are stacked siblings in a single column container —
-    // never run together on one inline line
-    expect(link.parentElement).not.toBeNull();
-    expect(link.parentElement).toBe(note.parentElement);
-    expect(link.parentElement?.className).toContain("flex-col");
+    expect(screen.getByText("Vendor PDF: openssl-advisory.pdf")).toBeTruthy();
+    expect(screen.getByText("Confirmed the CVE affects 3.2.1.")).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
   });
 
-  it("POSTs the new source when Add source is clicked", async () => {
+  it("saves a non-URL source with title and notes via the add modal", async () => {
     setToken("test-token");
     const fetchMock = routeFetch([
       {
@@ -79,14 +78,7 @@ describe("Sources editor", () => {
           method === "POST" && url === `/api/tickets/${TICKET_ID}/sources`,
         respond: () =>
           jsonResponse(
-            {
-              id: "22222222-2222-4222-8222-222222222222",
-              ticketId: TICKET_ID,
-              url: null,
-              note: "vendor advisory",
-              createdById: null,
-              createdAt: "2026-09-14T08:00:00.000Z",
-            },
+            sourceFixture({ title: "Slack thread #incident-42", notes: "Timeline reconstructed." }),
             201,
           ),
       },
@@ -94,25 +86,81 @@ describe("Sources editor", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderWithProviders(<SourcesEditor ticketId={TICKET_ID} sources={[]} />);
 
-    fireEvent.change(screen.getByLabelText("Source note"), {
-      target: { value: "vendor advisory" },
-    });
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+    fireEvent.change(screen.getByLabelText("Title"), {
+      target: { value: "Slack thread #incident-42" },
+    });
+    fireEvent.change(screen.getByLabelText("Notes"), {
+      target: { value: "Timeline reconstructed." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         `/api/tickets/${TICKET_ID}/sources`,
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ note: "vendor advisory" }),
+          body: JSON.stringify({ title: "Slack thread #incident-42", notes: "Timeline reconstructed." }),
         }),
       ),
     );
   });
 
-  it("DELETEs a source when its delete button is clicked", async () => {
+  it("truncates long notes to a 120-char preview expandable in place", () => {
+    const longNotes = "a".repeat(200);
     setToken("test-token");
+    vi.stubGlobal("fetch", routeFetch([]));
+    renderWithProviders(
+      <SourcesEditor ticketId={TICKET_ID} sources={[sourceFixture({ title: "PDF", notes: longNotes })]} />,
+    );
+    expect(screen.getByText("a".repeat(120))).toBeTruthy();
+    expect(screen.queryByText(longNotes)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(screen.getByText(longNotes)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show less" }));
+    expect(screen.queryByText(longNotes)).toBeNull();
+  });
+
+  it("edits a source through the modal and PATCHes the changes", async () => {
     const sourceId = "22222222-2222-4222-8222-222222222222";
+    setToken("test-token");
+    const fetchMock = routeFetch([
+      {
+        match: (url, method) =>
+          method === "PATCH" && url === `/api/tickets/${TICKET_ID}/sources/${sourceId}`,
+        respond: () => jsonResponse(sourceFixture({ title: "Vendor PDF", notes: "Updated notes." })),
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(
+      <SourcesEditor
+        ticketId={TICKET_ID}
+        sources={[sourceFixture({ id: sourceId, title: "Vendor PDF", notes: "Old notes." })]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit source" }));
+    const notesField = screen.getByLabelText("Notes") as HTMLTextAreaElement;
+    expect(notesField.value).toBe("Old notes.");
+    fireEvent.change(notesField, { target: { value: "Updated notes." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/tickets/${TICKET_ID}/sources/${sourceId}`,
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ notes: "Updated notes." }),
+        }),
+      ),
+    );
+  });
+
+  it("asks for confirmation before deleting a source", async () => {
+    const sourceId = "22222222-2222-4222-8222-222222222222";
+    setToken("test-token");
     const fetchMock = routeFetch([
       {
         match: (url, method) =>
@@ -122,22 +170,13 @@ describe("Sources editor", () => {
     ]);
     vi.stubGlobal("fetch", fetchMock);
     renderWithProviders(
-      <SourcesEditor
-        ticketId={TICKET_ID}
-        sources={[
-          {
-            id: sourceId,
-            ticketId: TICKET_ID,
-            url: null,
-            note: "Vendor advisory",
-            createdById: null,
-            createdAt: "2026-09-14T08:00:00.000Z",
-          },
-        ]}
-      />,
+      <SourcesEditor ticketId={TICKET_ID} sources={[sourceFixture({ id: sourceId, title: "Vendor PDF" })]} />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Delete source" }));
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -145,17 +184,5 @@ describe("Sources editor", () => {
         expect.objectContaining({ method: "DELETE" }),
       ),
     );
-  });
-
-  it("keeps Add source disabled until a url or note is entered", () => {
-    setToken("test-token");
-    vi.stubGlobal("fetch", routeFetch([]));
-    renderWithProviders(
-      <SourcesEditor ticketId={TICKET_ID} sources={[]} />,
-    );
-    expect(
-      (screen.getByRole("button", { name: "Add source" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
   });
 });

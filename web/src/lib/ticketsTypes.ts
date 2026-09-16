@@ -110,6 +110,8 @@ export interface TicketSource {
   ticketId: string;
   url: string | null;
   note: string | null;
+  title: string | null;
+  notes: string | null;
   createdById: string | null;
   createdAt: string;
 }
@@ -226,4 +228,18 @@ export interface UpdateIocBody {
   context?: string;
   origin?: string;
   includeInBulletin?: boolean;
+}
+
+export interface CreateTicketSourceBody {
+  url?: string;
+  note?: string;
+  title?: string;
+  notes?: string;
+}
+
+export interface UpdateTicketSourceBody {
+  url?: string | null;
+  note?: string | null;
+  title?: string | null;
+  notes?: string | null;
 }

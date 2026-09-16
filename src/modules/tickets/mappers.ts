@@ -40,6 +40,8 @@ export function toTicketSourceDto(row: TicketSource): TicketSourceWire {
     ticketId: row.ticketId,
     url: row.url,
     note: row.note,
+    title: row.title,
+    notes: row.notes,
     createdById: row.createdById,
     createdAt: row.createdAt.toISOString(),
   };

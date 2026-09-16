@@ -83,6 +83,8 @@ describe("TicketDetailPage: workspace composition", () => {
                 ticketId: TICKET_ID,
                 url: "https://openssl.org/advisory",
                 note: null,
+                title: null,
+                notes: null,
                 createdById: null,
                 createdAt: "2026-09-14T08:00:00.000Z",
               },

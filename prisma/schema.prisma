@@ -81,6 +81,7 @@ enum TicketActivityAction {
   IOC_UPDATED
   IOC_REMOVED
   SOURCE_ADDED
+  SOURCE_UPDATED
   SOURCE_REMOVED
   AI_FILL
   AI_ENRICH
@@ -204,6 +205,10 @@ model TicketSource {
   ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   url         String?
   note        String?
+  /// Non-URL label for sources that have no link (PDF name, Slack thread, …)
+  title       String?
+  /// Long-form analyst notes (Postgres text — no length cap at the DB layer; API caps at 5000)
+  notes       String?
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())

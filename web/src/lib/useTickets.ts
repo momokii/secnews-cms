@@ -25,6 +25,7 @@ import {
   sendTicket,
   transitionTicket,
   updateIoc,
+  updateTicketSource,
   type AiRunBody,
   type CreateIocBody,
   type CreateTicketBody,
@@ -36,6 +37,7 @@ import {
   type TicketsQuery,
   type TicketStatus,
   type UpdateIocBody,
+  type UpdateTicketSourceBody,
 } from "./ticketsApi";
 
 /** React Query bindings for the ticket workflow. Filter combos own their
@@ -119,6 +121,14 @@ export function useDeleteTicketSource() {
     ({ id }: { id: string; sourceId: string }) => id,
     ({ id, sourceId }: { id: string; sourceId: string }) =>
       deleteTicketSource(id, sourceId),
+  );
+}
+
+export function useUpdateTicketSource() {
+  return useTicketMutation(
+    ({ id }: { id: string; sourceId: string; patch: UpdateTicketSourceBody }) => id,
+    ({ id, sourceId, patch }: { id: string; sourceId: string; patch: UpdateTicketSourceBody }) =>
+      updateTicketSource(id, sourceId, patch),
   );
 }
 

@@ -4,6 +4,7 @@ import {
   type AiSuggestion,
   type CreateIocBody,
   type CreateTicketBody,
+  type CreateTicketSourceBody,
   type DeliveryAudit,
   type Ioc,
   type OtxPushResponse,
@@ -19,6 +20,7 @@ import {
   type TicketStatus,
   type TicketsQuery,
   type UpdateIocBody,
+  type UpdateTicketSourceBody,
 } from "./ticketsTypes";
 
 export {
@@ -40,6 +42,7 @@ export type {
   ChannelType,
   CreateIocBody,
   CreateTicketBody,
+  CreateTicketSourceBody,
   DeliveryAudit,
   DeliveryStatus,
   FindingType,
@@ -60,6 +63,7 @@ export type {
   Tlp,
   TicketsQuery,
   UpdateIocBody,
+  UpdateTicketSourceBody,
 } from "./ticketsTypes";
 
 /** Fetch functions for the ticket workflow (contract #21-36, #47-48, #52). */
@@ -141,9 +145,18 @@ export async function patchTicketFields(
 
 export async function addTicketSource(
   id: string,
-  body: { url?: string; note?: string },
+  body: CreateTicketSourceBody,
 ): Promise<TicketSource> {
   const response = await apiFetch(`/tickets/${id}/sources`, jsonInit("POST", body));
+  return readJson<TicketSource>(response);
+}
+
+export async function updateTicketSource(
+  id: string,
+  sourceId: string,
+  patch: UpdateTicketSourceBody,
+): Promise<TicketSource> {
+  const response = await apiFetch(`/tickets/${id}/sources/${sourceId}`, jsonInit("PATCH", patch));
   return readJson<TicketSource>(response);
 }
 
