@@ -16,6 +16,11 @@ const promptsFixture = [
     content: "Enrich draft: {{overview}} {{cveIds}}",
     updatedAt: "2026-09-02T11:00:00.000Z",
   },
+  {
+    kind: "SOURCE_DRAFT",
+    content: "Source draft: {{selectedSources}} {{targetFields}}",
+    updatedAt: "2026-09-03T12:00:00.000Z",
+  },
 ];
 
 function renderPage(): void {
@@ -58,8 +63,8 @@ describe("FE-PRM-01: editors load prompt content", () => {
     localStorage.clear();
   });
 
-  it("GETs /prompts and fills both editors with their prompt content", async () => {
-    // Given: an ADMIN session and the server holding both prompts
+  it("GETs /prompts and fills all three editors with their prompt content", async () => {
+    // Given: an ADMIN session and the server holding all three prompts
     setToken("test-token");
     setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "a@b.c", name: "Admin", role: "ADMIN" });
     const fetchMock = routeFetch([
@@ -76,6 +81,7 @@ describe("FE-PRM-01: editors load prompt content", () => {
     // Then: each editor shows its server content
     expect(await screen.findByDisplayValue("Fill draft: {{title}} {{iocs}}")).toBeTruthy();
     expect(screen.getByDisplayValue("Enrich draft: {{overview}} {{cveIds}}")).toBeTruthy();
+    expect(screen.getByDisplayValue("Source draft: {{selectedSources}} {{targetFields}}")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/prompts",
       expect.objectContaining({ method: "GET" }),
@@ -194,6 +200,8 @@ describe("FE-PRM-03: placeholder legend", () => {
       "{{tlp}}",
       "{{iocs}}",
       "{{sources}}",
+      "{{selectedSources}}",
+      "{{targetFields}}",
       "{{overview}}",
       "{{description}}",
       "{{recommendations}}",
@@ -205,7 +213,7 @@ describe("FE-PRM-03: placeholder legend", () => {
       expect(legend.textContent).toContain(token);
     }
     const legendItems = legend.querySelectorAll("li");
-    expect(legendItems).toHaveLength(16);
+    expect(legendItems).toHaveLength(18);
     expect(legend.textContent).toContain("Unknown placeholders stay literal");
   });
 });
@@ -248,7 +256,7 @@ describe("FE-PRM-05: prompt guidance", () => {
   });
 
   it("explains when each prompt runs, its inputs, guarantees, and output", async () => {
-    // Given: both prompt templates load
+    // Given: all three prompt templates load
     setToken("test-token");
     vi.stubGlobal(
       "fetch",
@@ -263,13 +271,17 @@ describe("FE-PRM-05: prompt guidance", () => {
     // When: the prompts page renders
     renderPage();
 
-    // Then: analyst guidance is visible on both cards
+    // Then: analyst guidance is visible on all three cards
     expect(await screen.findByText(/Runs from the Fill button/i)).toBeTruthy();
     expect(screen.getByText(/Runs from the Enrich button/i)).toBeTruthy();
+    expect(screen.getByText(/Runs from the Source Draft button/i)).toBeTruthy();
     expect(screen.getAllByText(/working materials/i)).toHaveLength(2);
-    expect(screen.getAllByText(/never invents/i)).toHaveLength(2);
+    expect(screen.getAllByText(/never invents/i)).toHaveLength(3);
     expect(screen.getByText(/PENDING suggestions auto-merge on accept/i)).toBeTruthy();
     expect(screen.getByText(/every addition needs Accept, Edit, or Reject/i)).toBeTruthy();
+    expect(screen.getByText(/grounded only in the selected sources/i)).toBeTruthy();
+    expect(screen.getAllByText(/\{\{selectedSources\}\}/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/\{\{targetFields\}\}/).length).toBeGreaterThanOrEqual(2);
   });
 });
 

@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { paginated, pageQuery } from "../../common/pagination.js";
+import { PromptKind } from "../../generated/prisma/enums.js";
 import { SuggestionStatusEnum } from "../tickets/schema.js";
 import { SOURCE_DRAFT_FIELDS } from "./prompts.js";
 
@@ -7,6 +8,9 @@ import { SOURCE_DRAFT_FIELDS } from "./prompts.js";
  * enrich = full rewrite suggestions. Both land as PENDING suggestions that
  * must be accepted/edited/rejected before Send or OTX push (hard block, S2).
  * Ids are uuid strings — every model PK is a uuid in the B1 Prisma schema. */
+
+export const PromptKindEnum = z.enum(PromptKind);
+export type PromptKindValue = z.infer<typeof PromptKindEnum>;
 
 export const AiSuggestionSchema = z.object({
   id: z.uuid(),
@@ -17,6 +21,9 @@ export const AiSuggestionSchema = z.object({
   currentValue: z.string().nullable(),
   suggestedValue: z.string(),
   status: SuggestionStatusEnum,
+  /** AI flow that produced the row: FILL | ENRICH | SOURCE_DRAFT — lets each
+   * ticket detail panel list only its own suggestions. */
+  origin: PromptKindEnum,
   /** Model id that produced the suggestion (null for hand-written rows). */
   model: z.string().nullable(),
   /** Provider kind (OPENAI|ANTHROPIC|GEMINI|DEEPSEEK) that produced the
@@ -53,8 +60,16 @@ export const SuggestionActionResponseSchema = z.object({
   suggestion: AiSuggestionSchema,
 });
 
-// GET /tickets/:id/suggestions
+// GET /tickets/:id/suggestions — origin is a comma-separated list
+// (e.g. FILL,ENRICH for the assist panel, SOURCE_DRAFT for source draft);
+// omitted = every origin (backward compatible).
 export const ListSuggestionsQuerySchema = pageQuery.extend({
   status: SuggestionStatusEnum.optional(),
+  origin: z
+    .string()
+    .optional()
+    .transform((raw) => (raw === undefined ? undefined : raw.split(",").map((entry) => entry.trim())))
+    .pipe(z.array(PromptKindEnum).min(1))
+    .optional(),
 });
 export const ListSuggestionsResponseSchema = paginated(AiSuggestionSchema);

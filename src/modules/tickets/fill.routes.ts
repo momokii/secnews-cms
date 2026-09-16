@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod/v4";
+import { PromptKind } from "../../generated/prisma/enums.js";
 import { AppError } from "../../common/errors.js";
 import { idParam } from "../../common/pagination.js";
 import { AiFillResponseSchema } from "../ai/schema.js";
@@ -57,7 +58,10 @@ export default async function fillRoutes(app: FastifyInstance): Promise<void> {
     let rows;
     try {
       const drafts = await generateSuggestions(app.prisma, ticket, mode, explicit);
-      rows = drafts.length > 0 ? await storeSuggestions(app.prisma, ticketId, drafts) : [];
+      rows =
+        drafts.length > 0
+          ? await storeSuggestions(app.prisma, ticketId, drafts, mode === "fill" ? PromptKind.FILL : PromptKind.ENRICH)
+          : [];
     } catch (error) {
       if (error instanceof SemanticError) {
         semantic422(reply, error);

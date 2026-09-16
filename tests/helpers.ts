@@ -58,17 +58,20 @@ export async function createTestTicket(
   return ticket.id;
 }
 
-/** Persist an AiSuggestion row whose content carries the structured payload. */
+/** Persist an AiSuggestion row whose content carries the structured payload.
+ * origin defaults to FILL — the migration default for pre-existing rows. */
 export async function createTestSuggestion(
   ticketId: string,
   payload: { field: string; currentValue: string | null; suggestedValue: string },
   status: "PENDING" | "ACCEPTED" | "REJECTED" = "PENDING",
+  origin: "FILL" | "ENRICH" | "SOURCE_DRAFT" = "FILL",
 ): Promise<string> {
   const row = await prisma.aiSuggestion.create({
     data: {
       ticketId,
       status,
       model: "test-model",
+      origin,
       content: JSON.stringify(payload),
     },
     select: { id: true },

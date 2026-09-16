@@ -5,12 +5,13 @@ import { apiFetch } from "./api";
  * is ADMIN-only server-side; GET /prompts/:kind/history serves the
  * append-only revisions newest-first, paginated). */
 
-export type PromptKind = "FILL" | "ENRICH";
+export type PromptKind = "FILL" | "ENRICH" | "SOURCE_DRAFT";
 
 export interface PromptEntry {
   kind: PromptKind;
   content: string;
-  updatedAt: string;
+  /** null when the kind has no stored row and the built-in default is served. */
+  updatedAt: string | null;
 }
 
 /** One append-only prompt revision as served by GET /prompts/:kind/history. */

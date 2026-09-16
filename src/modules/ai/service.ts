@@ -1,4 +1,5 @@
 import type { PrismaClient } from "../../generated/prisma/client.js";
+import type { PromptKind } from "../../generated/prisma/enums.js";
 import { IntegrationKind, SuggestionStatus } from "../../generated/prisma/enums.js";
 import { AppError } from "../../common/errors.js";
 import { decryptSecret } from "../../lib/crypto.js";
@@ -176,6 +177,7 @@ export type SuggestionRow = {
   id: string;
   ticketId: string;
   status: "PENDING" | "ACCEPTED" | "REJECTED";
+  origin: PromptKind;
   model: string | null;
   provider: string | null;
   content: string;
@@ -183,11 +185,14 @@ export type SuggestionRow = {
   updatedAt: Date;
 };
 
-/** Persist drafts as PENDING rows; the content column holds the JSON payload. */
+/** Persist drafts as PENDING rows; the content column holds the JSON payload.
+ * origin tags which AI flow produced the rows so the ticket detail panels can
+ * list only their own suggestions. */
 export async function storeSuggestions(
   db: PrismaClient,
   ticketId: string,
   drafts: Array<{ model: string; provider: ProviderKind } & SuggestionDraft>,
+  origin: PromptKind,
 ): Promise<SuggestionRow[]> {
   return db.$transaction(
     drafts.map((draft) =>
@@ -195,6 +200,7 @@ export async function storeSuggestions(
         data: {
           ticketId,
           status: SuggestionStatus.PENDING,
+          origin,
           model: draft.model,
           provider: draft.provider,
           content: JSON.stringify({
@@ -216,6 +222,7 @@ export function toSuggestion(row: SuggestionRow): {
   currentValue: string | null;
   suggestedValue: string;
   status: "PENDING" | "ACCEPTED" | "REJECTED";
+  origin: PromptKind;
   model: string | null;
   provider: string | null;
   createdAt: string;
@@ -229,6 +236,7 @@ export function toSuggestion(row: SuggestionRow): {
     currentValue: payload.currentValue ?? null,
     suggestedValue: payload.suggestedValue ?? "",
     status: row.status,
+    origin: row.origin,
     model: row.model,
     provider: row.provider,
     createdAt: row.createdAt.toISOString(),

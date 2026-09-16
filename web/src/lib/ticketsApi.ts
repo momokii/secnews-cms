@@ -12,6 +12,7 @@ import {
   type PatchTicketFieldsBody,
   type SendResponse,
   type SourceDraftBody,
+  type SuggestionOrigin,
   type SuggestionStatus,
   type Ticket,
   type TicketActivity,
@@ -54,6 +55,7 @@ export type {
   PatchTicketFieldsBody,
   SendResponse,
   SourceDraftBody,
+  SuggestionOrigin,
   SuggestionStatus,
   Ticket,
   TicketActivity,
@@ -221,12 +223,14 @@ export async function listSuggestions(
   status?: SuggestionStatus,
   page = 1,
   pageSize = 5,
+  origin?: SuggestionOrigin[],
 ): Promise<Paginated<AiSuggestion>> {
   const response = await apiFetch(
     `/tickets/${id}/suggestions${buildQuery({
       status,
       page,
       pageSize,
+      origin: origin?.join(","),
     })}`,
     { method: "GET" },
   );

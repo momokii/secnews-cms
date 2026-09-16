@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { AppError } from "../../common/errors.js";
 import { idParam } from "../../common/pagination.js";
+import { PromptKind } from "../../generated/prisma/enums.js";
 import { AiFillResponseSchema, SourceDraftBodySchema } from "../ai/schema.js";
 import { generateSourceDraftSuggestions } from "../ai/source-draft.js";
 import { SemanticError, storeSuggestions, toSuggestion } from "../ai/service.js";
@@ -58,7 +59,7 @@ export default async function sourceDraftRoutes(app: FastifyInstance): Promise<v
           allowWebSearch: body.allowWebSearch ?? false,
           explicit,
         });
-        rows = drafts.length > 0 ? await storeSuggestions(app.prisma, ticketId, drafts) : [];
+        rows = drafts.length > 0 ? await storeSuggestions(app.prisma, ticketId, drafts, PromptKind.SOURCE_DRAFT) : [];
       } catch (error) {
         if (error instanceof SemanticError) {
           semantic422(reply, error);

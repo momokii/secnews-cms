@@ -179,7 +179,7 @@ export function AiPanel({ ticketId, pendingSuggestions, blocked }: AiPanelProps)
         </p>
       ) : null}
 
-      <SuggestionList ticketId={ticketId} />
+      <SuggestionList ticketId={ticketId} origin={["FILL", "ENRICH"]} />
 
       <AiHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
     </section>

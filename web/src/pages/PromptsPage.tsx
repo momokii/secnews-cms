@@ -49,6 +49,16 @@ const PROMPT_PLACEHOLDERS = [
     gloss: "Source urls/notes, comma-joined — empty string when none",
   },
   {
+    token: "{{selectedSources}}",
+    gloss:
+      "Source-draft only: numbered list of the analyst-chosen grounding sources with title, url and notes per source (empty in fill/enrich)",
+  },
+  {
+    token: "{{targetFields}}",
+    gloss:
+      "Source-draft only: comma-joined requested output fields (overview, description, recommendations, references) — empty in fill/enrich",
+  },
+  {
     token: "{{overview}}",
     gloss: "Current overview, or empty string when unset",
   },
@@ -81,6 +91,7 @@ const PROMPT_PLACEHOLDERS = [
 const CARD_TITLES: Readonly<Record<PromptKind, string>> = {
   FILL: "Fill",
   ENRICH: "Enrich",
+  SOURCE_DRAFT: "Source Draft",
 };
 
 /** Analyst-facing guidance per template: when it runs, what it may use, what
@@ -95,12 +106,17 @@ const CARD_GUIDANCE: Readonly<Record<PromptKind, readonly string[]>> = {
     "It never invents findings — every suggestion traces back to the ticket's own sources.",
     "PENDING suggestions auto-merge on accept, so every addition needs Accept, Edit, or Reject before it reaches the final fields.",
   ],
+  SOURCE_DRAFT: [
+    "Runs from the Source Draft button on a ticket: it drafts the requested narrative fields grounded only in the selected sources you chose for that draft.",
+    "Its inputs are the selected grounding sources ({{selectedSources}}), the requested output fields ({{targetFields}}), and the ticket context.",
+    "It never invents beyond the selected sources — anything they don't support is omitted from the draft.",
+  ],
 };
 
 interface PromptCardProps {
   kind: PromptKind;
   content: string;
-  updatedAt: string;
+  updatedAt: string | null;
   isAdmin: boolean;
 }
 
@@ -119,9 +135,11 @@ function PromptCard({ kind, content, updatedAt, isAdmin }: PromptCardProps) {
         <h2 className="text-sm font-semibold text-slate-900">
           {CARD_TITLES[kind]} prompt
         </h2>
-        <span className="text-xs text-slate-500">
-          Updated {formatTimestamp(updatedAt)}
-        </span>
+        {updatedAt ? (
+          <span className="text-xs text-slate-500">
+            Updated {formatTimestamp(updatedAt)}
+          </span>
+        ) : null}
       </div>
 
       <ul className="mt-2 space-y-1 text-xs text-slate-500">
@@ -185,7 +203,8 @@ export function PromptsPage() {
     <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
       <h1 className="text-lg font-semibold text-slate-900">Prompt templates</h1>
       <p className="mt-1 text-sm text-slate-500">
-        System prompts sent to the AI provider for fill and enrich suggestions.
+        System prompts sent to the AI provider for fill, enrich and source-draft
+        suggestions.
       </p>
 
       {promptsQuery.isPending ? (
@@ -201,13 +220,19 @@ export function PromptsPage() {
           <PromptCard
             kind="FILL"
             content={byKind.get("FILL")?.content ?? ""}
-            updatedAt={byKind.get("FILL")?.updatedAt ?? ""}
+            updatedAt={byKind.get("FILL")?.updatedAt ?? null}
             isAdmin={isAdmin}
           />
           <PromptCard
             kind="ENRICH"
             content={byKind.get("ENRICH")?.content ?? ""}
-            updatedAt={byKind.get("ENRICH")?.updatedAt ?? ""}
+            updatedAt={byKind.get("ENRICH")?.updatedAt ?? null}
+            isAdmin={isAdmin}
+          />
+          <PromptCard
+            kind="SOURCE_DRAFT"
+            content={byKind.get("SOURCE_DRAFT")?.content ?? ""}
+            updatedAt={byKind.get("SOURCE_DRAFT")?.updatedAt ?? null}
             isAdmin={isAdmin}
           />
 

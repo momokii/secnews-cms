@@ -45,6 +45,11 @@ export type IocType = (typeof IOC_TYPES)[number];
 export const SUGGESTION_STATUSES = ["PENDING", "ACCEPTED", "REJECTED"] as const;
 export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
 
+/** Which AI flow produced a suggestion — the ticket detail panels filter on
+ * this so AI assist never shows source-draft rows and vice versa. */
+export const SUGGESTION_ORIGINS = ["FILL", "ENRICH", "SOURCE_DRAFT"] as const;
+export type SuggestionOrigin = (typeof SUGGESTION_ORIGINS)[number];
+
 /** AI providers that accept per-run overrides on ai/fill and ai/enrich. */
 export const AI_PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI", "DEEPSEEK"] as const;
 export type AiProviderKind = (typeof AI_PROVIDERS)[number];
@@ -151,6 +156,8 @@ export interface AiSuggestion {
   currentValue: string | null;
   suggestedValue: string;
   status: SuggestionStatus;
+  /** AI flow that produced the row: FILL | ENRICH | SOURCE_DRAFT. */
+  origin: SuggestionOrigin;
   /** Provider that produced the suggestion; null = server default ("Auto"). */
   provider: string | null;
   model: string | null;

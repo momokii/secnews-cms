@@ -125,7 +125,7 @@ export function SourceDraftPanel({ ticketId, sources }: SourceDraftPanelProps) {
       </p>
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <fieldset>
+        <fieldset className="min-w-0">
           <legend className="flex items-center gap-2 text-xs text-slate-500">
             Sources
             <span className="flex gap-1">
@@ -158,16 +158,16 @@ export function SourceDraftPanel({ ticketId, sources }: SourceDraftPanelProps) {
                   className="mt-1 h-4 w-4"
                 />
                 <span className="min-w-0">
-                  <span className="block truncate font-medium text-slate-900">
+                  <span className="block break-words font-medium text-slate-900">
                     {sourceName(source)}
                   </span>
                   {source.url !== null ? (
-                    <span className="block truncate text-xs text-slate-500">
+                    <span className="block break-all text-xs text-slate-500">
                       {source.url}
                     </span>
                   ) : null}
                   {sourcePreview(source) !== "" ? (
-                    <span className="block truncate text-xs text-slate-500">
+                    <span className="block break-words text-xs text-slate-500">
                       {sourcePreview(source)}
                     </span>
                   ) : null}
@@ -177,7 +177,7 @@ export function SourceDraftPanel({ ticketId, sources }: SourceDraftPanelProps) {
           </ul>
         </fieldset>
 
-        <fieldset>
+        <fieldset className="min-w-0">
           <legend className="text-xs text-slate-500">Target fields</legend>
           <div className="mt-2 flex flex-col gap-1">
             {SOURCE_DRAFT_FIELDS.map((field) => (
@@ -225,7 +225,7 @@ export function SourceDraftPanel({ ticketId, sources }: SourceDraftPanelProps) {
         </p>
       ) : null}
 
-      <SuggestionList ticketId={ticketId} />
+      <SuggestionList ticketId={ticketId} origin={["SOURCE_DRAFT"]} />
     </section>
   );
 }

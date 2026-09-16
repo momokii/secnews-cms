@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { Pagination } from "../../components/Pagination";
 import { formatTimestamp } from "../../lib/datetime";
-import type { AiSuggestion } from "../../lib/ticketsApi";
+import type { AiSuggestion, SuggestionOrigin } from "../../lib/ticketsApi";
 import {
   useAcceptSuggestion,
   useDeleteSuggestion,
@@ -60,11 +60,18 @@ function deleteMessage(suggestion: AiSuggestion): string {
 
 /** Suggestion review list: PENDING badges, accept/reject, and delete on any
  * status via the shared ConfirmDialog. Server-paginated at 5 per page
- * (5/10/20 selectable). Owns its suggestions query. */
-export function SuggestionList({ ticketId }: { ticketId: string }) {
+ * (5/10/20 selectable). Owns its suggestions query, scoped to the given
+ * origins so each panel lists only its own rows. */
+export function SuggestionList({
+  ticketId,
+  origin,
+}: {
+  ticketId: string;
+  origin: SuggestionOrigin[];
+}) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const suggestionsQuery = useSuggestions(ticketId, undefined, page, pageSize);
+  const suggestionsQuery = useSuggestions(ticketId, undefined, page, pageSize, origin);
   const accept = useAcceptSuggestion();
   const reject = useRejectSuggestion();
   const remove = useDeleteSuggestion();

@@ -237,6 +237,9 @@ model AiSuggestion {
   ticketId  String
   ticket    Ticket           @relation(fields: [ticketId], references: [id])
   status    SuggestionStatus @default(PENDING)
+  // Which AI flow produced the row — separates assist (FILL/ENRICH) from
+  // source-grounded drafting in the ticket detail panels.
+  origin    PromptKind       @default(FILL)
   model     String?
   provider  String?
   content   String

@@ -34,7 +34,8 @@ import {
    type PatchTicketFieldsBody,
    type SendResponse,
    type SourceDraftBody,
-   type SuggestionStatus,
+   type SuggestionOrigin,
+  type SuggestionStatus,
   type TicketActivityAction,
   type TicketsQuery,
   type TicketStatus,
@@ -158,10 +159,16 @@ export function useDeleteIoc() {
 
 // ---- AI assist ----
 
-export function useSuggestions(id: string, status?: SuggestionStatus, page = 1, pageSize = 5) {
+export function useSuggestions(
+  id: string,
+  status?: SuggestionStatus,
+  page = 1,
+  pageSize = 5,
+  origin?: SuggestionOrigin[],
+) {
   return useQuery({
-    queryKey: ["suggestions", id, status ?? null, page, pageSize],
-    queryFn: () => listSuggestions(id, status, page, pageSize),
+    queryKey: ["suggestions", id, status ?? null, page, pageSize, origin ?? null],
+    queryFn: () => listSuggestions(id, status, page, pageSize, origin),
     placeholderData: keepPreviousData,
   });
 }

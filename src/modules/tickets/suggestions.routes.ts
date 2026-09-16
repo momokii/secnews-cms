@@ -85,8 +85,12 @@ export default async function suggestionRoutes(app: FastifyInstance): Promise<vo
     },
   }, async (request) => {
     const { id } = request.params;
-    const { status, page, pageSize } = request.query;
-    const where = { ticketId: id, ...(status === undefined ? {} : { status }) };
+    const { status, origin, page, pageSize } = request.query;
+    const where = {
+      ticketId: id,
+      ...(status === undefined ? {} : { status }),
+      ...(origin === undefined ? {} : { origin: { in: origin } }),
+    };
     const [rows, total] = await Promise.all([
       app.prisma.aiSuggestion.findMany({
         where,

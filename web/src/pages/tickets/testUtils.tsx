@@ -65,6 +65,7 @@ export function suggestionFixture(
     currentValue: null,
     suggestedValue: "Attackers exploit CVE-2026-1234 via crafted certs.",
     status: "PENDING",
+    origin: "FILL",
     provider: null,
     model: "gemini",
     createdAt: "2026-09-14T08:00:00.000Z",
