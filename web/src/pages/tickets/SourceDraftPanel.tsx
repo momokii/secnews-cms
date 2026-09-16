@@ -1,5 +1,8 @@
 import { useState } from "react";
+import type { AvailableIntegration } from "../../lib/integrationsApi";
+import { AI_PROVIDERS, type AiProviderKind, type AiRunBody } from "../../lib/ticketsApi";
 import type { SourceDraftBody, TicketSource } from "../../lib/ticketsApi";
+import { useAvailableIntegrations } from "../../lib/useIntegrations";
 import { useSourceDraft } from "../../lib/useTickets";
 import { SuggestionList } from "./SuggestionList";
 
@@ -46,15 +49,32 @@ function sourcePreview(source: TicketSource): string {
   return source.notes ?? source.note ?? "";
 }
 
+const AUTO_PROVIDER = "AUTO";
+const DEFAULT_MODEL_PLACEHOLDER = "default";
+
+function isAiProvider(kind: string): kind is AiProviderKind {
+  return AI_PROVIDERS.some((provider) => provider === kind);
+}
+
+type PickerValue = AiProviderKind | typeof AUTO_PROVIDER;
+
+function parsePickerValue(value: string): PickerValue {
+  if (value === AUTO_PROVIDER) return AUTO_PROVIDER;
+  return isAiProvider(value) ? value : AUTO_PROVIDER;
+}
+
 interface SourceDraftPanelProps {
   ticketId: string;
   sources: TicketSource[];
 }
 
-/** Source Draft: pick sources, pick target fields, run — the drafts land in
- * the same server-paginated suggestion review list as AI assist. */
+/** Source Draft Assist: pick sources, pick target fields, run — the drafts land in
+ * the same server-paginated suggestion review list as AI assist, isolated by origin. */
 export function SourceDraftPanel({ ticketId, sources }: SourceDraftPanelProps) {
   const run = useSourceDraft();
+  const availableQuery = useAvailableIntegrations();
+  const [provider, setProvider] = useState<PickerValue>(AUTO_PROVIDER);
+  const [model, setModel] = useState("");
   const [selectedSourceIds, setSelectedSourceIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -64,6 +84,19 @@ export function SourceDraftPanel({ ticketId, sources }: SourceDraftPanelProps) {
   const [allowWebSearch, setAllowWebSearch] = useState(false);
 
   const canRun = selectedSourceIds.size > 0 && targetFields.size > 0;
+  const keyedProviders = (availableQuery.data ?? []).filter(
+    (item): item is AvailableIntegration & { kind: AiProviderKind } =>
+      item.hasKey && isAiProvider(item.kind),
+  );
+  const modelPlaceholder =
+    keyedProviders.find((item) => item.kind === provider)?.model ??
+    DEFAULT_MODEL_PLACEHOLDER;
+
+  const aiBody = (): AiRunBody => {
+    if (provider === AUTO_PROVIDER) return {};
+    const trimmed = model.trim();
+    return trimmed === "" ? { provider } : { provider, model: trimmed };
+  };
 
   const toggleSource = (id: string, checked: boolean): void => {
     setSelectedSourceIds((current) => {
@@ -94,6 +127,7 @@ export function SourceDraftPanel({ ticketId, sources }: SourceDraftPanelProps) {
       sourceIds: [...selectedSourceIds],
       targetFields: [...targetFields],
       allowWebSearch,
+      ...aiBody(),
     };
     run.mutate({ id: ticketId, body });
   };
@@ -101,7 +135,7 @@ export function SourceDraftPanel({ ticketId, sources }: SourceDraftPanelProps) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">Source draft</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Source Draft Assist</h2>
         <span title={SOURCE_DRAFT_TOOLTIP} className="flex items-center text-slate-400">
           <svg
             aria-hidden="true"
@@ -207,7 +241,33 @@ export function SourceDraftPanel({ ticketId, sources }: SourceDraftPanelProps) {
         </fieldset>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1 text-xs text-slate-500">
+          Provider
+          <select
+            aria-label="AI provider"
+            value={provider}
+            onChange={(event) => setProvider(parsePickerValue(event.target.value))}
+            className="rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-700"
+          >
+            <option value={AUTO_PROVIDER}>Auto (first configured)</option>
+            {keyedProviders.map((item) => (
+              <option key={item.kind} value={item.kind}>
+                {item.kind}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-slate-500">
+          Model
+          <input
+            aria-label="AI model (optional)"
+            value={model}
+            onChange={(event) => setModel(event.target.value)}
+            placeholder={modelPlaceholder}
+            className="w-48 rounded-md border border-slate-200 px-2 py-2 text-sm text-slate-700 placeholder:text-slate-400"
+          />
+        </label>
         <button
           type="button"
           onClick={onRun}
