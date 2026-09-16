@@ -4,13 +4,14 @@
 
 ## What This Repository Is
 
-This repository is currently in **initialization phase** — no product code has been written yet. It is scaffolded with a universal `.claude/` agent infrastructure designed to work for **any repository, any tech stack, and any setup**.
+**SecNews CMS** — a security-news aggregation and operations platform: ingest security feeds, triage them into tickets, enrich with threat intel (OTX) and AI, then deliver bulletins via email / WhatsApp / Telegram.
 
-- **Current phase:** Blank / greenfield. The project purpose, tech stack, and architecture are not yet determined and will emerge during the first working sessions.
-- **Placeholder status:** All `.claude/` files start intentionally **general and stack-agnostic**. They are expected to evolve organically as the project's stack, patterns, and decisions become known.
-- **After first working session:** The agent that performs real work must autonomously refine placeholder content into accurate, project-specific content (see Self-Update Directive below).
+- **Stack:** TypeScript on Node 22 — Fastify API (`src/`, Prisma 7 + PostgreSQL 16.4), React/Vite web UI (`web/`), Docker Compose v2 (dev override auto-merged; prod overlay runs db + api + web under project `secnews-cms-prod`; one-click via `scripts/setup-prod.sh`).
+- **Key modules:** auth/bootstrap/users, tickets workflow + audit, feeds + ingest, OTX IOC sync, AI fill/enrich with prompt templates (revision history, placeholders), delivery channels, bulletin render, HTML email-template studio, research-notebook sources, Integrations menu (SMTP / WhatsApp / AI providers / threat intel — DB-backed, encrypted, masked, check-connection).
+- **Agent-facing docs:** machine contract in `docs/API_CONTRACT.md` + `docs/STATES.md`; env/Compose truth in `.claude/ENVIRONMENT_GUIDE.md`; live state in `.claude/state/`.
+- **Work tracking:** tasks ship as git commits prefixed `TASK-<NAME>`; current state lives in `.claude/state/CURRENT_STATUS.md`.
 
-This README itself is a living document — update it the moment the project acquires real identity.
+This README is a living document — update it whenever the stack, deployment, or module surface changes.
 
 ---
 
@@ -92,11 +93,7 @@ This is not optional — keeping `.claude/` accurate is part of every task (see 
 
 ## Evolution Note
 
-All `.claude/` files start **general and stack-agnostic by design**. This is intentional:
-
-- A brand-new agent can orient and contribute without prior briefing.
-- Placeholder guidance is deliberately broad so it applies regardless of whether the project becomes a web service, CLI, data pipeline, mobile app, or anything else.
-- As soon as concrete decisions are made (language, framework, database, deployment target), the agent that makes those decisions is responsible for replacing generic content with precise, project-specific content.
+The `.claude/` files began as stack-agnostic placeholders and have been refined into project-specific guidance as the stack became real. Remaining placeholder text (if any) is a bug: any agent that spots generic advice contradicting the actual stack (Fastify/Prisma/React/Compose) should fix it in the same session.
 
 **The goal:** Zero manual re-briefing. Any Claude Code agent can drop in, read `.claude/README.md` → `HOW_TO_RESUME.md` → state files, and begin contributing immediately.
 
@@ -112,4 +109,4 @@ All `.claude/` files start **general and stack-agnostic by design**. This is int
 
 ---
 
-*Last updated: Initialization — general placeholder. Update after first working session.*
+*Last updated: 2026-09-16 — rewritten with the real SecNews CMS stack (Fastify + Prisma 7 + React/Vite + Compose v2, DB-backed Integrations). Update after every working session.*

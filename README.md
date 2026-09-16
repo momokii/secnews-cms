@@ -16,6 +16,8 @@ Security-news aggregation CMS: Fastify API (`src/`), React/Vite web UI (`web/`),
 
 ## Deploy
 
+The production stack is base `docker-compose.yml` + prod overlay `docker-compose.prod.yml` — together they run db + api + web as one Compose project named `secnews-cms-prod` (the dev-only `docker-compose.override.yml` is not merged when `-f` flags are given). DB migrations run automatically inside the api container on every start (`prisma migrate deploy`) — no manual step. WhatsApp and SMTP are **not** configured via env: after deploy, set them up in the web UI's **Integrations** menu — credentials are stored encrypted in the database.
+
 ### One-click
 
 ```sh
@@ -41,7 +43,7 @@ openssl rand -hex 32   # INGEST_API_KEY   (shared secret for feed ingest)
 openssl rand -hex 16   # POSTGRES_PASSWORD
 ```
 
-While in `.env`, also set `POSTGRES_DB=secnews_prod`. Set `WEB_PORT` only if 8080 is taken on the host. `CORS_ORIGIN` is not needed for the bundled web UI (nginx serves SPA and API on one origin). `SMTP_*` / `WAHA_*` only if you use those channels — prefer configuring them in the Integrations menu (ADMIN, stored encrypted, testable); the env vars remain the fallback until a DB row exists. Never commit `.env`.
+While in `.env`, also set `POSTGRES_DB=secnews_prod`. Set `WEB_PORT` only if 8080 is taken on the host. `CORS_ORIGIN` is not needed for the bundled web UI (nginx serves SPA and API on one origin). WhatsApp / SMTP need no env config — set them up after login in the Integrations menu (ADMIN, stored encrypted, testable). Never commit `.env`.
 
 ### 2. Start the production stack
 
@@ -121,4 +123,4 @@ npm run test:e2e
 
 ## WhatsApp (WAHA) — external service
 
-WAHA is **not** part of the compose stack. `WAHA_BASE_URL`, `WAHA_SESSION` and `WAHA_API_KEY` in `.env` point to an externally hosted WhatsApp gateway; WhatsApp channel deliveries require it to be reachable. The e2e suite stubs it, so tests never call WAHA.
+WAHA is **not** part of the compose stack — it is an externally hosted WhatsApp gateway that WhatsApp channel deliveries require to be reachable. Configure it in the **Integrations** menu (ADMIN role): gateway URL, session and API key are stored encrypted in the database and testable from the UI. `WAHA_BASE_URL` / `WAHA_SESSION` / `WAHA_API_KEY` env vars still work as a code-level fallback, but they are not in `.env.example` and not needed. The e2e suite stubs WAHA, so tests never call it.

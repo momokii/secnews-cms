@@ -6,57 +6,51 @@
 
 ## Project Phase
 
-**Initialization** — Repository is empty. First task is project setup. The universal `.claude/` agent infrastructure has been scaffolded and is ready for the first working session.
+**MVP feature-complete, actively hardening.** The SecNews operations platform is deployed via a one-click Compose stack (`scripts/setup-prod.sh` → project `secnews-cms-prod`: db + api + web). 90+ `TASK-*` commits landed; work is now incremental UX/UX-hardening and docs accuracy rather than scaffolding.
 
 ---
 
-## Completed
+## Stack Snapshot
 
-- [x] `.claude/` agent infrastructure initialized — all 14 files scaffolded:
-  - [x] `.claude/settings.json` — tool permissions (allow/ask/deny, non-destructive defaults, no invalid hooks)
-  - [x] `.claude/README.md` — master orientation doc (canonical order Step 0 README → Step 1 HOW_TO_RESUME → state)
-  - [x] `.claude/AGENT_RULES.md` — non-negotiable behavioral rules
-  - [x] `.claude/CODING_STANDARDS.md` — stack-agnostic best practices
-  - [x] `.claude/SECURITY_STANDARDS.md` — mandatory security requirements
-  - [x] `.claude/ENVIRONMENT_GUIDE.md` — environment definitions & behavior
-  - [x] `.claude/HOW_TO_RESUME.md` — 11-step resume protocol (canonical order aligned with README)
-  - [x] `.claude/state/CURRENT_STATUS.md` — this file
-  - [x] `.claude/state/TASK_QUEUE.md` — ordered backlog (template/placeholder)
-  - [x] `.claude/state/DECISIONS_LOG.md` — decisions log (template/placeholder)
-  - [x] `.claude/templates/new_feature.md` — feature checklist
-  - [x] `.claude/templates/new_endpoint.md` — endpoint checklist
-  - [x] `.claude/templates/new_test.md` — test checklist
-  - [x] `.claude/templates/bug_fix.md` — bug fix checklist
-- [x] Root security prerequisites created — `.env.example` (non-secret placeholders, committed) and `.gitignore` (`.env`/`.env.*` ignored, `!.env.example` allowed)
+- **API:** TypeScript, Node 22, Fastify (`src/`), Prisma 7 + adapter-pg, zod v4 schemas per module (`src/modules/*/schema.ts`).
+- **Web:** React + Vite (`web/`), nginx stable-alpine serving the SPA and proxying `/api/*` in prod.
+- **DB:** PostgreSQL 16.4-alpine; migrations auto-run via `prisma migrate deploy` in the api container entrypoint.
+- **Deploy:** Compose v2 — base `docker-compose.yml` + `docker-compose.override.yml` (dev, auto-merged) + `docker-compose.prod.yml` (overlay, project name `secnews-cms-prod`, only `WEB_PORT` published).
+- **Tests:** vitest — API unit suites (`tests/*.test.ts`) + API-level e2e (`npm run test:e2e`, transport-stubbed, needs :5433 dev DB); web unit tests.
 
----
+## Completed (major surfaces)
+
+- [x] Auth & users — JWT login with env-driven `JWT_EXPIRES_IN` (sidebar countdown), roles ADMIN/EDITOR/ANALYST, bootstrap-first-admin gate, change-password.
+- [x] Tickets workflow — full state machine (`docs/STATES.md`), take/transition gates, audit activity timeline with action filter and old→new values, CVE-id guards, IOC value-vs-type validation, pending-suggestions hard block.
+- [x] Research-notebook sources — rich sources on tickets (title + notes), tooltip display, per-source edit, audit trail (TASK-SOURCES).
+- [x] Feeds & ingest — RSS/Atom poller on `FEED_POLL_CRON`, `POST /ingest` with timing-safe `INGEST_API_KEY`.
+- [x] OTX threat intel — IOC push/patch/remove with real upstream ids, diff-based sync, re-push converges to the ticket's canonical IOC set.
+- [x] AI enrichment — Fill/Enrich prompt templates persisted with revision history + per-card guidance + history viewer, 16 placeholders (aggregated + granular) with legend mirroring the backend renderer, provider+model choice per call (Gemini, DeepSeek), suggestion accept/delete with audit.
+- [x] Delivery — channels CRUD (email / WhatsApp-WAHA / Telegram-channel), central send transport, audited send + resend from SENT, upstream error detail surfaced (telegram network cause/timeouts).
+- [x] Bulletin — render pipeline from READY tickets.
+- [x] Email template studio — HTML email templates with editor + render preview (TASK-UX+EMAIL).
+- [x] **Integrations menu** — SMTP, WAHA, AI providers, threat-intel keys configured **in-app** (ADMIN role): stored encrypted in DB (`ENCRYPTION_KEY`), masked on read, `check-connection` probes for SMTP/WAHA/Telegram/DeepSeek. Env vars (`WAHA_*`, `SMTP_*`) remain a code-level fallback only — **no longer listed in `.env.example`** (TASK-INTGS + this docs pass).
+- [x] Prod deploy — `scripts/setup-prod.sh` one-click (idempotent .env generation, build, wait-for-health); `prisma migrate deploy` runs in api entrypoint; compose project isolation documented (`docker compose ps` empty → use `-f … -f docker-compose.prod.yml ps` or `-p secnews-cms-prod ps`).
 
 ## In Progress
 
-- [ ] Awaiting first project task from user — no product code has been written yet
-
----
+- [ ] None carried across sessions. Current session: docs/state alignment (TASK-DOCS) — see Session History.
 
 ## Blocked
 
-None
-
----
+None.
 
 ## Open Questions
 
-- Tech stack not yet determined — language, framework, database, deployment target unknown
-- Project purpose not yet defined — awaiting user goals / PRD
-- Environment configuration partially established — `.env.example` (non-secret placeholders) and `.gitignore` (`.env` ignored, `!.env.example` allowed) created at bootstrap; Docker setup and real health-check/test commands still pending
-- Linting / formatting / test commands not yet known — placeholders remain in `HOW_TO_RESUME.md` and `ENVIRONMENT_GUIDE.md`
-
----
+- None blocking. (Historic ones — stack, deploy path, test commands — resolved; see `ENVIRONMENT_GUIDE.md` for the verified command table.)
 
 ## Security Notes
 
-- No implementation exists yet — security standards will be applied from first commit.
-- `.env` gitignore — `.gitignore` lists `.env`, `.env.staging`, `.env.production`, `.env.local` as ignored and `!.env.example` as allowed; `.env.example` exists at repo root with non-secret placeholders (verified by inspecting `.gitignore`; rerun `git check-ignore` after `git init`).
-- No secrets exist in the repository at this stage — `.env.example` contains only placeholders.
+- Secrets only via `.env` (gitignored): `JWT_SECRET`, `ENCRYPTION_KEY`, `INGEST_API_KEY`, `POSTGRES_*`; `setup-prod.sh` generates them with `openssl rand -hex`.
+- `ENCRYPTION_KEY` encrypts integration credentials (SMTP, WAHA, AI providers) at rest; API returns them masked.
+- `CORS_ORIGIN` empty disables cross-origin browser access (secure default); prod bundled UI needs none (single origin).
+- Prod containers run non-root (api uid 100, web uid 101); only `WEB_PORT` published; db unpublished in prod.
+- No real WAHA/SMTP credentials in repo; e2e stubs both transports (zero external traffic).
 
 ---
 
@@ -67,17 +61,23 @@ None
 - **Agent:** Sisyphus (bootstrap)
 - **Goal:** Initialize universal `.claude/` agent infrastructure for a blank repository
 - **Outcome:** All 14 files created with substantive, general-first content per file specifications. No product code changed. Ready for first working session.
-- **Next step:** User provides project goals / PRD; agent populates `TASK_QUEUE.md` and begins first feature. After that session, agent must update `.claude/` files with project-specific content (especially `CODING_STANDARDS.md`, `SECURITY_STANDARDS.md`, `ENVIRONMENT_GUIDE.md`, and `README.md`).
 
 ### Session — 2026-09-04 — Oracle Verification Fixes (1/500)
 
 - **Agent:** Sisyphus (verification)
 - **Goal:** Address Oracle NOT VERIFIED gaps (5 items)
-- **Fixes:** (1) `settings.json` — narrowed `allow` to specific safe commands, added `ask` for destructive ops, expanded `deny` for `git reset --hard`/`clean -f`/`push --force`/`docker system prune`/`volume rm`/`rmi -f`/`rm -rf ~`/`sudo`, removed invalid `hooks.preCommit` (2) `README.md` → `HOW_TO_RESUME.md` circular — defined canonical order `Step 0 README (this file) → Step 1 HOW_TO_RESUME → state` with alignment notes (3) `HOW_TO_RESUME.md` — Step 1 canonical note, Quick Reference Card updated to canonical entry, footer aligned to README (4) Created root `.env.example` (non-secret placeholders) and `.gitignore` (`.env*` ignored, `!.env.example` allowed) to satisfy `SECURITY_STANDARDS.md` mandatory prerequisite; verified by inspecting `.gitignore`; rerun `git check-ignore` after `git init` (5) Updated `CURRENT_STATUS.md` Completed/Open Questions/Security Notes to accurately reflect prerequisites
+- **Fixes:** settings.json hardening; README→HOW_TO_RESUME canonical order; .env.example/.gitignore prerequisites; CURRENT_STATUS accuracy.
 - **Outcome:** All 5 gaps resolved, prerequisites now satisfied.
+
+### Session — 2026-09-16 — TASK-DOCS: repo docs + env cleanup
+
+- **Agent:** Sisyphus-Junior
+- **Goal:** Align repo docs and `.claude` state with the current stack after Integrations went DB-backed.
+- **Changes:** `.env.example` — removed `WAHA_*` and `SMTP_*` blocks, replaced with Integration-menu pointer (env fallback documented as code-level only); README — Deploy intro now explains base+overlay compose files under project `secnews-cms-prod`, in-app SMTP/WAHA config, manual section and WAHA section rewritten accordingly; `.claude/README.md` — real project identity replaces greenfield placeholder; this file + `TASK_QUEUE.md` + `DECISIONS_LOG.md` reflect the actual stack (prompt templates, email template studio, research-notebook sources, integrations).
+- **Outcome:** Docs consistent with TASK-INTGS/TASK-COMPOSE reality; no code changes; tests re-run green.
 
 ---
 
 ## Last Updated
 
-2026-09-04 — Oracle verification fixes applied (settings.json non-destructive, orientation canonical, .env.example/.gitignore created). Updated by Sisyphus.
+2026-09-16 — TASK-DOCS: state files aligned with current stack; .env.example dropped WAHA/SMTP env vars. Updated by Sisyphus-Junior.
