@@ -8,7 +8,7 @@ import { z } from "zod/v4";
  * (never edited) — mirrors the bulletin-template behavior.
  */
 
-export const PromptKindSchema = z.enum(["FILL", "ENRICH"]);
+export const PromptKindSchema = z.enum(["FILL", "ENRICH", "SOURCE_DRAFT"]);
 export type PromptKindValue = z.infer<typeof PromptKindSchema>;
 
 export const PromptPlaceholderSchema = z.object({

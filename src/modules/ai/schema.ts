@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { paginated, pageQuery } from "../../common/pagination.js";
 import { SuggestionStatusEnum } from "../tickets/schema.js";
+import { SOURCE_DRAFT_FIELDS } from "./prompts.js";
 
 /** AI assist. fill = strict (suggests ONLY missing final fields);
  * enrich = full rewrite suggestions. Both land as PENDING suggestions that
@@ -31,6 +32,21 @@ export type AiSuggestion = z.infer<typeof AiSuggestionSchema>;
 export const AiFillResponseSchema = z.object({
   suggestions: z.array(AiSuggestionSchema),
 });
+
+// POST /tickets/:id/ai/source-draft (TASK-SRC-DRAFT): the analyst picks the
+// grounding sources and the narrative fields to draft. Only overview/
+// description/recommendations/references are draftable here — the typed
+// working fields (cveIds etc.) belong to fill/enrich.
+export const SourceDraftBodySchema = z
+  .object({
+    sourceIds: z.array(z.uuid()).min(1).max(20),
+    targetFields: z.array(z.enum(SOURCE_DRAFT_FIELDS)).min(1),
+    /** Prompt-only augmentation for references; no server-side fetching. */
+    allowWebSearch: z.boolean().optional(),
+    provider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "DEEPSEEK"]).optional(),
+    model: z.string().min(1).optional(),
+  })
+  .strict();
 
 // POST /tickets/:id/suggestions/:suggestionId/accept — merges into final fields
 export const SuggestionActionResponseSchema = z.object({

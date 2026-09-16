@@ -24,7 +24,7 @@ import {
 export default async function promptRoutes(app: FastifyInstance): Promise<void> {
   const f = app.withTypeProvider<ZodTypeProvider>();
 
-  const KINDS = [PromptKind.FILL, PromptKind.ENRICH] as const;
+  const KINDS = [PromptKind.FILL, PromptKind.ENRICH, PromptKind.SOURCE_DRAFT] as const;
   const placeholders = PROMPT_PLACEHOLDERS.map((placeholder) => ({ ...placeholder }));
 
   // GET /prompts — ANY authenticated role (template-editing context).

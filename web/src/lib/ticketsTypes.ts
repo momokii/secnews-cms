@@ -55,6 +55,14 @@ export interface AiRunBody {
   model?: string;
 }
 
+/** Body for POST /tickets/:id/ai/source-draft — drafts the target final fields
+ * ONLY from the picked sources; allowWebSearch lets References use online search. */
+export interface SourceDraftBody {
+  sourceIds: string[];
+  targetFields: string[];
+  allowWebSearch?: boolean;
+}
+
 export const CHANNEL_TYPES = ["WHATSAPP", "TELEGRAM", "EMAIL"] as const;
 export type ChannelType = (typeof CHANNEL_TYPES)[number];
 

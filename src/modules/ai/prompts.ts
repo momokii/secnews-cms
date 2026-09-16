@@ -18,6 +18,11 @@ export const SUGGESTIBLE_FIELDS = [
 ] as const;
 export type SuggestibleField = (typeof SUGGESTIBLE_FIELDS)[number];
 
+/** Fields source-draft may target: the narrative output sections only — the
+ * typed working fields (cveIds etc.) are fill/enrich territory. */
+export const SOURCE_DRAFT_FIELDS = ["overview", "description", "recommendations", "references"] as const;
+export type SourceDraftField = (typeof SOURCE_DRAFT_FIELDS)[number];
+
 export class SemanticError extends Error {
   readonly details?: unknown;
   constructor(message: string, details?: unknown) {
@@ -75,20 +80,61 @@ export function sourceValues(ticket: TicketWithRelations): string {
     .join(", ");
 }
 
+/** Numbered {{selectedSources}} block: title, url, notes per source — the
+ * grounding evidence for source-draft. `note` is the legacy short form,
+ * shown only when the long-form `notes` is absent. */
+export function selectedSourcesBlock(sources: TicketWithRelations["sources"]): string {
+  if (sources.length === 0) {
+    return "(no sources selected)";
+  }
+  return sources
+    .map((source, index) => {
+      return [
+        `${index + 1}. title: ${source.title ?? "(none)"}`,
+        `   url: ${source.url ?? "(none)"}`,
+        `   notes: ${source.notes ?? source.note ?? "(none)"}`,
+      ].join("\n");
+    })
+    .join("\n");
+}
+
 /** The ticket header block injected as the {{ticketContext}} prompt placeholder. */
 export function ticketContext(ticket: TicketWithRelations): string {
-  const iocs = iocValues(ticket);
-  const sources = sourceValues(ticket);
   return [
     `title: ${ticket.title}`,
     `summary: ${ticket.summary}`,
     `findingType: ${ticket.findingType}`,
     `tlp: ${ticket.tlp}`,
-    iocs === "" ? "" : `iocs: ${iocs}`,
-    sources === "" ? "" : `sources: ${sources}`,
+    iocLine(ticket),
+    sourceLine(ticket),
   ]
     .filter((line) => line !== "")
     .join("\n");
+}
+
+/** Source-draft header block: the chosen grounding sources are injected
+ * separately via {{selectedSources}} — an all-sources line here would leak
+ * evidence the analyst did not select. */
+export function sourceDraftTicketContext(ticket: TicketWithRelations): string {
+  return [
+    `title: ${ticket.title}`,
+    `summary: ${ticket.summary}`,
+    `findingType: ${ticket.findingType}`,
+    `tlp: ${ticket.tlp}`,
+    iocLine(ticket),
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
+function iocLine(ticket: TicketWithRelations): string {
+  const iocs = iocValues(ticket);
+  return iocs === "" ? "" : `iocs: ${iocs}`;
+}
+
+function sourceLine(ticket: TicketWithRelations): string {
+  const sources = sourceValues(ticket);
+  return sources === "" ? "" : `sources: ${sources}`;
 }
 
 export const SYSTEM_PROMPT = [

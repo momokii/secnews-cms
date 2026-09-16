@@ -4,9 +4,12 @@ import {
   currentValueOf,
   iocValues,
   missingFields,
+  selectedSourcesBlock,
+  sourceDraftTicketContext,
   sourceValues,
   SUGGESTIBLE_FIELDS,
   ticketContext,
+  type SourceDraftField,
   type TicketWithRelations,
 } from "./prompts.js";
 
@@ -65,6 +68,16 @@ export const PROMPT_PLACEHOLDERS = [
   {
     name: "sources",
     description: "Source urls/notes, comma-joined — empty string when none",
+  },
+  {
+    name: "selectedSources",
+    description:
+      "Source-draft only: numbered list of the analyst-chosen grounding sources with title, url and notes per source (empty in fill/enrich)",
+  },
+  {
+    name: "targetFields",
+    description:
+      "Source-draft only: comma-joined requested output fields (overview, description, recommendations, references) — empty in fill/enrich",
   },
   {
     name: "overview",
@@ -138,6 +151,30 @@ export const DEFAULT_PROMPTS: Record<PromptKind, string> = {
     "{{ticketContext}}",
     "{{currentFields}}",
   ].join("\n"),
+  SOURCE_DRAFT: [
+    "# Role",
+    "You are a security-intelligence analyst drafting the narrative sections of a ticket, grounded ONLY in the sources the analyst selected below.",
+    "",
+    "# Instructions",
+    "Ground every statement in the selected sources. Keep numbers, versions, CVE ids, and dates verbatim from the source that states them.",
+    "Never invent IOCs, CVE IDs, product versions, sources, or claims that the selected sources do not support. If the sources are silent, omit it rather than fabricate it.",
+    "The selected sources are the only permitted evidence: do not add knowledge, references, or context from anywhere else.",
+    "Defang every IOC in prose and lists (for example, example[.]com and hxxps://example[.]com).",
+    "Keep the tone concise, precise, and suitable for analyst sign-off.",
+    "",
+    "# Output contract",
+    'Return JSON of the shape {"fields": {"<field>": "<text>", ...}} with ONLY the requested fields: {{targetFields}}.',
+    "No markdown fences, no commentary, no keys outside the requested fields.",
+    "For a references request, list the supporting selected source URLs one per line, most authoritative first; omit a URL the sources cannot support.",
+    'Example — for requested fields overview, references a correct answer is:',
+    '{"fields": {"overview": "One paragraph grounded in the selected sources.", "references": "https://advisory.example/a\\nhttps://report.example/b"}}',
+    "",
+    "Selected sources:",
+    "{{selectedSources}}",
+    "",
+    "Ticket context:",
+    "{{ticketContext}}",
+  ].join("\n"),
 };
 
 /** The ticket-data values the renderer substitutes into a template: the three
@@ -153,6 +190,9 @@ export type PromptBindings = {
   tlp: string;
   iocs: string;
   sources: string;
+  /** Source-draft only: bound by sourceDraftPromptBindings, "" in fill/enrich. */
+  selectedSources: string;
+  targetFields: string;
   overview: string;
   description: string;
   recommendations: string;
@@ -189,7 +229,24 @@ export function promptBindings(ticket: TicketWithRelations): PromptBindings {
     tlp: ticket.tlp,
     iocs: iocValues(ticket),
     sources: sourceValues(ticket),
+    selectedSources: "",
+    targetFields: "",
     ...finalFieldBindings(ticket),
+  };
+}
+
+/** Source-draft bindings: the standard ticket bindings plus the numbered
+ * grounding-source block and the comma-joined requested output fields. */
+export function sourceDraftPromptBindings(
+  ticket: TicketWithRelations,
+  chosenSources: TicketWithRelations["sources"],
+  targetFields: readonly SourceDraftField[],
+): PromptBindings {
+  return {
+    ...promptBindings(ticket),
+    ticketContext: sourceDraftTicketContext(ticket),
+    selectedSources: selectedSourcesBlock(chosenSources),
+    targetFields: targetFields.join(", "),
   };
 }
 

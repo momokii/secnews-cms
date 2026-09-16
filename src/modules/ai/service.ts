@@ -45,7 +45,7 @@ export type SuggestionDraft = {
 
 type StoredProviderConfig = { apiKey: string; model?: string };
 
-type ProviderChoice = {
+export type ProviderChoice = {
   provider?: "OPENAI" | "ANTHROPIC" | "GEMINI" | "DEEPSEEK";
   model?: string;
 };
@@ -106,23 +106,21 @@ export async function resolveProvider(
   throw new SemanticError("No AI provider configured — set a key under integrations first");
 }
 
-/** Run one completion against the resolved provider and return field drafts. */
-export async function generateSuggestions(
+export type ProviderRun = { kind: ProviderKind; model: string };
+
+/** Resolve the provider, run one completion, and map transport failures:
+ * network-unreachable → 502 INTERNAL naming the provider; upstream non-2xx →
+ * 502 with the upstream status/body detail. Shared by every AI flow. */
+export async function runCompletion(
   db: PrismaClient,
-  ticket: TicketWithRelations,
-  mode: "fill" | "enrich",
-  explicit: ProviderChoice = {},
-): Promise<Array<{ model: string; provider: ProviderKind } & SuggestionDraft>> {
+  explicit: ProviderChoice,
+  system: string,
+  prompt: string,
+): Promise<{ raw: string } & ProviderRun> {
   const provider = await resolveProvider(db, explicit);
-  const call = PROVIDERS[provider.kind];
-  const template = await loadPromptTemplate(db, modeToKind(mode));
   let raw: string;
   try {
-    raw = await call({
-      ...provider.options,
-      system: SYSTEM_PROMPT,
-      prompt: renderPromptTemplate(template, promptBindings(ticket)),
-    });
+    raw = await PROVIDERS[provider.kind]({ ...provider.options, system, prompt });
   } catch (error) {
     if (isNetworkFailure(error)) {
       throw new AppError(
@@ -137,6 +135,23 @@ export async function generateSuggestions(
     }
     throw error;
   }
+  return { raw, kind: provider.kind, model: provider.options.model };
+}
+
+/** Run one completion against the resolved provider and return field drafts. */
+export async function generateSuggestions(
+  db: PrismaClient,
+  ticket: TicketWithRelations,
+  mode: "fill" | "enrich",
+  explicit: ProviderChoice = {},
+): Promise<Array<{ model: string; provider: ProviderKind } & SuggestionDraft>> {
+  const template = await loadPromptTemplate(db, modeToKind(mode));
+  const { raw, kind, model } = await runCompletion(
+    db,
+    explicit,
+    SYSTEM_PROMPT,
+    renderPromptTemplate(template, promptBindings(ticket)),
+  );
   const fields = parseModelFields(raw);
 
   const scope = mode === "fill" ? missingFields(ticket) : [...SUGGESTIBLE_FIELDS];
@@ -150,8 +165,8 @@ export async function generateSuggestions(
       field,
       currentValue: currentValueOf(ticket, field),
       suggestedValue: suggested,
-      model: provider.options.model,
-      provider: provider.kind,
+      model,
+      provider: kind,
     });
   }
   return drafts;

@@ -22,17 +22,19 @@ import {
   patchTicketFields,
   pushOtx,
   rejectSuggestion,
-  sendTicket,
-  transitionTicket,
-  updateIoc,
-  updateTicketSource,
-  type AiRunBody,
-  type CreateIocBody,
-  type CreateTicketBody,
-  type OtxPushResponse,
-  type PatchTicketFieldsBody,
-  type SendResponse,
-  type SuggestionStatus,
+   sendTicket,
+   sourceDraft,
+   transitionTicket,
+   updateIoc,
+   updateTicketSource,
+   type AiRunBody,
+   type CreateIocBody,
+   type CreateTicketBody,
+   type OtxPushResponse,
+   type PatchTicketFieldsBody,
+   type SendResponse,
+   type SourceDraftBody,
+   type SuggestionStatus,
   type TicketActivityAction,
   type TicketsQuery,
   type TicketStatus,
@@ -221,6 +223,19 @@ export function useAiFill() {
 
 export function useAiEnrich() {
   return useAiRun("ai/enrich");
+}
+
+export function useSourceDraft() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: SourceDraftBody }) =>
+      sourceDraft(id, body),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ["ticket", id] });
+      void queryClient.invalidateQueries({ queryKey: ["suggestions", id] });
+      void queryClient.invalidateQueries({ queryKey: ["ticket-activity", id] });
+    },
+  });
 }
 
 // ---- Delivery ----

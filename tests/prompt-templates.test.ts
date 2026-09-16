@@ -86,11 +86,11 @@ describe("TASK-PROMPT prompt template management (fill/enrich)", () => {
     // Then: one item per kind, default content, and the placeholder legend
     expect(res.statusCode).toBe(200);
     const items = res.json() as Array<{ kind: string; content: string; updatedAt: string | null; placeholders: Array<{ name: string }> }>;
-    expect(items.map((item) => item.kind)).toEqual(["FILL", "ENRICH"]);
+    expect(items.map((item) => item.kind)).toEqual(["FILL", "ENRICH", "SOURCE_DRAFT"]);
     for (const item of items) {
       expect(item.content).toContain("Ticket context:");
       expect(item.content).toContain("{{ticketContext}}");
-      expect(typeof item.updatedAt).toBe("string");
+      expect(item.updatedAt === null || typeof item.updatedAt === "string").toBe(true);
     }
     expect(items[0]?.placeholders.map((placeholder) => placeholder.name)).toEqual([
       "ticketContext",
@@ -102,6 +102,8 @@ describe("TASK-PROMPT prompt template management (fill/enrich)", () => {
       "tlp",
       "iocs",
       "sources",
+      "selectedSources",
+      "targetFields",
       "overview",
       "description",
       "recommendations",

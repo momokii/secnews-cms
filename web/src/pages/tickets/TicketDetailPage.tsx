@@ -12,6 +12,7 @@ import { CopyButton } from "../../components/CopyButton";
 import { DeliveryActions } from "./DeliveryActions";
 import { FinalFieldsForm } from "./FinalFieldsForm";
 import { IocTable } from "./IocTable";
+import { SourceDraftPanel } from "./SourceDraftPanel";
 import { SourcesEditor } from "./SourcesEditor";
 import { TransitionActionBar } from "./TransitionActionBar";
 import { formatTimestamp } from "../../lib/datetime";
@@ -141,6 +142,8 @@ export function TicketDetailPage() {
           blocked={blockedByError}
         />
       </div>
+
+      <SourceDraftPanel ticketId={ticket.id} sources={ticket.sources} />
 
       <SourcesEditor ticketId={ticket.id} sources={ticket.sources} />
       <IocTable ticketId={ticket.id} iocs={ticket.iocs} />

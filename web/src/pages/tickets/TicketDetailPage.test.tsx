@@ -98,11 +98,13 @@ describe("TicketDetailPage: workspace composition", () => {
 
     // Action bar per role/state (EDITOR on READY → Mark sent + Close ticket).
     expect(await screen.findByRole("button", { name: "Mark sent" })).toBeTruthy();
-    // Final-fields form.
-    expect(screen.getByLabelText("Overview")).toBeTruthy();
+    // Final-fields form (role-scoped: Source draft's field checkbox shares the label).
+    expect(screen.getByRole("textbox", { name: "Overview" })).toBeTruthy();
     // AI panel.
     expect(screen.getByRole("button", { name: "AI fill (strict)" })).toBeTruthy();
-    expect(await screen.findByText("PENDING")).toBeTruthy();
+    // Source draft panel (its own suggestion list joins AI assist's).
+    expect(screen.getByRole("button", { name: "Run" })).toBeTruthy();
+    expect((await screen.findAllByText("PENDING")).length).toBeGreaterThan(0);
     // Sources editor.
     expect(screen.getByRole("link", { name: "https://openssl.org/advisory" })).toBeTruthy();
     // IOC table.

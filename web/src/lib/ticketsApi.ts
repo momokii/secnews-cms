@@ -11,6 +11,7 @@ import {
   type Paginated,
   type PatchTicketFieldsBody,
   type SendResponse,
+  type SourceDraftBody,
   type SuggestionStatus,
   type Ticket,
   type TicketActivity,
@@ -52,6 +53,7 @@ export type {
   Paginated,
   PatchTicketFieldsBody,
   SendResponse,
+  SourceDraftBody,
   SuggestionStatus,
   Ticket,
   TicketActivity,
@@ -202,6 +204,15 @@ export async function aiEnrich(
   body: AiRunBody = {},
 ): Promise<{ suggestions: AiSuggestion[] }> {
   const response = await apiFetch(`/tickets/${id}/ai/enrich`, jsonInit("POST", body));
+  return readJson(response);
+}
+
+/** Source draft: proposes the target fields from the picked sources only. */
+export async function sourceDraft(
+  id: string,
+  body: SourceDraftBody,
+): Promise<{ suggestions: AiSuggestion[] }> {
+  const response = await apiFetch(`/tickets/${id}/ai/source-draft`, jsonInit("POST", body));
   return readJson(response);
 }
 

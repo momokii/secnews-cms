@@ -24,7 +24,9 @@ const fillBody = z
   })
   .strict();
 
-function semantic422(reply: FastifyReply, error: SemanticError): void {
+/** Render a SemanticError as the documented 422 VALIDATION envelope — the
+ * shared AI rejection path for every AI assist route. */
+export function semantic422(reply: FastifyReply, error: SemanticError): void {
   void reply.code(422).send({
     error: { code: "VALIDATION", message: error.message, details: error.details ?? null },
   });

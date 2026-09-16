@@ -85,6 +85,7 @@ enum TicketActivityAction {
   SOURCE_REMOVED
   AI_FILL
   AI_ENRICH
+  AI_SOURCE_DRAFT
   SUGGESTION_ACCEPTED
   SUGGESTION_REJECTED
   SUGGESTION_DELETED
@@ -117,6 +118,7 @@ enum IntegrationKind {
 enum PromptKind {
   FILL
   ENRICH
+  SOURCE_DRAFT
 }
 
 // ── Models ───────────────────────────────────────────────────────────────────
