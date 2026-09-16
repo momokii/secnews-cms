@@ -121,6 +121,22 @@ enum PromptKind {
   SOURCE_DRAFT
 }
 
+enum ExportType {
+  FEED
+  TICKET
+}
+
+enum ExportFormat {
+  CSV
+  JSON
+  XLSX
+}
+
+enum ExportStatus {
+  SUCCESS
+  FAILED
+}
+
 // ── Models ───────────────────────────────────────────────────────────────────
 
 model User {
@@ -137,6 +153,7 @@ model User {
   activities   TicketActivity[]
   ticketsTaken Ticket[]         @relation("TicketTakenBy")
   promptRevisions PromptRevision[]
+  exportAudits ExportAudit[]
 }
 
 model FeedSource {
@@ -350,4 +367,23 @@ model TicketActivity {
   createdAt DateTime             @default(now())
 
   @@index([ticketId, createdAt])
+}
+
+// Export audit trail: one row per export run. actorId is nullable because
+// system/scheduled exports have no user; deleting the user keeps the audit row.
+model ExportAudit {
+  id        String        @id @default(uuid())
+  actorId   String?
+  actor     User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  type      ExportType
+  format    ExportFormat
+  from      DateTime?
+  to        DateTime?
+  status    ExportStatus
+  rowCount  Int?
+  error     String?
+  createdAt DateTime      @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
 }
