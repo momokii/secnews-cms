@@ -16,15 +16,11 @@ export function RequireAuth() {
   return <Outlet />;
 }
 
-/**
- * Route guard for guest-only pages: signed-in users are sent to /feeds instead
- * of seeing /login or /bootstrap.
- */
 export function GuestOnly() {
   const { token } = useSession();
 
   if (token !== null) {
-    return <Navigate to="/feeds" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Outlet />;

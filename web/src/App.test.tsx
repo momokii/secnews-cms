@@ -117,15 +117,18 @@ describe("ROUTE-02: analyst role access", () => {
     expect(screen.getByRole("heading", { name: "Tickets" })).toBeTruthy();
   });
 
-  it("lands / on /tickets for an analyst", () => {
-    // Given: an authenticated analyst session
+  it("lands / on /dashboard for an analyst", async () => {
     setToken("analyst-token");
     setUser({ id: "6d0b8a2c-4e1f-47d3-95c7-8b9a0d1e2f3a", email: "analyst@example.com", name: "Analyst", role: "ANALYST" });
-
-    // When: the app is rendered at the index route
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/dashboard/")) {
+        if (url.includes("/summary")) return new Response(JSON.stringify({ feedItems: { total: 0, byStatus: {} }, tickets: { total: 0, byStatus: {} }, deliveries: { sent: 0, failed: 0 } }), { status: 200 });
+        return new Response(JSON.stringify({ buckets: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), { status: 200 });
+    }));
     renderApp("/");
-
-    // Then: the analyst lands on the tickets list
-    expect(screen.getByRole("heading", { name: "Tickets" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeTruthy();
   });
 });

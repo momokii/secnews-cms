@@ -15,7 +15,7 @@ export function LoginPage() {
     try {
       const result = await login(email, password);
       setToken(result.token); setUser(result.user);
-      const from = location.state && typeof location.state === "object" && "from" in location.state && typeof location.state.from === "string" ? location.state.from : "/feeds";
+       const from = location.state && typeof location.state === "object" && "from" in location.state && typeof location.state.from === "string" ? location.state.from : "/dashboard";
       navigate(from, { replace: true });
     } catch (caught) { setError(apiErrorMessage(caught)); }
     finally { setSaving(false); }

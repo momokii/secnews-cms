@@ -18,6 +18,22 @@ function byStatusEntries(record: Record<string, number | undefined>): Array<[str
   return Object.entries(record).filter((entry): entry is [string, number] => typeof entry[1] === "number");
 }
 
+const FEED_ITEMS_TOOLTIP = "Aggregated feed ingestion (RSS + external ingest) grouped by triage status (Unreviewed/Viewed/Taken) for selected range";
+const TICKETS_TOOLTIP = "Work items (auto-feed or manual) grouped by workflow status (Open/Research/Ready/Sent/Closed)";
+const DELIVERIES_TOOLTIP = "Outbound sends audited per channel (WhatsApp/Telegram/Email), success vs failed";
+
+function InfoIcon({ title }: { title: string }) {
+  return (
+    <span title={title} className="flex items-center text-slate-400">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 16v-4" />
+        <path d="M12 8h.01" />
+      </svg>
+    </span>
+  );
+}
+
 function isResizeObserverAvailable(): boolean {
   return typeof window !== "undefined" && typeof window.ResizeObserver !== "undefined";
 }
@@ -47,12 +63,19 @@ export function DashboardPage() {
         ? timeseries.error.message
         : "Failed to load dashboard.";
 
-  const totalsZero =
+  const hasSummary =
     summary.data !== undefined &&
-    summary.data.feedItems.total === 0 &&
-    summary.data.tickets.total === 0 &&
-    summary.data.deliveries.sent === 0 &&
-    summary.data.deliveries.failed === 0;
+    typeof (summary.data as unknown as { feedItems?: unknown }).feedItems !== "undefined" &&
+    typeof (summary.data as { feedItems: { total: unknown } }).feedItems.total === "number" &&
+    typeof (summary.data as { tickets: { total: unknown } }).tickets.total === "number" &&
+    typeof (summary.data as { deliveries: { sent: unknown } }).deliveries.sent === "number";
+
+  const totalsZero =
+    hasSummary &&
+    summary.data!.feedItems.total === 0 &&
+    summary.data!.tickets.total === 0 &&
+    summary.data!.deliveries.sent === 0 &&
+    summary.data!.deliveries.failed === 0;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
@@ -72,14 +95,17 @@ export function DashboardPage() {
         </p>
       ) : null}
 
-      {summary.data ? (
+      {hasSummary ? (
         <>
           <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
             <article className="rounded-lg border border-slate-200 p-4">
-              <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Feed items</h2>
-              <p className="mt-2 text-3xl font-bold text-slate-900">{summary.data.feedItems.total}</p>
+              <h2 className="flex items-center gap-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                Feed items
+                <InfoIcon title={FEED_ITEMS_TOOLTIP} />
+              </h2>
+              <p className="mt-2 text-3xl font-bold text-slate-900">{summary.data!.feedItems.total}</p>
               <ul className="mt-2 flex flex-wrap gap-2">
-                {byStatusEntries(summary.data.feedItems.byStatus as Record<string, number>).map(([status, count]) => (
+                {byStatusEntries(summary.data!.feedItems.byStatus as Record<string, number>).map(([status, count]) => (
                   <li key={status} className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
                     {status}: {count}
                   </li>
@@ -88,10 +114,13 @@ export function DashboardPage() {
             </article>
 
             <article className="rounded-lg border border-slate-200 p-4">
-              <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Tickets</h2>
-              <p className="mt-2 text-3xl font-bold text-slate-900">{summary.data.tickets.total}</p>
+              <h2 className="flex items-center gap-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                Tickets
+                <InfoIcon title={TICKETS_TOOLTIP} />
+              </h2>
+              <p className="mt-2 text-3xl font-bold text-slate-900">{summary.data!.tickets.total}</p>
               <ul className="mt-2 flex flex-wrap gap-2">
-                {byStatusEntries(summary.data.tickets.byStatus as Record<string, number>).map(([status, count]) => (
+                {byStatusEntries(summary.data!.tickets.byStatus as Record<string, number>).map(([status, count]) => (
                   <li key={status} className="rounded bg-sky-100 px-2 py-1 text-xs font-medium text-sky-700">
                     {status}: {count}
                   </li>
@@ -100,11 +129,14 @@ export function DashboardPage() {
             </article>
 
             <article className="rounded-lg border border-slate-200 p-4">
-              <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Deliveries</h2>
-              <p className="mt-2 text-3xl font-bold text-slate-900">{summary.data.deliveries.sent + summary.data.deliveries.failed}</p>
+              <h2 className="flex items-center gap-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                Deliveries
+                <InfoIcon title={DELIVERIES_TOOLTIP} />
+              </h2>
+              <p className="mt-2 text-3xl font-bold text-slate-900">{summary.data!.deliveries.sent + summary.data!.deliveries.failed}</p>
               <div className="mt-2 flex gap-2">
-                <span className="rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">Sent: {summary.data.deliveries.sent}</span>
-                <span className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700">Failed: {summary.data.deliveries.failed}</span>
+                <span className="rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">Sent: {summary.data!.deliveries.sent}</span>
+                <span className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700">Failed: {summary.data!.deliveries.failed}</span>
               </div>
             </article>
           </div>

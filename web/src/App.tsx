@@ -20,13 +20,12 @@ import { TicketsListPage } from "./pages/tickets/TicketsListPage";
 import { UsersPage } from "./pages/UsersPage";
 import { useSession } from "./lib/tokenStore";
 
-/** Role-aware landing: analysts start at triage, everyone else at feed sources. */
 function IndexLanding() {
-  const { token, user } = useSession();
+  const { token } = useSession();
   if (token === null) {
     return <Navigate to="/login" replace />;
   }
-  return <Navigate to={user?.role === "ANALYST" ? "/tickets" : "/feeds"} replace />;
+  return <Navigate to="/dashboard" replace />;
 }
 
 export function App() {

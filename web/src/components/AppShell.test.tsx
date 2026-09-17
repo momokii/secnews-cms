@@ -139,16 +139,19 @@ describe("SHELL-03: signed-in users skip guest routes", () => {
     clearToken();
   });
 
-  it("redirects /login to /feeds when a session exists", async () => {
-    // Given: an authenticated admin session
+  it("redirects /login to /dashboard when a session exists", async () => {
     setToken("admin-token");
     setUser({ id: "c528cea2-f3e7-4673-8def-37ac36981adf", email: "admin@example.com", name: "Admin", role: "ADMIN" });
-
-    // When: the app renders at /login
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/dashboard/")) {
+        if (url.includes("/summary")) return new Response(JSON.stringify({ feedItems: { total: 0, byStatus: {} }, tickets: { total: 0, byStatus: {} }, deliveries: { sent: 0, failed: 0 } }), { status: 200 });
+        return new Response(JSON.stringify({ buckets: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 20 }), { status: 200 });
+    }));
     renderApp("/login");
-
-    // Then: the feeds page is shown instead
-    expect(await screen.findByRole("heading", { name: "Feeds" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeTruthy();
   });
 });
 

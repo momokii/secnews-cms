@@ -14,13 +14,14 @@ const GUEST_ITEMS = [
   { to: "/bootstrap", label: "Bootstrap" },
 ] as const;
 
+const DASHBOARD_ITEM = { to: "/dashboard", label: "Dashboard" } as const;
+
 /** Feed-source configuration is manager-only; triage entries suit every role. */
 const MGR_ITEMS = [
   { to: "/feeds", label: "Feeds" },
 ] as const;
 
 const MEMBER_ITEMS = [
-  { to: "/dashboard", label: "Dashboard" },
   { to: "/reports", label: "Reports" },
   { to: "/feeds/items", label: "Feed items" },
   { to: "/tickets", label: "Tickets" },
@@ -144,6 +145,7 @@ export function AppShell() {
     token === null
       ? GUEST_ITEMS
       : [
+          DASHBOARD_ITEM,
           ...(isMgr ? MGR_ITEMS : []),
           ...MEMBER_ITEMS,
           ...(user?.role === "ADMIN" ? ADMIN_ITEMS : []),
