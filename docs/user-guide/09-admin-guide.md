@@ -77,7 +77,7 @@ Open **Prompts** in the left menu. Here you write the instructions the AI receiv
 
 ## Email template
 
-Open **Email template** in the left menu. ADMIN owns this page; other roles see it read-only with a note.
+Open **Email template** in the left menu. Like Integrations, Prompts and Users, this menu appears only for ADMIN accounts.
 
 1. Set the **Subject** line.
 2. Edit the **HTML body**. Placeholders: {{title}}, {{overview}}, {{description}}, {{recommendations}}, {{references}}, {{iocs}}, {{tlp}}, {{findingType}}.
