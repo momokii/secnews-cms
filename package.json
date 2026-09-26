@@ -1,6 +1,6 @@
 {
   "name": "secnews-cms",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "SecNews CMS backend — security news aggregation API",
   "type": "module",

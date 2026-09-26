@@ -2,6 +2,19 @@
 
 Security-news aggregation CMS: Fastify API (`src/`), React/Vite web UI (`web/`), PostgreSQL. Everything below is reproducible from a clean clone.
 
+**Current release: v1.0.0** — see [CHANGELOG.md](CHANGELOG.md).
+
+## Documentation
+
+| Audience | Doc | What it covers |
+|---|---|---|
+| End users (operations team) | [docs/user-guide/](docs/user-guide/README.md) | Step-by-step guide for every menu and workflow — no technical background needed. Start with the [Getting started](docs/user-guide/01-getting-started.md) page. |
+| End users & new engineers | [docs/GLOSSARY.md](docs/GLOSSARY.md) | Every term used in the app (IOC, TLP, Pulse, triage, ...) in plain language. |
+| New engineers & reviewers | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The ideas behind the app, end-to-end workflow diagrams, module map, and design decisions. |
+| Developers | [docs/API_CONTRACT.md](docs/API_CONTRACT.md) · [docs/STATES.md](docs/STATES.md) | Full API contract and state machines (ticket workflow, IOC types, TLP mapping). |
+
+Quick answers: [docs/user-guide/10-faq-troubleshooting.md](docs/user-guide/10-faq-troubleshooting.md).
+
 | Service | Image (pinned) | Runs as | Host port |
 |---|---|---|---|
 | web — nginx serving the SPA, proxying `/api/*` to the API | build `node:22-alpine` → serve `nginx:stable-alpine` | uid 101 (`nginx`) | `8080` (the only published port; override with `WEB_PORT`) |
