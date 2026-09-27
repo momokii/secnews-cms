@@ -62,6 +62,7 @@ Before closing any session, you MUST:
 5. **Update `SECURITY_STANDARDS.md`** if new security patterns were established or stack-specific security guidance was extended.
 6. **Update `ENVIRONMENT_GUIDE.md`** if environment configuration changed (new services, ports, env vars, Compose overrides).
 7. **Update `README.md`** if project-level context changed (purpose, stack, architecture, or orientation sequence).
+8. **Update the end-user docs** in `docs/user-guide/` (and `docs/ARCHITECTURE.md` / `docs/GLOSSARY.md` if architecture, workflow, or terminology changed) whenever a user-facing behavior shipped or changed — new feature, changed flow, renamed button/menu, new status, new role rule. Timing rule: update **after the change is complete and verified, never mid-development** — docs must always describe finished, working behavior, not half-built work. Docs are not done until they match what a user actually sees.
 
 **A session is not complete until state files reflect reality.**
 
@@ -74,6 +75,7 @@ Before closing any session, you MUST:
 - **When architecture is decided:** update `README.md` with the real project description and log the decision in `DECISIONS_LOG.md`.
 - **When Docker setup is established:** update `ENVIRONMENT_GUIDE.md` with real, verified commands — replace placeholder `docker-compose` examples with the actual commands that work.
 - **Keeping `.claude/` accurate is part of every task**, not a separate task. Do it inline before closing the session.
+- **Keeping `docs/user-guide/` accurate is part of every user-facing task**: when a shipped change alters what a user sees or how a workflow works, update the affected guide pages (and the architecture doc / glossary if the system design changed) in the same session, after the change is verified — never describe work that is still in progress.
 
 ---
 
