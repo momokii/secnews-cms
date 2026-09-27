@@ -42,7 +42,7 @@ Usually nothing is wrong:
 
 Menus follow your role.
 
-1. ANALYST sees Reports, Feed items, Tickets, Clients, Bulletin and OTX pulses.
+1. ANALYST sees Dashboard, Reports, Feed items, Tickets, Clients, Bulletin and OTX pulses.
 2. EDITOR additionally sees Feeds.
 3. Only ADMIN sees Integrations, Email template, Prompts and Users.
 

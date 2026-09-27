@@ -26,7 +26,7 @@ This step only applies to a brand-new system that has no user accounts yet. It i
 
 2. Enter your **email** and **password**.
 
-3. Click the login button.
+3. Click **Sign in**.
 
 *What you'll see:* the Dashboard, and your name with your role (ADMIN, EDITOR, or ANALYST) at the top of the left sidebar.
 

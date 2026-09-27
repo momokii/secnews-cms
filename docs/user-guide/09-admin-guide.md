@@ -71,7 +71,7 @@ Open **Prompts** in the left menu. Here you write the instructions the AI receiv
 1. There are three templates: the **Fill prompt**, the **Enrich prompt** and the **Source Draft prompt**. Each card explains when it runs.
 2. Edit the text and click the card's save button. Only ADMIN can save.
 3. Inject ticket data with the placeholders listed under **Placeholder legend**, for example the title, the IOC list or the sources selected for a draft.
-4. Click **View history** under a card to see past versions and **Restore** an older one if a change made things worse.
+4. Click **View Fill history** (or the matching button) under a card to see past versions and **Restore** an older one if a change made things worse.
 
 **Outcome:** the AI follows your house rules, and every instruction change can be rolled back.
 

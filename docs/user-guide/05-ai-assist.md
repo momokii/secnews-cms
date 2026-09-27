@@ -73,7 +73,7 @@ ADMIN users can change what the AI is told to do. Open **Prompts** in the left m
 1. There are three templates: **Fill prompt**, **Enrich prompt** and **Source Draft prompt**. Each card explains when that prompt runs.
 2. Edit the text in the card and click **Save Fill prompt** (or the matching button).
 3. Use the placeholders listed under **Placeholder legend** to inject ticket data, such as the title, the IOCs or the selected sources.
-4. Click **View history** under a card to see earlier versions. **Restore** brings an old version back as the current draft.
+4. Click **View Fill history** (or the matching button) under a card to see earlier versions. **Restore** brings an old version back as the current draft.
 
 Prompt changes affect future runs only. Suggestions already on tickets stay as they are.
 

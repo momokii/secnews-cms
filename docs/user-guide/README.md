@@ -41,7 +41,7 @@ If you are not sure which role you have, look at the small label under your name
 
 This walks you through the main flow once, from login to a sent bulletin. It assumes your account already exists and that a colleague has already added at least one news source.
 
-1. **Log in.** Open the web address your team gave you, enter your email and password, and click the login button.
+1. **Log in.** Open the web address your team gave you, enter your email and password, and click **Sign in**.
 
    *What you'll see:* the Dashboard with three number cards across the top.
 
